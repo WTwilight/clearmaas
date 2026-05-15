@@ -17,8 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import z from 'zod'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { Pricing } from '@/features/pricing'
+import { getModuleAccess } from '@/lib/nav-modules'
+import { useAuthStore } from '@/stores/auth-store'
 
 const pricingSearchSchema = z.object({
   search: z.string().optional(),
@@ -35,5 +37,17 @@ const pricingSearchSchema = z.object({
 
 export const Route = createFileRoute('/pricing/')({
   validateSearch: pricingSearchSchema,
+  beforeLoad: () => {
+    const access = getModuleAccess('pricing')
+    if (!access.enabled) {
+      throw redirect({ to: '/' })
+    }
+    if (access.requireAuth) {
+      const { auth } = useAuthStore.getState()
+      if (!auth.user) {
+        throw redirect({ to: '/sign-in', search: { redirect: '/pricing' } })
+      }
+    }
+  },
   component: Pricing,
 })
