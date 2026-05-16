@@ -44,6 +44,10 @@ func TestMain(m *testing.M) {
 		&model.Channel{},
 		&model.TopUp{},
 		&model.UserSubscription{},
+		&model.Enterprise{},
+		&model.EnterprisePricingSheet{},
+		&model.EnterprisePricingItem{},
+		&model.EnterpriseUserBinding{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -65,6 +69,10 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM channels")
 		model.DB.Exec("DELETE FROM top_ups")
 		model.DB.Exec("DELETE FROM user_subscriptions")
+		model.DB.Exec("DELETE FROM enterprise_pricing_items")
+		model.DB.Exec("DELETE FROM enterprise_pricing_sheets")
+		model.DB.Exec("DELETE FROM enterprise_user_bindings")
+		model.DB.Exec("DELETE FROM enterprises")
 	})
 }
 
@@ -713,4 +721,189 @@ func TestSettle_NonPerCall_AdaptorAdjustWorks(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+// ---------------------------------------------------------------------------
+// RecalculateTaskQuota boundary conditions
+// ---------------------------------------------------------------------------
+
+func TestRecalculateTaskQuota_ZeroActualQuota(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 101, 101, 101
+	const initQuota = 5000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-test-zero", 4000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 1000, tokenID, BillingSourceWallet, 0)
+
+	// actualQuota = 0 → should return immediately (no-op)
+	RecalculateTaskQuota(ctx, task, 0, "test-zero-quota")
+
+	// User quota unchanged
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
+	// Task quota unchanged
+	assert.Equal(t, 1000, task.Quota)
+	// No logs
+	assert.Equal(t, int64(0), countLogs(t))
+}
+
+func TestRecalculateTaskQuota_NegativeActualQuota(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 102, 102, 102
+	const initQuota = 5000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-test-neg", 4000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 1000, tokenID, BillingSourceWallet, 0)
+
+	// actualQuota < 0 → should return immediately
+	RecalculateTaskQuota(ctx, task, -100, "test-negative-quota")
+
+	// User quota unchanged
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
+	// Task quota unchanged
+	assert.Equal(t, 1000, task.Quota)
+}
+
+func TestRecalculateTaskQuota_NoChange(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 103, 103, 103
+	const initQuota = 5000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-test-same", 4000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 1000, tokenID, BillingSourceWallet, 0)
+
+	// actualQuota == preConsumedQuota → no-op
+	RecalculateTaskQuota(ctx, task, 1000, "test-same-quota")
+
+	assert.Equal(t, initQuota, getUserQuota(t, userID))
+	assert.Equal(t, int64(0), countLogs(t))
+}
+
+// ---------------------------------------------------------------------------
+// RefundTaskQuota boundary conditions
+// ---------------------------------------------------------------------------
+
+func TestRefundTaskQuota_ZeroQuota_AdjustFunding(t *testing.T) {
+	truncate(t)
+
+	const userID, tokenID, channelID = 201, 201, 201
+
+	seedUser(t, userID, 5000)
+	seedToken(t, tokenID, userID, "sk-refund-zero", 4000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 0, tokenID, BillingSourceWallet, 0)
+
+	// quota = 0 → returns immediately
+	RefundTaskQuota(context.Background(), task, "test-zero")
+
+	// No change
+	assert.Equal(t, 5000, getUserQuota(t, userID))
+	assert.Equal(t, int64(0), countLogs(t))
+}
+
+// ---------------------------------------------------------------------------
+// taskAdjustFunding: wallet paths
+// ---------------------------------------------------------------------------
+
+func TestTaskAdjustFunding_WalletPositiveDelta(t *testing.T) {
+	truncate(t)
+
+	const userID, tokenID, channelID = 301, 301, 301
+	const initQuota = 5000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-wallet-pos", 4000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 0, tokenID, BillingSourceWallet, 0)
+
+	// IncreaseUserQuota
+	err := taskAdjustFunding(task, 1000)
+	require.NoError(t, err)
+	assert.Equal(t, 6000, getUserQuota(t, userID))
+}
+
+func TestTaskAdjustFunding_WalletNegativeDelta(t *testing.T) {
+	truncate(t)
+
+	const userID, tokenID, channelID = 302, 302, 302
+	const initQuota = 5000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-wallet-neg", 4000)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 0, tokenID, BillingSourceWallet, 0)
+
+	// DecreaseUserQuota
+	err := taskAdjustFunding(task, -2000)
+	require.NoError(t, err)
+	assert.Equal(t, 3000, getUserQuota(t, userID))
+}
+
+func TestTaskAdjustFunding_WalletNegativeOverflow(t *testing.T) {
+	truncate(t)
+
+	const userID, tokenID, channelID = 303, 303, 303
+	const initQuota = 1000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-wallet-ovf", 500)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 0, tokenID, BillingSourceWallet, 0)
+
+	// Trying to refund more than available → should not go negative
+	err := taskAdjustFunding(task, -10000)
+	require.NoError(t, err)
+	// User quota should not go below 0
+	quota := getUserQuota(t, userID)
+	assert.GreaterOrEqual(t, quota, 0)
+}
+
+// ---------------------------------------------------------------------------
+// taskIsSubscription
+// ---------------------------------------------------------------------------
+
+func TestTaskIsSubscription(t *testing.T) {
+	// Subscription task: BillingSource=subscription + SubscriptionId > 0
+	subTask := &model.Task{
+		PrivateData: model.TaskPrivateData{
+			BillingSource:  BillingSourceSubscription,
+			SubscriptionId: 123,
+		},
+	}
+	require.True(t, taskIsSubscription(subTask))
+
+	// Wallet task
+	walletTask := &model.Task{
+		PrivateData: model.TaskPrivateData{
+			BillingSource: "wallet",
+		},
+	}
+	require.False(t, taskIsSubscription(walletTask))
+
+	// Subscription task but no subscription ID
+	emptySubTask := &model.Task{
+		PrivateData: model.TaskPrivateData{
+			BillingSource:  BillingSourceSubscription,
+			SubscriptionId: 0,
+		},
+	}
+	require.False(t, taskIsSubscription(emptySubTask))
 }

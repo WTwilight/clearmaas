@@ -35,7 +35,8 @@ func modelPriceNotConfiguredError(modelName string, userId int) error {
 // https://docs.claude.com/en/docs/build-with-claude/prompt-caching#1-hour-cache-duration
 const claudeCacheCreation1hMultiplier = 6 / 3.75
 
-// HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present
+// HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present.
+// It also checks for enterprise pricing sheet discounts which take precedence over group ratios.
 func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.GroupRatioInfo {
 	groupRatioInfo := types.GroupRatioInfo{
 		GroupRatio:        1.0, // default ratio
@@ -56,12 +57,58 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 		groupRatioInfo.GroupSpecialRatio = userGroupRatio
 		groupRatioInfo.GroupRatio = userGroupRatio
 		groupRatioInfo.HasSpecialRatio = true
+		groupRatioInfo.RatioSource = "group_group_ratio"
 	} else {
 		// normal group ratio
 		groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
+		groupRatioInfo.RatioSource = "group_ratio"
 	}
 
-	return groupRatioInfo
+	// check enterprise pricing sheet - takes precedence over group ratios
+	return HandleEnterprisePricingSheet(ctx, relayInfo, groupRatioInfo)
+}
+
+// HandleEnterprisePricingSheet checks if the user is bound to an enterprise with an active pricing sheet
+// and overrides the group ratio if a model discount is found.
+// It takes the base ratio info (from group/group-group settings) and returns it with potential overrides.
+func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
+	sheet, err := getUserActivePricingSheetForBilling(relayInfo.UserId)
+	if err == nil && sheet != nil {
+		modelRatio, found := getModelDiscountForBilling(sheet.Id, relayInfo.OriginModelName)
+		if found {
+			baseRatioInfo.GroupRatio = modelRatio
+			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
+			baseRatioInfo.EnterpriseSheetId = sheet.Id
+			baseRatioInfo.EnterpriseSheetName = sheet.Name
+			logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied: sheet=%s ratio=%.4f", sheet.Name, modelRatio))
+		}
+	}
+	if baseRatioInfo.RatioSource == "" {
+		baseRatioInfo.RatioSource = "group_ratio"
+	}
+	return baseRatioInfo
+}
+
+// getUserActivePricingSheetForBilling is the internal helper for billing.
+// It wraps the service layer to avoid circular imports.
+func getUserActivePricingSheetForBilling(userId int) (*model.EnterprisePricingSheet, error) {
+	enterpriseId, found := model.IsUserInEnterprise(userId)
+	if !found {
+		return nil, nil
+	}
+	if !model.IsEnterpriseEnabled(enterpriseId) {
+		return nil, nil
+	}
+	return model.GetFirstActivePricingSheetByEnterpriseId(enterpriseId)
+}
+
+// getModelDiscountForBilling returns the discount value for a model in a pricing sheet.
+func getModelDiscountForBilling(sheetId int, modelName string) (float64, bool) {
+	item, err := model.GetPricingItemBySheetIdAndModel(sheetId, modelName)
+	if err != nil || item == nil {
+		return 0, false
+	}
+	return item.DiscountValue, true
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
@@ -87,7 +134,7 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	var freeModel bool
 	if !usePrice {
 		preConsumedTokens := common.Max(promptTokens, common.PreConsumedQuota)
-		if meta.MaxTokens != 0 {
+		if meta != nil && meta.MaxTokens != 0 {
 			preConsumedTokens += meta.MaxTokens
 		}
 		var success bool
@@ -96,6 +143,10 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 		if !success {
 			acceptUnsetRatio := false
 			if info.UserSetting.AcceptUnsetRatioModel {
+				acceptUnsetRatio = true
+			}
+			// If enterprise pricing sheet overrides the ratio, accept the model even without group ratio config
+			if groupRatioInfo.RatioSource == "enterprise_pricing_sheet" {
 				acceptUnsetRatio = true
 			}
 			if !acceptUnsetRatio {

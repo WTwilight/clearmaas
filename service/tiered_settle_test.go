@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
 // Claude Sonnet-style tiered expression: standard vs long-context
@@ -827,4 +828,393 @@ func BenchmarkRatioBilling_Parallel(b *testing.B) {
 			ratioQuota(usage, false, 1.5, 5.0, 0.1, 1.0, 1.5)
 		}
 	})
+}
+
+// ---------------------------------------------------------------------------
+// BuildTieredTokenParams: Claude semantic cache split
+// ---------------------------------------------------------------------------
+
+func TestBuildTieredTokenParams_ClaudeSemantic_CC5mOnly(t *testing.T) {
+	usage := &dto.Usage{
+		PromptTokens:                   100000,
+		CompletionTokens:               5000,
+		UsageSemantic:                  "anthropic",
+		ClaudeCacheCreation5mTokens:    50000,
+		ClaudeCacheCreation1hTokens:    0,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         10000,
+			CachedCreationTokens: 0,
+			ImageTokens:          0,
+			AudioTokens:          0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	// usedVars does NOT include "cr", "cc", "cc1h", etc.
+	usedVars := map[string]bool{}
+
+	params := BuildTieredTokenParams(usage, true, usedVars)
+
+	// Claude semantic: cc1h from ClaudeCacheCreation1hTokens = 0
+	// cc5m from ClaudeCacheCreation5mTokens = 50000
+	require.Equal(t, float64(100000), params.P)
+	require.Equal(t, float64(5000), params.C)
+	// len = p + cr + cc5m + cc1h = 100000 + 10000 + 50000 + 0 = 160000
+	require.Equal(t, float64(160000), params.Len)
+	require.Equal(t, float64(10000), params.CR)
+	require.Equal(t, float64(50000), params.CC)
+	require.Equal(t, float64(0), params.CC1h)
+}
+
+func TestBuildTieredTokenParams_ClaudeSemantic_CC5mAndCC1h(t *testing.T) {
+	usage := &dto.Usage{
+		PromptTokens:                   100000,
+		CompletionTokens:               5000,
+		UsageSemantic:                  "anthropic",
+		ClaudeCacheCreation5mTokens:    50000,
+		ClaudeCacheCreation1hTokens:    20000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         10000,
+			CachedCreationTokens: 0,
+			ImageTokens:          0,
+			AudioTokens:          0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{}
+
+	params := BuildTieredTokenParams(usage, true, usedVars)
+
+	// len = p + cr + cc5m + cc1h = 100000 + 10000 + 50000 + 20000 = 180000
+	require.Equal(t, float64(180000), params.Len)
+	require.Equal(t, float64(50000), params.CC)
+	require.Equal(t, float64(20000), params.CC1h)
+}
+
+func TestBuildTieredTokenParams_ClaudeSemantic_BothZero(t *testing.T) {
+	usage := &dto.Usage{
+		PromptTokens:                   100000,
+		CompletionTokens:               5000,
+		UsageSemantic:                  "anthropic",
+		ClaudeCacheCreation5mTokens:    0,
+		ClaudeCacheCreation1hTokens:    0,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         0,
+			CachedCreationTokens: 0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{}
+
+	params := BuildTieredTokenParams(usage, true, usedVars)
+
+	require.Equal(t, float64(100000), params.Len)
+	require.Equal(t, float64(0), params.CC)
+	require.Equal(t, float64(0), params.CC1h)
+}
+
+func TestBuildTieredTokenParams_NonClaude_CacheReferenced(t *testing.T) {
+	// Non-Claude but usedVars includes cr/cc → p should subtract cache tokens
+	usage := &dto.Usage{
+		PromptTokens:                   100000,
+		CompletionTokens:               5000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         20000,
+			CachedCreationTokens: 10000,
+			ImageTokens:          0,
+			AudioTokens:          0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{"cr": true, "cc": true}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// p -= cr + cc = 100000 - 20000 - 10000 = 70000
+	require.Equal(t, float64(70000), params.P)
+	require.Equal(t, float64(20000), params.CR)
+	require.Equal(t, float64(10000), params.CC)
+}
+
+func TestBuildTieredTokenParams_NonClaude_CacheNotReferenced(t *testing.T) {
+	// Non-Claude and usedVars does NOT include cr/cc → p unchanged
+	usage := &dto.Usage{
+		PromptTokens:                   100000,
+		CompletionTokens:               5000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens:         20000,
+			CachedCreationTokens: 10000,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// p unchanged = 100000 (cache not referenced in expression)
+	require.Equal(t, float64(100000), params.P)
+	require.Equal(t, float64(20000), params.CR)
+	require.Equal(t, float64(10000), params.CC)
+}
+
+func TestBuildTieredTokenParams_NonClaude_ImageReferenced(t *testing.T) {
+	usage := &dto.Usage{
+		PromptTokens:                   10000,
+		CompletionTokens:               5000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			ImageTokens: 2000,
+			AudioTokens: 0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{"img": true, "ai": true}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// p -= img = 10000 - 2000 = 8000
+	require.Equal(t, float64(8000), params.P)
+	require.Equal(t, float64(2000), params.Img)
+}
+
+func TestBuildTieredTokenParams_NonClaude_ImageOutputReferenced(t *testing.T) {
+	usage := &dto.Usage{
+		PromptTokens:                   1000,
+		CompletionTokens:               5000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			ImageTokens: 0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{
+			ImageTokens: 3000,
+			AudioTokens: 0,
+		},
+	}
+	usedVars := map[string]bool{"img_o": true, "ao": true}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// c -= img_o = 5000 - 3000 = 2000
+	require.Equal(t, float64(2000), params.C)
+	require.Equal(t, float64(3000), params.ImgO)
+}
+
+func TestBuildTieredTokenParams_NegativeClamping(t *testing.T) {
+	// When p or c go negative after subtraction, they should be clamped to 0
+	usage := &dto.Usage{
+		PromptTokens:     1000,
+		CompletionTokens: 500,
+		PromptTokensDetails: dto.InputTokenDetails{
+			// cr > promptTokens
+			CachedTokens: 2000,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{"cr": true}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// p = 1000 - 2000 = -1000 → clamped to 0
+	require.Equal(t, float64(0), params.P)
+}
+
+func TestBuildTieredTokenParams_NegativeCompletionClamping(t *testing.T) {
+	usage := &dto.Usage{
+		PromptTokens:     1000,
+		CompletionTokens: 500,
+		PromptTokensDetails: dto.InputTokenDetails{
+			ImageTokens: 0,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{
+			// img_o > completionTokens
+			ImageTokens: 1000,
+		},
+	}
+	usedVars := map[string]bool{"img_o": true}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// c = 500 - 1000 = -500 → clamped to 0
+	require.Equal(t, float64(0), params.C)
+}
+
+func TestBuildTieredTokenParams_ClaudeLenIncludesCacheTokens(t *testing.T) {
+	// For Claude: len = p + cr + cc5m + cc1h (Claude uses separate counters)
+	usage := &dto.Usage{
+		PromptTokens:                   80000,
+		CompletionTokens:               5000,
+		UsageSemantic:                  "anthropic",
+		ClaudeCacheCreation5mTokens:    50000,
+		ClaudeCacheCreation1hTokens:    0,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 10000,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{}
+
+	params := BuildTieredTokenParams(usage, true, usedVars)
+
+	// len = 80000 + 10000 + 50000 + 0 = 140000
+	require.Equal(t, float64(140000), params.Len)
+}
+
+func TestBuildTieredTokenParams_NonClaudeLenEqualsPrompt(t *testing.T) {
+	// For non-Claude: len = p (promptTokens already includes everything)
+	usage := &dto.Usage{
+		PromptTokens:                   100000,
+		CompletionTokens:               5000,
+		PromptTokensDetails: dto.InputTokenDetails{
+			CachedTokens: 20000,
+		},
+		CompletionTokenDetails: dto.OutputTokenDetails{},
+	}
+	usedVars := map[string]bool{}
+
+	params := BuildTieredTokenParams(usage, false, usedVars)
+
+	// len = p = 100000 (not 100000 + 20000)
+	require.Equal(t, float64(100000), params.Len)
+}
+
+// ---------------------------------------------------------------------------
+// TryTieredSettle: additional branch coverage
+// ---------------------------------------------------------------------------
+
+func TestTryTieredSettle_SnapshotNil(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{
+		TieredBillingSnapshot: nil,
+	}
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 100})
+	require.False(t, ok)
+	require.Equal(t, 0, quota)
+	require.Nil(t, result)
+}
+
+func TestTryTieredSettle_WrongBillingMode(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode: "ratio", // not "tiered_expr"
+		},
+	}
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 100})
+	require.False(t, ok)
+	require.Equal(t, 0, quota)
+	require.Nil(t, result)
+}
+
+func TestTryTieredSettle_ValidCrossTier(t *testing.T) {
+	expr := `p <= 200000 ? tier("standard", p * 1.5 + c * 7.5) : tier("long_context", p * 3.0 + c * 11.25)`
+	snap := &billingexpr.BillingSnapshot{
+		BillingMode:               "tiered_expr",
+		ExprString:                expr,
+		ExprHash:                  billingexpr.ExprHashString(expr),
+		GroupRatio:                1.0,
+		EstimatedPromptTokens:     100000,
+		EstimatedCompletionTokens: 5000,
+		EstimatedQuotaBeforeGroup: (100000*1.5 + 5000*7.5) / 1_000_000 * 500_000,
+		EstimatedQuotaAfterGroup: billingexpr.QuotaRound((100000*1.5 + 5000*7.5) / 1_000_000 * 500_000),
+		EstimatedTier:             "standard", // pre-consumed under standard tier
+		QuotaPerUnit:              500_000,
+	}
+	relayInfo := &relaycommon.RelayInfo{
+		TieredBillingSnapshot: snap,
+	}
+
+	// Actual: long context (p > 200000)
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 300000, C: 10000})
+	require.True(t, ok)
+	require.NotNil(t, result)
+	require.True(t, result.CrossedTier)
+	require.Equal(t, "long_context", result.MatchedTier)
+	// long_context: 300000*3.0 + 10000*11.25 = 1012500 / 1M * 500K = 506.25 → round = 506
+	require.Equal(t, 506, quota)
+}
+
+func TestTryTieredSettle_ValidSameTier(t *testing.T) {
+	expr := `tier("default", p * 1 + c * 2)`
+	snap := &billingexpr.BillingSnapshot{
+		BillingMode:              "tiered_expr",
+		ExprString:               expr,
+		ExprHash:                 billingexpr.ExprHashString(expr),
+		GroupRatio:               1.0,
+		EstimatedTier:            "default",
+		QuotaPerUnit:             500_000,
+	}
+	relayInfo := &relaycommon.RelayInfo{
+		TieredBillingSnapshot: snap,
+	}
+
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 1000, C: 500})
+	require.True(t, ok)
+	require.NotNil(t, result)
+	require.False(t, result.CrossedTier)
+	require.Equal(t, "default", result.MatchedTier)
+	// cost = 1000*1 + 500*2 = 2000; quota = 2000 / 1M * 500K = 1
+	require.Equal(t, 1, quota)
+}
+
+func TestTryTieredSettle_ExprErrorWithZeroFallback(t *testing.T) {
+	relayInfo := &relaycommon.RelayInfo{
+		FinalPreConsumedQuota: 0, // zero fallback
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode:               "tiered_expr",
+			ExprString:                `invalid +++ expr`,
+			ExprHash:                  billingexpr.ExprHashString(`invalid +++ expr`),
+			GroupRatio:               1.0,
+			EstimatedQuotaAfterGroup: 999,
+		},
+	}
+
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 100})
+	require.True(t, ok)
+	// quota <= 0 → fallback to EstimatedQuotaAfterGroup = 999
+	require.Equal(t, 999, quota)
+	require.Nil(t, result)
+}
+
+func TestTryTieredSettle_UsesFrozenRequestInput(t *testing.T) {
+	// Verify that TryTieredSettle uses relayInfo.BillingRequestInput, not the live request
+	expr := `param("mode") == "premium" ? tier("premium", p * 2) : tier("normal", p)`
+	snap := &billingexpr.BillingSnapshot{
+		BillingMode:              "tiered_expr",
+		ExprString:               expr,
+		ExprHash:                 billingexpr.ExprHashString(expr),
+		GroupRatio:               1.0,
+		EstimatedTier:            "normal",
+		QuotaPerUnit:             500_000,
+	}
+	relayInfo := &relaycommon.RelayInfo{
+		TieredBillingSnapshot: snap,
+		BillingRequestInput: &billingexpr.RequestInput{
+			Body: []byte(`{"mode":"premium"}`),
+		},
+	}
+
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 1000})
+	require.True(t, ok)
+	require.NotNil(t, result)
+	require.Equal(t, "premium", result.MatchedTier)
+	// premium: p*2 = 2000; quota = 2000 / 1M * 500K = 1
+	require.Equal(t, 1, quota)
+}
+
+func TestTryTieredSettle_NoRequestInput(t *testing.T) {
+	// When BillingRequestInput is nil, should not panic
+	expr := `tier("default", p)`
+	snap := &billingexpr.BillingSnapshot{
+		BillingMode:  "tiered_expr",
+		ExprString:   expr,
+		ExprHash:     billingexpr.ExprHashString(expr),
+		GroupRatio:   1.0,
+		EstimatedTier: "default",
+		QuotaPerUnit:  500_000,
+	}
+	relayInfo := &relaycommon.RelayInfo{
+		TieredBillingSnapshot:   snap,
+		BillingRequestInput:    nil,
+	}
+
+	ok, quota, result := TryTieredSettle(relayInfo, billingexpr.TokenParams{P: 1000})
+	require.True(t, ok)
+	require.NotNil(t, result)
+	require.Equal(t, "default", result.MatchedTier)
+	require.Equal(t, 1, quota) // 1000 / 1M * 500K = 0.5 → round = 1
 }

@@ -69,8 +69,12 @@ func createRootAccountIfNeed() error {
 	var user User
 	//if user.Status != common.UserStatusEnabled {
 	if err := DB.First(&user).Error; err != nil {
-		common.SysLog("no user exists, create a root user for you: username is root, password is 123456")
-		hashedPassword, err := common.Password2Hash("123456")
+		defaultPassword, genErr := common.GenerateDefaultPassword()
+		if genErr != nil {
+			return genErr
+		}
+		common.SysLog("no user exists, create a root user for you: username is root, password is " + defaultPassword)
+		hashedPassword, err := common.Password2Hash(defaultPassword)
 		if err != nil {
 			return err
 		}
@@ -107,11 +111,22 @@ func CheckSetup() {
 		} else {
 			common.SysLog("system is not initialized and no root user exists")
 			constant.Setup = false
+			// Create root account if needed
+			if err := createRootAccountIfNeed(); err != nil {
+				common.SysLog("failed to create root account: " + err.Error())
+			}
 		}
 	} else {
 		// Setup record exists, system is initialized
 		common.SysLog("system is already initialized at: " + time.Unix(setup.InitializedAt, 0).String())
 		constant.Setup = true
+		// Ensure root user exists (handles corrupted state: setup exists but no root user)
+		if !RootUserExists() {
+			common.SysLog("root user missing despite setup record, creating one")
+			if err := createRootAccountIfNeed(); err != nil {
+				common.SysLog("failed to create root account: " + err.Error())
+			}
+		}
 	}
 }
 
@@ -281,6 +296,10 @@ func migrateDB() error {
 		&CustomOAuthProvider{},
 		&UserOAuthBinding{},
 		&PerfMetric{},
+		&Enterprise{},
+		&EnterprisePricingSheet{},
+		&EnterprisePricingItem{},
+		&EnterpriseUserBinding{},
 	)
 	if err != nil {
 		return err

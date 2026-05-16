@@ -55,6 +55,7 @@ type textQuotaSummary struct {
 	AudioInputPrice          float64
 	ImageGenerationCallPrice float64
 	ToolCallSurchargeQuota   decimal.Decimal
+	OriginalPrice            int64
 }
 
 func cacheWriteTokensTotal(summary textQuotaSummary) int {
@@ -81,8 +82,7 @@ func isLegacyClaudeDerivedOpenAIUsage(relayInfo *relaycommon.RelayInfo, usage *d
 	return usage.ClaudeCacheCreation5mTokens > 0 || usage.ClaudeCacheCreation1hTokens > 0
 }
 
-func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
-	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
+func calculateTextToolCallSurchargeBase(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
 	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 
 	var surcharge decimal.Decimal
@@ -94,7 +94,6 @@ func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.Rel
 			surcharge = surcharge.Add(decimal.NewFromFloat(summary.WebSearchPrice).
 				Mul(decimal.NewFromInt(int64(webSearchTool.CallCount))).
 				Div(decimal.NewFromInt(1000)).
-				Mul(dGroupRatio).
 				Mul(dQuotaPerUnit))
 		}
 	} else if strings.HasSuffix(summary.ModelName, "search-preview") {
@@ -102,7 +101,6 @@ func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.Rel
 		summary.WebSearchPrice = operation_setting.GetToolPriceForModel("web_search_preview", summary.ModelName)
 		surcharge = surcharge.Add(decimal.NewFromFloat(summary.WebSearchPrice).
 			Div(decimal.NewFromInt(1000)).
-			Mul(dGroupRatio).
 			Mul(dQuotaPerUnit))
 	}
 
@@ -111,7 +109,6 @@ func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.Rel
 		summary.ClaudeWebSearchPrice = operation_setting.GetToolPrice("web_search")
 		surcharge = surcharge.Add(decimal.NewFromFloat(summary.ClaudeWebSearchPrice).
 			Div(decimal.NewFromInt(1000)).
-			Mul(dGroupRatio).
 			Mul(dQuotaPerUnit).
 			Mul(decimal.NewFromInt(int64(summary.ClaudeWebSearchCallCount))))
 	}
@@ -123,7 +120,6 @@ func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.Rel
 			surcharge = surcharge.Add(decimal.NewFromFloat(summary.FileSearchPrice).
 				Mul(decimal.NewFromInt(int64(fileSearchTool.CallCount))).
 				Div(decimal.NewFromInt(1000)).
-				Mul(dGroupRatio).
 				Mul(dQuotaPerUnit))
 		}
 	}
@@ -131,11 +127,17 @@ func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.Rel
 	if ctx.GetBool("image_generation_call") {
 		summary.ImageGenerationCallPrice = operation_setting.GetGPTImage1PriceOnceCall(ctx.GetString("image_generation_call_quality"), ctx.GetString("image_generation_call_size"))
 		surcharge = surcharge.Add(decimal.NewFromFloat(summary.ImageGenerationCallPrice).
-			Mul(dGroupRatio).
 			Mul(dQuotaPerUnit))
 	}
 
 	return surcharge
+}
+
+// calculateTextToolCallSurcharge applies GroupRatio to the base surcharge.
+// Kept for backward compatibility with composeTieredTextQuota.
+func calculateTextToolCallSurcharge(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, summary *textQuotaSummary) decimal.Decimal {
+	dGroupRatio := decimal.NewFromFloat(summary.GroupRatio)
+	return calculateTextToolCallSurchargeBase(ctx, relayInfo, summary).Mul(dGroupRatio)
 }
 
 func composeTieredTextQuota(relayInfo *relaycommon.RelayInfo, summary textQuotaSummary, tieredQuota int, tieredResult *billingexpr.TieredResult) int {
@@ -226,9 +228,10 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 
 	ratio := dModelRatio.Mul(dGroupRatio)
-	summary.ToolCallSurchargeQuota = calculateTextToolCallSurcharge(ctx, relayInfo, &summary)
+	toolCallSurchargeBase := calculateTextToolCallSurchargeBase(ctx, relayInfo, &summary)
+	summary.ToolCallSurchargeQuota = toolCallSurchargeBase.Mul(dGroupRatio)
 
-	var audioInputQuota decimal.Decimal
+	var audioInputQuotaBase, audioInputQuota decimal.Decimal
 	if !relayInfo.PriceData.UsePrice {
 		baseTokens := dPromptTokens
 
@@ -267,36 +270,42 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 			summary.AudioInputPrice = operation_setting.GetGeminiInputAudioPricePerMillionTokens(summary.ModelName)
 			if summary.AudioInputPrice > 0 {
 				baseTokens = baseTokens.Sub(dAudioTokens)
-				audioInputQuota = decimal.NewFromFloat(summary.AudioInputPrice).
-					Div(decimal.NewFromInt(1000000)).Mul(dAudioTokens).Mul(dGroupRatio).Mul(dQuotaPerUnit)
+				audioInputQuotaBase = decimal.NewFromFloat(summary.AudioInputPrice).
+					Div(decimal.NewFromInt(1000000)).Mul(dAudioTokens).Mul(dQuotaPerUnit)
+				audioInputQuota = audioInputQuotaBase.Mul(dGroupRatio)
 			}
 		}
 
 		promptQuota := baseTokens.Add(cachedTokensWithRatio).Add(imageTokensWithRatio).Add(cachedCreationTokensWithRatio)
 		completionQuota := dCompletionTokens.Mul(dCompletionRatio)
-		quotaCalculateDecimal := promptQuota.Add(completionQuota).Mul(ratio)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
+
+		// OriginalPrice: base token quota * ModelRatio (no GroupRatio)
+		originalPriceDecimal := promptQuota.Add(completionQuota).Mul(dModelRatio).Add(toolCallSurchargeBase).Add(audioInputQuotaBase)
 
 		if len(relayInfo.PriceData.OtherRatios) > 0 {
 			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
-				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
+				originalPriceDecimal = originalPriceDecimal.Mul(decimal.NewFromFloat(otherRatio))
 			}
 		}
+		summary.OriginalPrice = originalPriceDecimal.Round(0).IntPart()
 
+		// Actual quota: OriginalPrice * GroupRatio
+		quotaCalculateDecimal := originalPriceDecimal.Mul(dGroupRatio)
 		if !ratio.IsZero() && quotaCalculateDecimal.LessThanOrEqual(decimal.Zero) {
 			quotaCalculateDecimal = decimal.NewFromInt(1)
 		}
 		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
 	} else {
-		quotaCalculateDecimal := dModelPrice.Mul(dQuotaPerUnit).Mul(dGroupRatio)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(summary.ToolCallSurchargeQuota)
-		quotaCalculateDecimal = quotaCalculateDecimal.Add(audioInputQuota)
+		// OriginalPrice: base per-call price * ModelPrice (no GroupRatio)
+		originalPriceDecimal := dModelPrice.Mul(dQuotaPerUnit).Add(toolCallSurchargeBase).Add(audioInputQuotaBase)
 		if len(relayInfo.PriceData.OtherRatios) > 0 {
 			for _, otherRatio := range relayInfo.PriceData.OtherRatios {
-				quotaCalculateDecimal = quotaCalculateDecimal.Mul(decimal.NewFromFloat(otherRatio))
+				originalPriceDecimal = originalPriceDecimal.Mul(decimal.NewFromFloat(otherRatio))
 			}
 		}
+		summary.OriginalPrice = originalPriceDecimal.Round(0).IntPart()
+
+		quotaCalculateDecimal := originalPriceDecimal.Mul(dGroupRatio)
 		summary.Quota = int(quotaCalculateDecimal.Round(0).IntPart())
 	}
 
@@ -343,6 +352,9 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			tieredBillingApplied = true
 			tieredResult = tieredRes
 			summary.Quota = composeTieredTextQuota(relayInfo, summary, tieredQuota, tieredRes)
+			// For tiered billing, OriginalPrice = ActualQuotaBeforeGroup + ToolCallSurchargeBase (both exclude GroupRatio)
+			toolCallSurchargeBase := decimal.NewFromFloat(summary.ToolCallSurchargeQuota).Div(decimal.NewFromFloat(summary.GroupRatio))
+			summary.OriginalPrice = decimal.NewFromFloat(tieredResult.ActualQuotaBeforeGroup).Add(toolCallSurchargeBase).Round(0).IntPart()
 		}
 	}
 
@@ -429,6 +441,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		other["image_generation_call"] = true
 		other["image_generation_call_price"] = summary.ImageGenerationCallPrice
 	}
+	other["original_price"] = summary.OriginalPrice
+	other["discount_ratio"] = summary.GroupRatio
 	if summary.CacheCreationTokens > 0 {
 		other["cache_creation_tokens"] = summary.CacheCreationTokens
 		other["cache_creation_ratio"] = summary.CacheCreationRatio

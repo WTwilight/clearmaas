@@ -125,6 +125,10 @@ func taskBillingOther(task *model.Task) map[string]interface{} {
 			other["model_ratio"] = bc.ModelRatio
 		}
 		other["group_ratio"] = bc.GroupRatio
+		other["discount_ratio"] = bc.GroupRatio
+		if bc.GroupRatio > 0 && task.Quota > 0 {
+			other["original_price"] = int64(float64(task.Quota) / bc.GroupRatio)
+		}
 		if len(bc.OtherRatios) > 0 {
 			for k, v := range bc.OtherRatios {
 				other[k] = v

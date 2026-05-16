@@ -8,8 +8,25 @@ export const loginFormSchema = z.object({
   username: z.string().min(1, 'Please enter your username or email'),
   password: z
     .string()
-    .min(1, 'Please enter your password')
-    .min(8, 'Password must be at least 8 characters long'),
+    .superRefine((val, ctx) => {
+      if (!val) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.too_small,
+          minimum: 1,
+          type: 'string',
+          inclusive: true,
+          message: 'Please enter your password',
+        })
+      } else if (val.length < 8) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.too_small,
+          minimum: 8,
+          type: 'string',
+          inclusive: true,
+          message: 'Password must be at least 8 characters long',
+        })
+      }
+    }),
 })
 
 export const registerFormSchema = z
@@ -18,9 +35,36 @@ export const registerFormSchema = z
     email: z.string().optional(),
     password: z
       .string()
-      .min(1, 'Please enter your password')
-      .min(8, 'Password must be at least 8 characters long')
-      .max(20, 'Password must be at most 20 characters long'),
+      .superRefine((val, ctx) => {
+        if (!val) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.too_small,
+            minimum: 1,
+            type: 'string',
+            inclusive: true,
+            message: 'Please enter your password',
+          })
+        } else {
+          if (val.length < 8) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.too_small,
+              minimum: 8,
+              type: 'string',
+              inclusive: true,
+              message: 'Password must be at least 8 characters long',
+            })
+          }
+          if (val.length > 20) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.too_big,
+              maximum: 20,
+              type: 'string',
+              inclusive: true,
+              message: 'Password must be at most 20 characters long',
+            })
+          }
+        }
+      }),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
   .refine((data) => data.password === data.confirmPassword, {

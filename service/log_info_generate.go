@@ -261,6 +261,13 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData types.Price
 	if priceData.GroupRatioInfo.HasSpecialRatio {
 		other["user_group_ratio"] = priceData.GroupRatioInfo.GroupSpecialRatio
 	}
+	if priceData.Quota > 0 && priceData.GroupRatioInfo.GroupRatio > 0 {
+		// OriginalPrice can only be computed when ModelPrice > 0 (usePrice=true).
+		// For usePrice=false (按量计费) MJ tasks, ModelPrice=-1 so OriginalPrice is left unset.
+		if priceData.ModelPrice > 0 {
+			other["original_price"] = int64(float64(priceData.Quota) / priceData.GroupRatioInfo.GroupRatio)
+		}
+	}
 	appendRequestPath(nil, relayInfo, other)
 	return other
 }

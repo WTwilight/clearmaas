@@ -32,6 +32,7 @@ import { Route as authOtpRouteImport } from './routes/(auth)/otp'
 import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
+import { Route as AuthenticatedEnterprisePricingRouteRouteImport } from './routes/_authenticated/enterprise-pricing/route'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
@@ -43,6 +44,7 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
+import { Route as AuthenticatedEnterprisePricingIndexRouteImport } from './routes/_authenticated/enterprise-pricing/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
@@ -58,6 +60,9 @@ import { Route as AuthenticatedSystemSettingsModelsIndexRouteImport } from './ro
 import { Route as AuthenticatedSystemSettingsContentIndexRouteImport } from './routes/_authenticated/system-settings/content/index'
 import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './routes/_authenticated/system-settings/billing/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
+import { Route as AuthenticatedEnterprisePricingSheetsIndexRouteImport } from './routes/_authenticated/enterprise-pricing/sheets/index'
+import { Route as AuthenticatedEnterprisePricingItemsIndexRouteImport } from './routes/_authenticated/enterprise-pricing/items/index'
+import { Route as AuthenticatedEnterprisePricingEnterpriseIndexRouteImport } from './routes/_authenticated/enterprise-pricing/enterprise/index'
 import { Route as AuthenticatedSystemSettingsSiteSectionRouteImport } from './routes/_authenticated/system-settings/site/$section'
 import { Route as AuthenticatedSystemSettingsSecuritySectionRouteImport } from './routes/_authenticated/system-settings/security/$section'
 import { Route as AuthenticatedSystemSettingsOperationsSectionRouteImport } from './routes/_authenticated/system-settings/operations/$section'
@@ -180,6 +185,12 @@ const AuthenticatedSystemSettingsRouteRoute =
     path: '/system-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedEnterprisePricingRouteRoute =
+  AuthenticatedEnterprisePricingRouteRouteImport.update({
+    id: '/enterprise-pricing',
+    path: '/enterprise-pricing',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const PricingModelIdIndexRoute = PricingModelIdIndexRouteImport.update({
   id: '/pricing/$modelId/',
   path: '/pricing/$modelId/',
@@ -243,6 +254,12 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEnterprisePricingIndexRoute =
+  AuthenticatedEnterprisePricingIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedEnterprisePricingRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -331,6 +348,24 @@ const AuthenticatedSystemSettingsAuthIndexRoute =
     path: '/auth/',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedEnterprisePricingSheetsIndexRoute =
+  AuthenticatedEnterprisePricingSheetsIndexRouteImport.update({
+    id: '/sheets/',
+    path: '/sheets/',
+    getParentRoute: () => AuthenticatedEnterprisePricingRouteRoute,
+  } as any)
+const AuthenticatedEnterprisePricingItemsIndexRoute =
+  AuthenticatedEnterprisePricingItemsIndexRouteImport.update({
+    id: '/items/',
+    path: '/items/',
+    getParentRoute: () => AuthenticatedEnterprisePricingRouteRoute,
+  } as any)
+const AuthenticatedEnterprisePricingEnterpriseIndexRoute =
+  AuthenticatedEnterprisePricingEnterpriseIndexRouteImport.update({
+    id: '/enterprise/',
+    path: '/enterprise/',
+    getParentRoute: () => AuthenticatedEnterprisePricingRouteRoute,
+  } as any)
 const AuthenticatedSystemSettingsSiteSectionRoute =
   AuthenticatedSystemSettingsSiteSectionRouteImport.update({
     id: '/site/$section',
@@ -378,6 +413,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
+  '/enterprise-pricing': typeof AuthenticatedEnterprisePricingRouteRouteWithChildren
   '/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
   '/oauth': typeof authOauthRoute
@@ -404,6 +440,7 @@ export interface FileRoutesByFullPath {
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/enterprise-pricing/': typeof AuthenticatedEnterprisePricingIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -422,6 +459,9 @@ export interface FileRoutesByFullPath {
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/enterprise-pricing/enterprise/': typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
+  '/enterprise-pricing/items/': typeof AuthenticatedEnterprisePricingItemsIndexRoute
+  '/enterprise-pricing/sheets/': typeof AuthenticatedEnterprisePricingSheetsIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -459,6 +499,7 @@ export interface FileRoutesByTo {
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/enterprise-pricing': typeof AuthenticatedEnterprisePricingIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
@@ -477,6 +518,9 @@ export interface FileRoutesByTo {
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/enterprise-pricing/enterprise': typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
+  '/enterprise-pricing/items': typeof AuthenticatedEnterprisePricingItemsIndexRoute
+  '/enterprise-pricing/sheets': typeof AuthenticatedEnterprisePricingSheetsIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -492,6 +536,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
+  '/_authenticated/enterprise-pricing': typeof AuthenticatedEnterprisePricingRouteRouteWithChildren
   '/_authenticated/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/(auth)/forgot-password': typeof authForgotPasswordRoute
   '/(auth)/oauth': typeof authOauthRoute
@@ -518,6 +563,7 @@ export interface FileRoutesById {
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/enterprise-pricing/': typeof AuthenticatedEnterprisePricingIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -536,6 +582,9 @@ export interface FileRoutesById {
   '/_authenticated/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
   '/_authenticated/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
   '/_authenticated/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
+  '/_authenticated/enterprise-pricing/enterprise/': typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
+  '/_authenticated/enterprise-pricing/items/': typeof AuthenticatedEnterprisePricingItemsIndexRoute
+  '/_authenticated/enterprise-pricing/sheets/': typeof AuthenticatedEnterprisePricingSheetsIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -550,6 +599,7 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy-policy'
     | '/user-agreement'
+    | '/enterprise-pricing'
     | '/system-settings'
     | '/forgot-password'
     | '/oauth'
@@ -576,6 +626,7 @@ export interface FileRouteTypes {
     | '/usage-logs/$section'
     | '/channels/'
     | '/dashboard/'
+    | '/enterprise-pricing/'
     | '/keys/'
     | '/models/'
     | '/playground/'
@@ -594,6 +645,9 @@ export interface FileRouteTypes {
     | '/system-settings/operations/$section'
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
+    | '/enterprise-pricing/enterprise/'
+    | '/enterprise-pricing/items/'
+    | '/enterprise-pricing/sheets/'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
@@ -631,6 +685,7 @@ export interface FileRouteTypes {
     | '/usage-logs/$section'
     | '/channels'
     | '/dashboard'
+    | '/enterprise-pricing'
     | '/keys'
     | '/models'
     | '/playground'
@@ -649,6 +704,9 @@ export interface FileRouteTypes {
     | '/system-settings/operations/$section'
     | '/system-settings/security/$section'
     | '/system-settings/site/$section'
+    | '/enterprise-pricing/enterprise'
+    | '/enterprise-pricing/items'
+    | '/enterprise-pricing/sheets'
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
@@ -663,6 +721,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/privacy-policy'
     | '/user-agreement'
+    | '/_authenticated/enterprise-pricing'
     | '/_authenticated/system-settings'
     | '/(auth)/forgot-password'
     | '/(auth)/oauth'
@@ -689,6 +748,7 @@ export interface FileRouteTypes {
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/enterprise-pricing/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
@@ -707,6 +767,9 @@ export interface FileRouteTypes {
     | '/_authenticated/system-settings/operations/$section'
     | '/_authenticated/system-settings/security/$section'
     | '/_authenticated/system-settings/site/$section'
+    | '/_authenticated/enterprise-pricing/enterprise/'
+    | '/_authenticated/enterprise-pricing/items/'
+    | '/_authenticated/enterprise-pricing/sheets/'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
@@ -898,6 +961,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/enterprise-pricing': {
+      id: '/_authenticated/enterprise-pricing'
+      path: '/enterprise-pricing'
+      fullPath: '/enterprise-pricing'
+      preLoaderRoute: typeof AuthenticatedEnterprisePricingRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/pricing/$modelId/': {
       id: '/pricing/$modelId/'
       path: '/pricing/$modelId'
@@ -974,6 +1044,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/keys/'
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/enterprise-pricing/': {
+      id: '/_authenticated/enterprise-pricing/'
+      path: '/'
+      fullPath: '/enterprise-pricing/'
+      preLoaderRoute: typeof AuthenticatedEnterprisePricingIndexRouteImport
+      parentRoute: typeof AuthenticatedEnterprisePricingRouteRoute
     }
     '/_authenticated/dashboard/': {
       id: '/_authenticated/dashboard/'
@@ -1080,6 +1157,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsAuthIndexRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/enterprise-pricing/sheets/': {
+      id: '/_authenticated/enterprise-pricing/sheets/'
+      path: '/sheets'
+      fullPath: '/enterprise-pricing/sheets/'
+      preLoaderRoute: typeof AuthenticatedEnterprisePricingSheetsIndexRouteImport
+      parentRoute: typeof AuthenticatedEnterprisePricingRouteRoute
+    }
+    '/_authenticated/enterprise-pricing/items/': {
+      id: '/_authenticated/enterprise-pricing/items/'
+      path: '/items'
+      fullPath: '/enterprise-pricing/items/'
+      preLoaderRoute: typeof AuthenticatedEnterprisePricingItemsIndexRouteImport
+      parentRoute: typeof AuthenticatedEnterprisePricingRouteRoute
+    }
+    '/_authenticated/enterprise-pricing/enterprise/': {
+      id: '/_authenticated/enterprise-pricing/enterprise/'
+      path: '/enterprise'
+      fullPath: '/enterprise-pricing/enterprise/'
+      preLoaderRoute: typeof AuthenticatedEnterprisePricingEnterpriseIndexRouteImport
+      parentRoute: typeof AuthenticatedEnterprisePricingRouteRoute
+    }
     '/_authenticated/system-settings/site/$section': {
       id: '/_authenticated/system-settings/site/$section'
       path: '/site/$section'
@@ -1156,6 +1254,30 @@ const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
   authRouteRouteChildren,
 )
 
+interface AuthenticatedEnterprisePricingRouteRouteChildren {
+  AuthenticatedEnterprisePricingIndexRoute: typeof AuthenticatedEnterprisePricingIndexRoute
+  AuthenticatedEnterprisePricingEnterpriseIndexRoute: typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
+  AuthenticatedEnterprisePricingItemsIndexRoute: typeof AuthenticatedEnterprisePricingItemsIndexRoute
+  AuthenticatedEnterprisePricingSheetsIndexRoute: typeof AuthenticatedEnterprisePricingSheetsIndexRoute
+}
+
+const AuthenticatedEnterprisePricingRouteRouteChildren: AuthenticatedEnterprisePricingRouteRouteChildren =
+  {
+    AuthenticatedEnterprisePricingIndexRoute:
+      AuthenticatedEnterprisePricingIndexRoute,
+    AuthenticatedEnterprisePricingEnterpriseIndexRoute:
+      AuthenticatedEnterprisePricingEnterpriseIndexRoute,
+    AuthenticatedEnterprisePricingItemsIndexRoute:
+      AuthenticatedEnterprisePricingItemsIndexRoute,
+    AuthenticatedEnterprisePricingSheetsIndexRoute:
+      AuthenticatedEnterprisePricingSheetsIndexRoute,
+  }
+
+const AuthenticatedEnterprisePricingRouteRouteWithChildren =
+  AuthenticatedEnterprisePricingRouteRoute._addFileChildren(
+    AuthenticatedEnterprisePricingRouteRouteChildren,
+  )
+
 interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsIndexRoute: typeof AuthenticatedSystemSettingsIndexRoute
   AuthenticatedSystemSettingsAuthSectionRoute: typeof AuthenticatedSystemSettingsAuthSectionRoute
@@ -1214,6 +1336,7 @@ const AuthenticatedSystemSettingsRouteRouteWithChildren =
   )
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedEnterprisePricingRouteRoute: typeof AuthenticatedEnterprisePricingRouteRouteWithChildren
   AuthenticatedSystemSettingsRouteRoute: typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   AuthenticatedChat2linkRoute: typeof AuthenticatedChat2linkRoute
   AuthenticatedChatChatIdRoute: typeof AuthenticatedChatChatIdRoute
@@ -1235,6 +1358,8 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedEnterprisePricingRouteRoute:
+    AuthenticatedEnterprisePricingRouteRouteWithChildren,
   AuthenticatedSystemSettingsRouteRoute:
     AuthenticatedSystemSettingsRouteRouteWithChildren,
   AuthenticatedChat2linkRoute: AuthenticatedChat2linkRoute,

@@ -43,6 +43,10 @@ func TestMain(m *testing.M) {
 		&SubscriptionPlan{},
 		&SubscriptionOrder{},
 		&UserSubscription{},
+		&Enterprise{},
+		&EnterprisePricingSheet{},
+		&EnterprisePricingItem{},
+		&EnterpriseUserBinding{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

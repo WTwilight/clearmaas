@@ -23,6 +23,8 @@ var verificationMap map[string]verificationValue
 var verificationMapMaxSize = 10
 var VerificationValidMinutes = 10
 
+const defaultPasswordLength = 12
+
 func GenerateVerificationCode(length int) string {
 	code := uuid.New().String()
 	code = strings.Replace(code, "-", "", -1)
@@ -30,6 +32,10 @@ func GenerateVerificationCode(length int) string {
 		return code
 	}
 	return code[:length]
+}
+
+func GenerateDefaultPassword() (string, error) {
+	return GenerateVerificationCode(defaultPasswordLength), nil
 }
 
 func RegisterVerificationCodeWithKey(key string, code string, purpose string) {

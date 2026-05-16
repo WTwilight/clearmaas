@@ -185,7 +185,12 @@ function BillingBreakdown(props: {
   const userGR = other.user_group_ratio
   const isUserGR = userGR != null && Number.isFinite(userGR) && userGR !== -1
   const effectiveGR = isUserGR ? userGR : other.group_ratio
-  if (effectiveGR != null && Number.isFinite(effectiveGR)) {
+  if (other.discount_ratio != null && Number.isFinite(other.discount_ratio) && other.discount_ratio !== 1) {
+    rows.push({
+      label: t('Discount Ratio'),
+      value: `${formatRatio(other.discount_ratio)}x`,
+    })
+  } else if (effectiveGR != null && Number.isFinite(effectiveGR)) {
     rows.push({
       label: isUserGR ? t('User Exclusive Ratio') : t('Group Ratio'),
       value: `${formatRatio(effectiveGR)}x`,
@@ -288,6 +293,13 @@ function BillingBreakdown(props: {
       value: other.admin_info.local_count_tokens
         ? t('Local Billing')
         : t('Upstream Response'),
+    })
+  }
+
+  if (other.original_price != null && other.original_price > 0) {
+    rows.push({
+      label: t('Original Price'),
+      value: formatLogQuota(other.original_price),
     })
   }
 

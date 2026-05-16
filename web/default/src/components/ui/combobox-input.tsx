@@ -18,6 +18,7 @@ interface ComboboxInputProps {
   emptyText?: string
   className?: string
   id?: string
+  customDisplayValue?: string
 }
 
 export function ComboboxInput({
@@ -28,23 +29,25 @@ export function ComboboxInput({
   emptyText = 'No option found.',
   className,
   id,
+  customDisplayValue,
 }: ComboboxInputProps) {
   const { t } = useTranslation()
   const [open, setOpen] = React.useState(false)
+  const [inputValue, setInputValue] = React.useState('')
   const [highlightedIndex, setHighlightedIndex] = React.useState(-1)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLUListElement>(null)
 
   const filteredOptions = React.useMemo(() => {
-    if (!value.trim()) return options
-    const search = value.toLowerCase().trim()
+    if (!inputValue.trim()) return options
+    const search = inputValue.toLowerCase().trim()
     return options.filter(
       (option) =>
         option.label.toLowerCase().includes(search) ||
         option.value.toLowerCase().includes(search)
     )
-  }, [options, value])
+  }, [options, inputValue])
 
   // Reset highlight when filtered options change
   React.useEffect(() => {
@@ -61,6 +64,7 @@ export function ComboboxInput({
         !containerRef.current.contains(e.target as Node)
       ) {
         setOpen(false)
+        setInputValue('')
       }
     }
 
@@ -68,9 +72,17 @@ export function ComboboxInput({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
+  // Sync customDisplayValue → inputValue when selection changes externally
+  React.useEffect(() => {
+    if (!open && customDisplayValue !== undefined) {
+      setInputValue(customDisplayValue)
+    }
+  }, [customDisplayValue, open])
+
   const handleSelect = (selectedValue: string) => {
     onValueChange(selectedValue)
     setOpen(false)
+    setInputValue('')
     inputRef.current?.focus()
   }
 
@@ -100,13 +112,14 @@ export function ComboboxInput({
         if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
           handleSelect(filteredOptions[highlightedIndex].value)
         } else {
-          // No highlighted option, just close the dropdown and keep current value
           setOpen(false)
+          setInputValue('')
         }
         break
       case 'Escape':
         e.preventDefault()
         setOpen(false)
+        setInputValue(customDisplayValue ?? '')
         break
     }
   }
@@ -118,7 +131,8 @@ export function ComboboxInput({
     item?.scrollIntoView({ block: 'nearest' })
   }, [highlightedIndex])
 
-  const showDropdown = open && (filteredOptions.length > 0 || value.trim())
+  const showDropdown = open && filteredOptions.length > 0
+  const displayValue = open ? inputValue : customDisplayValue ?? inputValue
 
   return (
     <div ref={containerRef} className='relative'>
@@ -132,12 +146,17 @@ export function ComboboxInput({
         aria-autocomplete='list'
         autoComplete='off'
         placeholder={placeholder}
-        value={value}
+        value={displayValue}
         onChange={(e) => {
-          onValueChange(e.target.value)
+          setInputValue(e.target.value)
           if (!open) setOpen(true)
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true)
+          if (customDisplayValue) {
+            setInputValue('')
+          }
+        }}
         onKeyDown={handleKeyDown}
         className={cn('pr-9', className)}
       />
@@ -158,14 +177,14 @@ export function ComboboxInput({
                   aria-selected={value === option.value}
                   data-highlighted={index === highlightedIndex}
                   className={cn(
-                    'relative flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm select-none',
+                    'relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm select-none',
                     index === highlightedIndex &&
                       'bg-accent text-accent-foreground',
                     value === option.value && 'font-medium'
                   )}
                   onMouseEnter={() => setHighlightedIndex(index)}
                   onMouseDown={(e) => {
-                    e.preventDefault() // Prevent blur
+                    e.preventDefault()
                     handleSelect(option.value)
                   }}
                 >
@@ -183,9 +202,9 @@ export function ComboboxInput({
           ) : (
             <div className='px-2 py-6 text-center text-sm'>
               {emptyText}
-              {value.trim() && (
+              {inputValue.trim() && (
                 <div className='text-muted-foreground mt-1 text-xs'>
-                  {t('Press Enter to use "{{value}}"', { value: value.trim() })}
+                  {t('Press Enter to use "{{value}}"', { value: inputValue.trim() })}
                 </div>
               )}
             </div>

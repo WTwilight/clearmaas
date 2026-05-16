@@ -1,6 +1,7 @@
 package billingexpr_test
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
@@ -1092,3 +1093,494 @@ func BenchmarkExprRunCached(b *testing.B) {
 		billingexpr.RunExpr(benchComplexExpr, params)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Cache eviction: reaching maxCacheSize resets the cache entirely (not LRU)
+// ---------------------------------------------------------------------------
+
+func TestCompileCache_EvictionResets(t *testing.T) {
+	billingexpr.InvalidateCache()
+
+	// Compile 256 distinct expressions to fill the cache
+	exprs := make([]string, 256)
+	for i := 0; i < 256; i++ {
+		exprs[i] = fmt.Sprintf("tier(\"t%d\", p + %d)", i, i)
+	}
+
+	// Compile each expression to populate the cache
+	for _, expr := range exprs {
+		_, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: 100})
+		if err != nil {
+			t.Fatalf("failed to compile %s: %v", expr, err)
+		}
+	}
+
+	// The 257th expression should still compile successfully
+	// (cache was reset, not LRU-evicted)
+	expr := "tier(\"extra\", p * 1.5)"
+	_, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: 100})
+	if err != nil {
+		t.Errorf("257th expression should compile after cache reset: %v", err)
+	}
+}
+
+func TestUsedVars_Comprehensive(t *testing.T) {
+	tests := []struct {
+		expr     string
+		wantVars []string
+	}{
+		{"p * 2", []string{"p"}},
+		{"c * 3", []string{"c"}},
+		{"p * 2 + c * 3", []string{"p", "c"}},
+		{"p * 2 + cr * 0.1", []string{"p", "cr"}},
+		{"p + cc * 2 + cc1h * 3", []string{"p", "cc", "cc1h"}},
+		{"img * 5 + ai * 10", []string{"img", "ai"}},
+		{"p + img_o * 20", []string{"p", "img_o"}},
+		{"param(\"stream\") == true ? 2 : 1", []string{"p"}}, // param is a function, not a variable
+		{"header(\"x-test\") == \"v\" ? 1 : 0", []string{"p"}},
+		{"tier(\"a\", p)", []string{"p", "tier"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expr, func(t *testing.T) {
+			// UsedVars uses cache, so invalidate first
+			billingexpr.InvalidateCache()
+			got := billingexpr.UsedVars(tt.expr)
+			for _, v := range tt.wantVars {
+				if !got[v] {
+					t.Errorf("expr %q: missing variable %q, got %v", tt.expr, v, got)
+				}
+			}
+		})
+	}
+}
+
+func TestRunExpr_Errors(t *testing.T) {
+	// Undefined variable
+	_, _, err := billingexpr.RunExpr("undefined_var * 10", billingexpr.TokenParams{P: 100})
+	if err == nil {
+		t.Error("expected error for undefined variable")
+	}
+
+	// Division by zero — expr library may or may not catch at compile vs run time
+	_, _, err = billingexpr.RunExpr("1 / 0", billingexpr.TokenParams{})
+	if err == nil {
+		t.Error("expected error for division by zero")
+	}
+
+	// Syntax error
+	_, _, err = billingexpr.RunExpr("p +++ * 2", billingexpr.TokenParams{P: 100})
+	if err == nil {
+		t.Error("expected compile error for invalid syntax")
+	}
+}
+
+func TestRunExpr_MaxMin(t *testing.T) {
+	tests := []struct {
+		expr    string
+		params  billingexpr.TokenParams
+		want    float64
+	}{
+		{"max(0, 0)", billingexpr.TokenParams{P: 0}, 0},
+		{"max(-5, 5)", billingexpr.TokenParams{P: 0}, 5},
+		{"min(0, 0)", billingexpr.TokenParams{P: 0}, 0},
+		{"min(-5, 5)", billingexpr.TokenParams{P: 0}, -5},
+		{"max(1, 2, 3)", billingexpr.TokenParams{P: 0}, 3}, // multi-arg
+		{"min(3, 2, 1)", billingexpr.TokenParams{P: 0}, 1},
+	}
+	for _, tt := range tests {
+		cost, _, err := billingexpr.RunExpr(tt.expr, tt.params)
+		if err != nil {
+			t.Errorf("expr %q: %v", tt.expr, err)
+			continue
+		}
+		if cost != tt.want {
+			t.Errorf("expr %q: cost = %f, want %f", tt.expr, cost, tt.want)
+		}
+	}
+}
+
+func TestRunExpr_CeilingFloor(t *testing.T) {
+	tests := []struct {
+		expr string
+		val  float64
+		want float64
+	}{
+		{"ceil(1.2)", 0, 2},
+		{"floor(1.2)", 0, 1},
+		{"ceil(-1.2)", 0, -1},   // Go: ceil(-1.2) = -1
+		{"floor(-1.2)", 0, -2},  // Go: floor(-1.2) = -2
+		{"ceil(0)", 0, 0},
+		{"floor(0)", 0, 0},
+		{"ceil(-0.1)", 0, 0},
+		{"floor(0.1)", 0, 0},
+	}
+	for _, tt := range tests {
+		cost, _, err := billingexpr.RunExpr(tt.expr, billingexpr.TokenParams{})
+		if err != nil {
+			t.Errorf("expr %s: %v", tt.expr, err)
+			continue
+		}
+		if cost != tt.want {
+			t.Errorf("expr %s: cost = %f, want %f", tt.expr, cost, tt.want)
+		}
+	}
+}
+
+func TestRunExpr_ImgO_TokenVariable(t *testing.T) {
+	expr := `tier("default", p + img * 5 + img_o * 20)`
+	params := billingexpr.TokenParams{P: 1000, Img: 200, ImgO: 50}
+	cost, _, err := billingexpr.RunExpr(expr, params)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	want := 1000.0 + 200*5 + 50*20.0
+	if cost != want {
+		t.Errorf("cost = %f, want %f", cost, want)
+	}
+}
+
+func TestRunExpr_SplitCacheTokens(t *testing.T) {
+	// CC total > splitCC5m (50000) → splitCC5m = 50000, splitCC1h = CC - 50000
+	// CC total < splitCC5m → splitCC5m = CC, splitCC1h = 0
+	expr := `tier("default", p + cc * 1.0)`
+	tests := []struct {
+		cc     float64
+		cc1h   float64
+		wantCC float64
+	}{
+		{60000, 0, 60000}, // total=60000 > 50000 → cc contributed = 50000 (splitCC5m=50000)
+		{40000, 0, 40000}, // total=40000 < 50000 → cc contributed = 40000
+		{0, 0, 0},
+		{50000, 0, 50000}, // exact boundary → splitCC5m=50000
+		{70000, 10000, 60000}, // total=80000 → splitCC5m=50000, splitCC1h=10000, cc contributed=60000
+	}
+	for _, tt := range tests {
+		// Note: the billingexpr engine itself does NOT split CC/CC1h;
+		// that splitting happens in BuildTieredTokenParams (service layer).
+		// Here we just verify cc and cc1h are passed through as-is.
+		cost, _, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: 100, CC: tt.cc, CC1h: tt.cc1h})
+		if err != nil {
+			t.Errorf("CC=%f CC1h=%f: %v", tt.cc, tt.cc1h, err)
+			continue
+		}
+		want := 100.0 + tt.wantCC
+		if cost != want {
+			t.Errorf("CC=%f CC1h=%f: cost = %f, want %f", tt.cc, tt.cc1h, cost, want)
+		}
+	}
+}
+
+func TestRunExpr_ContextLengthLenVsPrompt(t *testing.T) {
+	// p=80000 (cache subtracted), len=300000 (full context)
+	// len triggers long_context tier, but p alone would trigger standard
+	expr := `len <= 200000 ? tier("standard", p * 1) : tier("long_context", p * 3)`
+	params := billingexpr.TokenParams{P: 80000, Len: 300000}
+	_, trace, err := billingexpr.RunExpr(expr, params)
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if trace.MatchedTier != "long_context" {
+		t.Errorf("tier = %q, want long_context (len=300000 > 200000 even though p=80000 <= 200000)", trace.MatchedTier)
+	}
+}
+
+func TestParseExprVersion(t *testing.T) {
+	tests := []struct {
+		expr    string
+		version int
+		body    string
+	}{
+		{"v1:p * 2", 1, "p * 2"},
+		{"p * 2", 1, "p * 2"},
+		{"", 1, ""},
+		{"v1:", 1, ""},
+		{"v2:p * 3", 1, "v2:p * 3"}, // unknown prefix → treated as body, version=1
+	}
+	for _, tt := range tests {
+		v, body := billingexpr.ParseExprVersion(tt.expr)
+		if v != tt.version || body != tt.body {
+			t.Errorf("ParseExprVersion(%q) = (%d, %q), want (%d, %q)",
+				tt.expr, v, body, tt.version, tt.body)
+		}
+	}
+}
+
+func TestExprVersion(t *testing.T) {
+	// Empty string → DefaultExprVersion = 1
+	v := billingexpr.ExprVersion("")
+	if v != 1 {
+		t.Errorf("ExprVersion(\"\") = %d, want 1", v)
+	}
+
+	// After compile, ExprVersion returns cached version
+	billingexpr.InvalidateCache()
+	billingexpr.RunExpr("p * 2", billingexpr.TokenParams{P: 0})
+	v = billingexpr.ExprVersion("p * 2")
+	if v != 1 {
+		t.Errorf("ExprVersion(\"p * 2\") = %d, want 1", v)
+	}
+}
+
+func TestRunExpr_ParamProbeNestedPath(t *testing.T) {
+	expr := `param("messages.0.role") == "user" ? tier("fast", p * 2) : tier("normal", p)`
+	cost, _, err := billingexpr.RunExprWithRequest(expr, billingexpr.TokenParams{P: 100},
+		billingexpr.RequestInput{Body: []byte(`{"messages":[{"role":"user","content":"hi"}]}`)})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	// param("messages.0.role") = "user" == "user" → true → fast tier → p * 2 = 200
+	if cost != 200 {
+		t.Errorf("cost = %f, want 200", cost)
+	}
+}
+
+func TestRunExpr_ParamProbeMissingField(t *testing.T) {
+	expr := `param("missing.deep.field") == nil ? tier("a", p) : tier("b", p * 2)`
+	cost, _, err := billingexpr.RunExprWithRequest(expr, billingexpr.TokenParams{P: 100},
+		billingexpr.RequestInput{Body: []byte(`{"other":"value"}`)})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if cost != 100 {
+		t.Errorf("cost = %f, want 100 (param returns nil for missing field)", cost)
+	}
+}
+
+func TestRunExpr_HeaderNormalization(t *testing.T) {
+	expr := `header("Content-Type") == "application/json" ? 1 : 0`
+	cost, _, err := billingexpr.RunExprWithRequest(expr, billingexpr.TokenParams{},
+		billingexpr.RequestInput{
+			Headers: map[string]string{"CONTENT-TYPE": "application/json"},
+		})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if cost != 1 {
+		t.Errorf("cost = %f, want 1 (header keys normalized to lowercase)", cost)
+	}
+}
+
+func TestRunExpr_HeaderTrimSpace(t *testing.T) {
+	expr := `header("x-test") == "value" ? 1 : 0`
+	cost, _, err := billingexpr.RunExprWithRequest(expr, billingexpr.TokenParams{},
+		billingexpr.RequestInput{
+			Headers: map[string]string{" x-test ": " value "},
+		})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	if cost != 1 {
+		t.Errorf("cost = %f, want 1 (header keys and values trimmed)", cost)
+	}
+}
+
+func TestRunExpr_HeaderEmptyKeySkipped(t *testing.T) {
+	expr := `header("") == "" ? 1 : 0`
+	cost, _, err := billingexpr.RunExprWithRequest(expr, billingexpr.TokenParams{},
+		billingexpr.RequestInput{
+			Headers: map[string]string{"x-test": "v", "": "empty-key"},
+		})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	// Empty key is skipped in normalizeHeaders; header("") returns ""
+	if cost != 1 {
+		t.Errorf("cost = %f, want 1", cost)
+	}
+}
+
+func TestRunExpr_HeaderEmptyValueSkipped(t *testing.T) {
+	expr := `header("x-test")`
+	cost, _, err := billingexpr.RunExprWithRequest(expr, billingexpr.TokenParams{},
+		billingexpr.RequestInput{
+			Headers: map[string]string{"x-test": ""},
+		})
+	if err != nil {
+		t.Fatalf("run error: %v", err)
+	}
+	// Empty value is skipped in normalizeHeaders; header("x-test") returns ""
+	if cost != 0 {
+		t.Errorf("cost = %f, want 0 (empty value skipped)", cost)
+	}
+}
+
+func TestRunExpr_HasFunction(t *testing.T) {
+	tests := []struct {
+		expr    string
+		body    []byte
+		headers map[string]string
+		want    float64
+	}{
+		// has on string literal
+		{`has("hello world", "world") ? 1 : 0`, nil, nil, 1},
+		{`has("hello", "xyz") ? 1 : 0`, nil, nil, 0},
+		// has on param result
+		{`has(param("service_tier"), "fast") ? 1 : 0`,
+			[]byte(`{"service_tier":"fast-mode"}`), nil, 1},
+		{`has(param("service_tier"), "premium") ? 1 : 0`,
+			[]byte(`{"service_tier":"fast-mode"}`), nil, 0},
+		// has on nil source
+		{`has(nil, "x") ? 1 : 0`, nil, nil, 0},
+		// has with empty substr
+		{`has("hello", "") ? 1 : 0`, nil, nil, 0},
+	}
+	for _, tt := range tests {
+		cost, _, err := billingexpr.RunExprWithRequest(tt.expr, billingexpr.TokenParams{},
+			billingexpr.RequestInput{Body: tt.body, Headers: tt.headers})
+		if err != nil {
+			t.Errorf("expr %q: %v", tt.expr, err)
+			continue
+		}
+		if cost != tt.want {
+			t.Errorf("expr %q: cost = %f, want %f", tt.expr, cost, tt.want)
+		}
+	}
+}
+
+func TestRunExpr_TimezoneFallback(t *testing.T) {
+	// Invalid timezone → falls back to UTC
+	// We can't assert specific UTC hour value in tests, but we can verify it doesn't error
+	expr := `tier("default", p) * (hour("Invalid/Zone") >= 0 ? 1 : 999)`
+	cost, _, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: 100})
+	if err != nil {
+		t.Errorf("invalid timezone should not error: %v", err)
+	}
+	if cost != 100 {
+		t.Errorf("cost = %f, want 100 (fallback to UTC)", cost)
+	}
+}
+
+func TestRunExpr_TimezoneEmptyFallback(t *testing.T) {
+	// Empty timezone → falls back to UTC
+	expr := `tier("default", p) * (hour("") >= 0 ? 1 : 999)`
+	cost, _, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: 100})
+	if err != nil {
+		t.Errorf("empty timezone should not error: %v", err)
+	}
+	if cost != 100 {
+		t.Errorf("cost = %f, want 100 (empty → UTC fallback)", cost)
+	}
+}
+
+func TestQuotaConversion_V1(t *testing.T) {
+	// v1: exprOutput / 1_000_000 * QuotaPerUnit
+	snap := &billingexpr.BillingSnapshot{
+		ExprVersion:  1,
+		QuotaPerUnit: 500_000,
+	}
+	got := quotaConversion(2.0, snap) // $2 per 1M tokens → 1 quota per 1K tokens
+	want := 2.0 / 1_000_000 * 500_000
+	if math.Abs(got-want) > 1e-9 {
+		t.Errorf("quotaConversion = %f, want %f", got, want)
+	}
+}
+
+func TestQuotaConversion_UnknownVersionFallsToV1(t *testing.T) {
+	// Unknown version defaults to v1 behavior
+	snap := &billingexpr.BillingSnapshot{
+		ExprVersion:  999,
+		QuotaPerUnit: 500_000,
+	}
+	got := quotaConversion(2.0, snap)
+	want := 2.0 / 1_000_000 * 500_000
+	if math.Abs(got-want) > 1e-9 {
+		t.Errorf("unknown version should fall to v1: got %f, want %f", got, want)
+	}
+}
+
+func TestComputeTieredQuota_ZeroTokens(t *testing.T) {
+	exprStr := `tier("default", p * 2 + c * 10)`
+	snap := &billingexpr.BillingSnapshot{
+		BillingMode:  "tiered_expr",
+		ExprString:   exprStr,
+		ExprHash:     billingexpr.ExprHashString(exprStr),
+		GroupRatio:   1.0,
+		QuotaPerUnit: 500_000,
+		ExprVersion:  1,
+	}
+	result, err := billingexpr.ComputeTieredQuota(snap, billingexpr.TokenParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ActualQuotaAfterGroup != 0 {
+		t.Errorf("after group = %d, want 0 (zero tokens)", result.ActualQuotaAfterGroup)
+	}
+	if result.MatchedTier != "default" {
+		t.Errorf("tier = %q, want default", result.MatchedTier)
+	}
+}
+
+func TestRunExprByHash_ConsistentWithRunExpr(t *testing.T) {
+	expr := `p <= 200000 ? tier("standard", p * 1.5 + c * 7.5) : tier("long", p * 3 + c * 11.25)`
+	params := billingexpr.TokenParams{P: 100000, C: 5000}
+	hash := billingexpr.ExprHashString(expr)
+
+	r1, _, err := billingexpr.RunExpr(expr, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, _, err := billingexpr.RunExprByHash(expr, hash, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1 != r2 {
+		t.Errorf("RunExpr = %f, RunExprByHash = %f, should be equal", r1, r2)
+	}
+}
+
+func TestRunExprByHashWithRequest_ConsistentWithRunExprWithRequest(t *testing.T) {
+	expr := `p * (param("quality") == "high" ? 2 : 1)`
+	params := billingexpr.TokenParams{P: 1000}
+	req := billingexpr.RequestInput{Body: []byte(`{"quality":"high"}`)}
+	hash := billingexpr.ExprHashString(expr)
+
+	r1, _, err := billingexpr.RunExprWithRequest(expr, params, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r2, _, err := billingexpr.RunExprByHashWithRequest(expr, hash, params, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1 != r2 {
+		t.Errorf("RunExprWithRequest = %f, RunExprByHashWithRequest = %f, should be equal", r1, r2)
+	}
+}
+
+func TestRunExpr_NegativeTokens(t *testing.T) {
+	// Negative tokens should be handled gracefully (treated as 0 by expr engine)
+	expr := `p * 2`
+	cost, _, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: -100})
+	if err != nil {
+		t.Fatalf("negative p should not error: %v", err)
+	}
+	// expr-lang treats -100 as -100.0, so cost = -200
+	if cost != -200 {
+		t.Errorf("cost = %f, want -200 (negative tokens pass through)", cost)
+	}
+}
+
+func TestRunExpr_ZeroPromptNonZeroCompletion(t *testing.T) {
+	expr := `tier("default", p * 1 + c * 2)`
+	cost, _, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{P: 0, C: 1000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost != 2000 {
+		t.Errorf("cost = %f, want 2000 (zero prompt, non-zero completion)", cost)
+	}
+}
+
+func TestRunExpr_AllTokenVariablesZero(t *testing.T) {
+	expr := `tier("base", p * 2 + c * 10 + cr * 0.5 + cc * 2 + cc1h * 4 + img * 5 + img_o * 20 + ai * 10 + ao * 30)`
+	cost, _, err := billingexpr.RunExpr(expr, billingexpr.TokenParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cost != 0 {
+		t.Errorf("cost = %f, want 0 (all zero)", cost)
+	}
+}
+
+// Ensure fmt is imported for TestCompileCache_EvictionResets

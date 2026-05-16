@@ -22,12 +22,9 @@ RUN mkdir -p web/default/dist web/classic/dist && \
 
 RUN go build -ldflags "-s -w -X 'github.com/QuantumNous/new-api/common.Version=$(cat VERSION)'" -o new-api
 
-FROM debian:bookworm-slim
+FROM alpine:3.19
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata wget \
-    && rm -rf /var/lib/apt/lists/* \
-    && update-ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /build/new-api /
 EXPOSE 3000

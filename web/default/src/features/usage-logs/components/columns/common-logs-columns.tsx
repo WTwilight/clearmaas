@@ -677,6 +677,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const quota = row.getValue('quota') as number
         const other = parseLogOther(log.other)
         const isSubscription = other?.billing_source === 'subscription'
+        const originalPrice = other?.original_price
+        const discountRatio = other?.discount_ratio
 
         if (isSubscription) {
           return (
@@ -704,12 +706,49 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         }
 
         const quotaStr = formatLogQuota(quota)
+        const originalPriceStr = originalPrice != null ? formatLogQuota(originalPrice) : null
+        const hasPriceBreakdown =
+          originalPriceStr != null &&
+          discountRatio != null &&
+          discountRatio !== 1
 
         return (
           <div className='flex flex-col gap-0.5'>
-            <span className='border-border/80 bg-muted/60 inline-flex w-fit items-center rounded-md border px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums'>
-              {quotaStr}
-            </span>
+            {hasPriceBreakdown ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className='border-border/80 bg-muted/60 inline-flex w-fit cursor-help items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums'>
+                        {quotaStr}
+                      </span>
+                    }
+                  >
+                    <span
+                      className='size-1 rounded-full bg-amber-400'
+                      aria-hidden='true'
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className='space-y-1 text-xs'>
+                      <p>
+                        {t('Original Price')}: {originalPriceStr}
+                      </p>
+                      <p>
+                        {t('Discount Ratio')}: {discountRatio}x
+                      </p>
+                      <p className='border-t pt-1 font-medium'>
+                        {t('Actual Cost')}: {quotaStr}
+                      </p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <span className='border-border/80 bg-muted/60 inline-flex w-fit items-center rounded-md border px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums'>
+                {quotaStr}
+              </span>
+            )}
           </div>
         )
       },

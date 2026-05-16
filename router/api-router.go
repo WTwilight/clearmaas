@@ -317,6 +317,34 @@ func SetApiRouter(router *gin.Engine) {
 			groupRoute.GET("/", controller.GetGroups)
 		}
 
+		enterpriseRoute := apiRouter.Group("/enterprise")
+		enterpriseRoute.Use(middleware.AdminAuth())
+		{
+			enterpriseRoute.POST("", controller.CreateEnterprise)
+			enterpriseRoute.GET("", controller.ListEnterprise)
+			enterpriseRoute.GET("/:id", controller.GetEnterprise)
+			enterpriseRoute.PUT("/:id", controller.UpdateEnterprise)
+			enterpriseRoute.DELETE("/:id", controller.DeleteEnterprise)
+			enterpriseRoute.POST("/:id/users", controller.BindUsers)
+			enterpriseRoute.DELETE("/:id/users/:userId", controller.UnbindUser)
+			enterpriseRoute.GET("/:id/users", controller.ListEnterpriseUsers)
+			enterpriseRoute.POST("/:id/pricing-sheet", controller.CreatePricingSheet)
+			enterpriseRoute.GET("/:id/pricing-sheet", controller.ListPricingSheet)
+			enterpriseRoute.GET("/:id/pricing-sheet/:sheetId", controller.GetPricingSheet)
+			enterpriseRoute.PUT("/:id/pricing-sheet/:sheetId", controller.UpdatePricingSheet)
+			enterpriseRoute.DELETE("/:id/pricing-sheet/:sheetId", controller.DeletePricingSheet)
+		}
+
+		pricingItemRoute := apiRouter.Group("/pricing-sheet")
+		pricingItemRoute.Use(middleware.AdminAuth())
+		{
+			pricingItemRoute.GET("", controller.ListAllPricingSheets)
+			pricingItemRoute.GET("/:sheetId/item", controller.ListPricingItems)
+			pricingItemRoute.POST("/:sheetId/item", controller.AddPricingItem)
+			pricingItemRoute.PUT("/:sheetId/item/:itemId", controller.UpdatePricingItem)
+			pricingItemRoute.DELETE("/:sheetId/item/:itemId", controller.DeletePricingItem)
+		}
+
 		prefillGroupRoute := apiRouter.Group("/prefill_group")
 		prefillGroupRoute.Use(middleware.AdminAuth())
 		{
