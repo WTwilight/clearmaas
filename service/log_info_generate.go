@@ -79,7 +79,25 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendBillingInfo(relayInfo, other)
 	appendParamOverrideInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
+	appendEnterprisePricingInfo(relayInfo, other)
 	return other
+}
+
+func appendEnterprisePricingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {
+	if relayInfo == nil || other == nil {
+		return
+	}
+	ratioInfo := relayInfo.PriceData.GroupRatioInfo
+	if ratioInfo.RatioSource == "" {
+		return
+	}
+	other["ratio_source"] = ratioInfo.RatioSource
+	if ratioInfo.EnterpriseSheetId != 0 {
+		other["enterprise_sheet_id"] = ratioInfo.EnterpriseSheetId
+	}
+	if ratioInfo.EnterpriseSheetName != "" {
+		other["enterprise_sheet_name"] = ratioInfo.EnterpriseSheetName
+	}
 }
 
 func appendParamOverrideInfo(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {

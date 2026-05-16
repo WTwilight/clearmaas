@@ -231,7 +231,7 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 	toolCallSurchargeBase := calculateTextToolCallSurchargeBase(ctx, relayInfo, &summary)
 	summary.ToolCallSurchargeQuota = toolCallSurchargeBase.Mul(dGroupRatio)
 
-	var audioInputQuotaBase, audioInputQuota decimal.Decimal
+	var audioInputQuotaBase decimal.Decimal
 	if !relayInfo.PriceData.UsePrice {
 		baseTokens := dPromptTokens
 
@@ -272,7 +272,6 @@ func calculateTextQuotaSummary(ctx *gin.Context, relayInfo *relaycommon.RelayInf
 				baseTokens = baseTokens.Sub(dAudioTokens)
 				audioInputQuotaBase = decimal.NewFromFloat(summary.AudioInputPrice).
 					Div(decimal.NewFromInt(1000000)).Mul(dAudioTokens).Mul(dQuotaPerUnit)
-				audioInputQuota = audioInputQuotaBase.Mul(dGroupRatio)
 			}
 		}
 
@@ -353,7 +352,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 			tieredResult = tieredRes
 			summary.Quota = composeTieredTextQuota(relayInfo, summary, tieredQuota, tieredRes)
 			// For tiered billing, OriginalPrice = ActualQuotaBeforeGroup + ToolCallSurchargeBase (both exclude GroupRatio)
-			toolCallSurchargeBase := decimal.NewFromFloat(summary.ToolCallSurchargeQuota).Div(decimal.NewFromFloat(summary.GroupRatio))
+			toolCallSurchargeBase := calculateTextToolCallSurchargeBase(ctx, relayInfo, &summary)
 			summary.OriginalPrice = decimal.NewFromFloat(tieredResult.ActualQuotaBeforeGroup).Add(toolCallSurchargeBase).Round(0).IntPart()
 		}
 	}

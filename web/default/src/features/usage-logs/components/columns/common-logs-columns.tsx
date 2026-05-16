@@ -774,6 +774,55 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     },
 
     {
+      accessorKey: 'original_price',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Original Price')} />
+      ),
+      cell: ({ row }) => {
+        const log = row.original
+        if (!isDisplayableLogType(log.type)) return null
+
+        const other = parseLogOther(log.other)
+        const originalPrice = other?.original_price
+        if (originalPrice == null || originalPrice <= 0) return null
+
+        return (
+          <span className='inline-flex w-fit rounded-md px-1.5 py-0.5 font-mono text-xs tabular-nums text-muted-foreground'>
+            {formatLogQuota(originalPrice)}
+          </span>
+        )
+      },
+      meta: { label: t('Original Price'), mobileHidden: true },
+    },
+
+    {
+      accessorKey: 'discount_ratio',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Discount Ratio')} />
+      ),
+      cell: ({ row }) => {
+        const log = row.original
+        if (!isDisplayableLogType(log.type)) return null
+
+        const other = parseLogOther(log.other)
+        const discountRatio = other?.discount_ratio
+        if (
+          discountRatio == null ||
+          !Number.isFinite(discountRatio) ||
+          discountRatio === 1
+        )
+          return null
+
+        return (
+          <span className='inline-flex w-fit items-center gap-1 rounded-md border border-amber-200/60 bg-amber-50/40 px-1.5 py-0.5 font-mono text-xs tabular-nums text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400'>
+            {discountRatio}x
+          </span>
+        )
+      },
+      meta: { label: t('Discount Ratio'), mobileHidden: true },
+    },
+
+    {
       accessorKey: 'content',
       header: t('Details'),
       cell: function DetailsCell({ row }) {

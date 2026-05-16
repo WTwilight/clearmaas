@@ -322,7 +322,7 @@ function BillingBreakdown(props: {
   }
 
   rows.push({
-    label: t('Total Cost'),
+    label: t('Actual Cost'),
     value: formatLogQuota(log.quota),
   })
 
