@@ -49,12 +49,10 @@ export function ComboboxInput({
     )
   }, [options, inputValue])
 
-  // Reset highlight when filtered options change
   React.useEffect(() => {
     setHighlightedIndex(-1)
   }, [filteredOptions])
 
-  // Handle click outside to close
   React.useEffect(() => {
     if (!open) return
 
@@ -72,7 +70,6 @@ export function ComboboxInput({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
-  // Sync customDisplayValue → inputValue when selection changes externally
   React.useEffect(() => {
     if (!open && customDisplayValue !== undefined) {
       setInputValue(customDisplayValue)
@@ -113,7 +110,7 @@ export function ComboboxInput({
           handleSelect(filteredOptions[highlightedIndex].value)
         } else {
           setOpen(false)
-          setInputValue('')
+          setInputValue(customDisplayValue ?? '')
         }
         break
       case 'Escape':
@@ -124,7 +121,6 @@ export function ComboboxInput({
     }
   }
 
-  // Scroll highlighted item into view
   React.useEffect(() => {
     if (highlightedIndex < 0 || !listRef.current) return
     const item = listRef.current.children[highlightedIndex] as HTMLElement
