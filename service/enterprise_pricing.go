@@ -45,3 +45,12 @@ func GetModelDiscount(sheetId int, modelName string) (float64, bool) {
 	}
 	return item.DiscountValue, true
 }
+
+// GetPricingItemDiscountType returns the discount type for a given pricing sheet and model.
+func GetPricingItemDiscountType(sheetId int, modelName string) (string, bool) {
+	item, err := model.GetPricingItemBySheetIdAndModel(sheetId, modelName)
+	if err != nil || item == nil {
+		return "", false
+	}
+	return item.DiscountType, true
+}

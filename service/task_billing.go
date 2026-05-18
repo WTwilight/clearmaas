@@ -58,10 +58,41 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 		Content:   logContent,
 		TokenId:   info.TokenId,
 		Group:     info.UsingGroup,
-		Other:     other,
+		Other:     buildTaskLogOther(info),
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
+}
+
+// buildTaskLogOther constructs the Other map for task consume logs.
+func buildTaskLogOther(info *relaycommon.RelayInfo) map[string]interface{} {
+	other := make(map[string]interface{})
+	other["is_task"] = true
+	other["request_path"] = info.RequestURLPath
+	other["model_price"] = info.PriceData.ModelPrice
+	if info.PriceData.ModelRatio > 0 {
+		other["model_ratio"] = info.PriceData.ModelRatio
+	}
+	other["group_ratio"] = info.PriceData.GroupRatioInfo.GroupRatio
+	if info.PriceData.GroupRatioInfo.HasSpecialRatio {
+		other["user_group_ratio"] = info.PriceData.GroupRatioInfo.GroupSpecialRatio
+	}
+	if info.IsModelMapped {
+		other["is_model_mapped"] = true
+		other["upstream_model_name"] = info.UpstreamModelName
+	}
+	// Enterprise pricing fields
+	ratioInfo := info.PriceData.GroupRatioInfo
+	if ratioInfo.RatioSource != "" {
+		other["ratio_source"] = ratioInfo.RatioSource
+		if ratioInfo.EnterpriseSheetId != 0 {
+			other["enterprise_sheet_id"] = ratioInfo.EnterpriseSheetId
+		}
+		if ratioInfo.EnterpriseSheetName != "" {
+			other["enterprise_sheet_name"] = ratioInfo.EnterpriseSheetName
+		}
+	}
+	return other
 }
 
 // ---------------------------------------------------------------------------

@@ -63,6 +63,7 @@ export const getSheetStatusOptions = (t: (key: string) => string) => [
 export const DISCOUNT_TYPE = {
   RATIO: 'ratio',
   FIXED_PRICE: 'fixed_price',
+  PER_CALL: 'per_call',
 } as const
 
 export const DISCOUNT_TYPES = {
@@ -74,11 +75,16 @@ export const DISCOUNT_TYPES = {
     labelKey: 'Fixed Price',
     value: DISCOUNT_TYPE.FIXED_PRICE,
   },
+  [DISCOUNT_TYPE.PER_CALL]: {
+    labelKey: 'Per Call',
+    value: DISCOUNT_TYPE.PER_CALL,
+  },
 } as const
 
 export const getDiscountTypeOptions = (t: (key: string) => string) => [
   { label: t('Ratio Discount'), value: DISCOUNT_TYPE.RATIO },
   { label: t('Fixed Price'), value: DISCOUNT_TYPE.FIXED_PRICE },
+  { label: t('Per Call'), value: DISCOUNT_TYPE.PER_CALL },
 ]
 
 // ============================================================================

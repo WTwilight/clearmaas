@@ -194,7 +194,10 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	}
 
 	// 6. 将 OtherRatios 应用到基础额度
-	if !common.StringsContains(constant.TaskPricePatches, modelName) {
+	// 跳过以下情况：
+	// - TaskPricePatches 中的模型（已有自己的价格体系）
+	// - 企业报价单 per_call 类型（使用固定价格，不再叠加其他比例）
+	if !common.StringsContains(constant.TaskPricePatches, modelName) && info.PriceData.PerCallPriceSheet <= 0 {
 		for _, ra := range info.PriceData.OtherRatios {
 			if ra != 1.0 {
 				info.PriceData.Quota = int(float64(info.PriceData.Quota) * ra)

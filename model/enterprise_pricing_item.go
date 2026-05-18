@@ -8,8 +8,9 @@ import (
 
 // Discount type constants
 const (
-	DiscountTypeRatio       = "ratio"
-	DiscountTypeFixedPrice   = "fixed_price"
+	DiscountTypeRatio      = "ratio"
+	DiscountTypeFixedPrice = "fixed_price"
+	DiscountTypePerCall   = "per_call"
 )
 
 // EnterprisePricingItem represents a pricing item (model discount) within a pricing sheet.

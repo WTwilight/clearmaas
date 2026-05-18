@@ -71,16 +71,27 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 // HandleEnterprisePricingSheet checks if the user is bound to an enterprise with an active pricing sheet
 // and overrides the group ratio if a model discount is found.
 // It takes the base ratio info (from group/group-group settings) and returns it with potential overrides.
+// For per_call type items, it sets PerCallPriceSheet to the absolute price instead of overriding GroupRatio.
 func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
 	sheet, err := getUserActivePricingSheetForBilling(relayInfo.UserId)
 	if err == nil && sheet != nil {
-		modelRatio, found := getModelDiscountForBilling(sheet.Id, relayInfo.OriginModelName)
-		if found {
-			baseRatioInfo.GroupRatio = modelRatio
-			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
-			baseRatioInfo.EnterpriseSheetId = sheet.Id
-			baseRatioInfo.EnterpriseSheetName = sheet.Name
-			logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied: sheet=%s ratio=%.4f", sheet.Name, modelRatio))
+		pricingItem := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
+		if pricingItem.Found && pricingItem.Item != nil {
+			if pricingItem.Item.DiscountType == model.DiscountTypePerCall {
+				// per_call: store absolute price, do not override GroupRatio
+				baseRatioInfo.PerCallPriceSheet = pricingItem.Item.DiscountValue
+				baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
+				baseRatioInfo.EnterpriseSheetId = sheet.Id
+				baseRatioInfo.EnterpriseSheetName = sheet.Name
+				logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied (per_call): sheet=%s price=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
+			} else {
+				// ratio / fixed_price: override GroupRatio with DiscountValue
+				baseRatioInfo.GroupRatio = pricingItem.Item.DiscountValue
+				baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
+				baseRatioInfo.EnterpriseSheetId = sheet.Id
+				baseRatioInfo.EnterpriseSheetName = sheet.Name
+				logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied: sheet=%s ratio=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
+			}
 		}
 	}
 	if baseRatioInfo.RatioSource == "" {
@@ -102,19 +113,51 @@ func getUserActivePricingSheetForBilling(userId int) (*model.EnterprisePricingSh
 	return model.GetFirstActivePricingSheetByEnterpriseId(enterpriseId)
 }
 
-// getModelDiscountForBilling returns the discount value for a model in a pricing sheet.
-func getModelDiscountForBilling(sheetId int, modelName string) (float64, bool) {
+// PricingItemResult holds the resolved discount from a pricing sheet.
+type PricingItemResult struct {
+	Item  *model.EnterprisePricingItem
+	Found bool
+}
+
+// getPricingItemResult returns the pricing item for a specific sheet and model.
+func getPricingItemResult(sheetId int, modelName string) PricingItemResult {
 	item, err := model.GetPricingItemBySheetIdAndModel(sheetId, modelName)
 	if err != nil || item == nil {
-		return 0, false
+		return PricingItemResult{Found: false}
 	}
-	return item.DiscountValue, true
+	return PricingItemResult{Item: item, Found: true}
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 
 	groupRatioInfo := HandleGroupRatio(c, info)
+
+	// per_call: enterprise pricing sheet sets a fixed per-call price for this model.
+	// The billing behaves like per-call (MJ/Task): charge a fixed amount per request.
+	if groupRatioInfo.PerCallPriceSheet > 0 {
+		quota := int(groupRatioInfo.PerCallPriceSheet * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		freeModel := false
+		if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
+			if groupRatioInfo.GroupRatio == 0 {
+				quota = 0
+				freeModel = true
+			}
+		}
+		priceData := types.PriceData{
+			FreeModel:         freeModel,
+			ModelPrice:        groupRatioInfo.PerCallPriceSheet,
+			GroupRatioInfo:    groupRatioInfo,
+			UsePrice:         true,
+			Quota:            quota,
+			PerCallPriceSheet: groupRatioInfo.PerCallPriceSheet,
+		}
+		if common.DebugEnabled {
+			println(fmt.Sprintf("model_price_helper (per_call sheet): model=%s price=%.4f quota=%d", info.OriginModelName, groupRatioInfo.PerCallPriceSheet, quota))
+		}
+		info.PriceData = priceData
+		return priceData, nil
+	}
 
 	// Check if this model uses tiered_expr billing
 	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
@@ -215,8 +258,34 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 }
 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)
+// 支持企业报价单的 per_call 类型：报价单中配置了 per_call 时，discount_value 作为绝对价格使用。
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
 	groupRatioInfo := HandleGroupRatio(c, info)
+
+	// per_call 优先级最高：使用企业报价单的绝对价格作为每次调用费用。
+	if groupRatioInfo.PerCallPriceSheet > 0 {
+		quota := int(groupRatioInfo.PerCallPriceSheet * common.QuotaPerUnit * groupRatioInfo.GroupRatio)
+		freeModel := false
+		if !operation_setting.GetQuotaSetting().EnableFreeModelPreConsume {
+			if groupRatioInfo.GroupRatio == 0 {
+				quota = 0
+				freeModel = true
+			}
+		}
+		priceData := types.PriceData{
+			FreeModel:         freeModel,
+			ModelPrice:        groupRatioInfo.PerCallPriceSheet,
+			GroupRatioInfo:    groupRatioInfo,
+			UsePrice:         true,
+			Quota:            quota,
+			PerCallPriceSheet: groupRatioInfo.PerCallPriceSheet,
+		}
+		if common.DebugEnabled {
+			println(fmt.Sprintf("model_price_helper_percall (per_call sheet): model=%s price=%.4f quota=%d", info.OriginModelName, groupRatioInfo.PerCallPriceSheet, quota))
+		}
+		info.PriceData = priceData
+		return priceData, nil
+	}
 
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
 	usePrice := success

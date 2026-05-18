@@ -40,7 +40,7 @@ import { useForm } from 'react-hook-form'
 
 const itemFormSchema = z.object({
   model: z.string().min(1, 'Model is required'),
-  discount_type: z.enum(['ratio', 'fixed_price']),
+  discount_type: z.enum(['ratio', 'fixed_price', 'per_call']),
   discount_value: z.number().min(0, 'Value must be non-negative'),
   remark: z.string().optional(),
 })
@@ -210,7 +210,7 @@ export function ItemDrawer({
                     <Select
                       items={getDiscountTypeOptions(t)}
                       onValueChange={(value) =>
-                        field.onChange(value as 'ratio' | 'fixed_price')
+                        field.onChange(value as 'ratio' | 'fixed_price' | 'per_call')
                       }
                       value={field.value}
                     >
@@ -244,6 +244,8 @@ export function ItemDrawer({
                       <FormLabel>
                         {discountType === DISCOUNT_TYPE.RATIO
                           ? t('Discount Ratio')
+                          : discountType === DISCOUNT_TYPE.PER_CALL
+                          ? t('Price per Call')
                           : t('Fixed Price')}
                       </FormLabel>
                       <FormControl>
@@ -257,6 +259,8 @@ export function ItemDrawer({
                           placeholder={
                             discountType === DISCOUNT_TYPE.RATIO
                               ? 'e.g., 0.8 for 20% off'
+                              : discountType === DISCOUNT_TYPE.PER_CALL
+                              ? 'e.g., 0.05'
                               : 'e.g., 0.001'
                           }
                         />
@@ -264,6 +268,8 @@ export function ItemDrawer({
                       <FormDescription>
                         {discountType === DISCOUNT_TYPE.RATIO
                           ? t('Enter ratio (e.g., 0.8 = 80% of original price)')
+                          : discountType === DISCOUNT_TYPE.PER_CALL
+                          ? t('Fixed price per API call (USD). Bypasses model token billing.')
                           : t('Enter fixed price per unit')}
                       </FormDescription>
                       <FormMessage />

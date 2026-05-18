@@ -59,6 +59,9 @@ export function useItemColumns(): ColumnDef<PricingItem>[] {
         if (type === 'ratio') {
           return <span className='font-medium'>{value.toFixed(2)}x</span>
         }
+        if (type === 'per_call') {
+          return <span className='font-medium'>${value.toFixed(4)}/call</span>
+        }
         return <span className='font-medium'>${value.toFixed(4)}</span>
       },
       meta: { label: t('Discount Value') },

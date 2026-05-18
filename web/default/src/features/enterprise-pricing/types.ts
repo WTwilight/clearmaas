@@ -38,7 +38,7 @@ export const pricingItemSchema = z.object({
   id: z.number(),
   pricing_sheet_id: z.number(),
   model: z.string(),
-  discount_type: z.enum(['ratio', 'fixed_price']),
+  discount_type: z.enum(['ratio', 'fixed_price', 'per_call']),
   discount_value: z.number(),
   remark: z.string().optional(),
 })
@@ -140,7 +140,7 @@ export interface UpdateSheetData extends CreateSheetData {
 
 export interface CreatePricingItemData {
   model: string
-  discount_type: 'ratio' | 'fixed_price'
+  discount_type: 'ratio' | 'fixed_price' | 'per_call'
   discount_value: number
   remark?: string
 }
