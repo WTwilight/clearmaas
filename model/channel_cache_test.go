@@ -231,7 +231,7 @@ func TestRetryClipping(t *testing.T) {
 }
 
 func TestGetRandomSatisfiedChannel_DatabaseConsistencyError(t *testing.T) {
-	// When a channelId in group2model2channels doesn't exist in channelsIDM,
+	// When a channelId in Group2Model2Channels doesn't exist in ChannelsIDM,
 	// an error should be returned (not a nil).
 	// We test this by temporarily corrupting the in-memory state.
 	origEnabled := common.MemoryCacheEnabled
@@ -239,21 +239,21 @@ func TestGetRandomSatisfiedChannel_DatabaseConsistencyError(t *testing.T) {
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
 	// Save original state
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 
 	// Restore after test
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
-	// Set up a "corrupt" state: channel ID 9999 is in the abilities list but not in channelsIDM
-	group2model2channels = map[string]map[string][]int{
+	// Set up a "corrupt" state: channel ID 9999 is in the abilities list but not in ChannelsIDM
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gpt-4o": {9999}},
 	}
-	channelsIDM = map[int]*Channel{
+	ChannelsIDM = map[int]*Channel{
 		// 9999 is intentionally missing
 	}
 
@@ -268,19 +268,19 @@ func TestGetRandomSatisfiedChannel_EmptyChannelList(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
 	// No channels registered for this group/model
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gpt-4o": {}},
 	}
-	channelsIDM = map[int]*Channel{}
+	ChannelsIDM = map[int]*Channel{}
 
 	channel, err := GetRandomSatisfiedChannel("default", "gpt-4o", 0)
 	require.NoError(t, err)
@@ -292,19 +292,19 @@ func TestGetRandomSatisfiedChannel_SingleChannel(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
 	ch := &Channel{Id: 42, Name: "test-channel", Priority: ptrInt64(10), Weight: ptrUint(50)}
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gpt-4o": {42}},
 	}
-	channelsIDM = map[int]*Channel{42: ch}
+	ChannelsIDM = map[int]*Channel{42: ch}
 
 	channel, err := GetRandomSatisfiedChannel("default", "gpt-4o", 0)
 	require.NoError(t, err)
@@ -318,20 +318,20 @@ func TestGetRandomSatisfiedChannel_NormalizedModelFallback(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
 	ch := &Channel{Id: 7, Name: "gemini-channel", Priority: ptrInt64(10), Weight: ptrUint(50)}
 	// Only "gemini-2.5-flash-thinking-*" is registered, not "gemini-2.5-flash-thinking-exp"
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gemini-2.5-flash-thinking-*": {7}},
 	}
-	channelsIDM = map[int]*Channel{7: ch}
+	ChannelsIDM = map[int]*Channel{7: ch}
 
 	channel, err := GetRandomSatisfiedChannel("default", "gemini-2.5-flash-thinking-exp", 0)
 	require.NoError(t, err)
@@ -345,11 +345,11 @@ func TestGetRandomSatisfiedChannel_MultiplePriorities(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
@@ -357,10 +357,10 @@ func TestGetRandomSatisfiedChannel_MultiplePriorities(t *testing.T) {
 	chMid := &Channel{Id: 2, Name: "mid-priority", Priority: ptrInt64(50), Weight: ptrUint(30)}
 	chLow := &Channel{Id: 3, Name: "low-priority", Priority: ptrInt64(10), Weight: ptrUint(20)}
 
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gpt-4o": {1, 2, 3}},
 	}
-	channelsIDM = map[int]*Channel{
+	ChannelsIDM = map[int]*Channel{
 		1: chHigh,
 		2: chMid,
 		3: chLow,

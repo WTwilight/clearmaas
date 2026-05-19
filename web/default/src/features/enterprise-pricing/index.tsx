@@ -3,6 +3,7 @@ import { EnterprisePricingProvider } from './components/enterprise-pricing-provi
 import { EnterprisePricingNav } from './components/enterprise-pricing-nav'
 import { Main, PageFooterPortal } from '@/components/layout'
 import { Outlet } from '@tanstack/react-router'
+import { SheetBindChannelDialog } from './components/sheet-bind-channel-dialog'
 
 function EnterprisePricingContent() {
   const { t } = useTranslation()
@@ -30,6 +31,8 @@ function EnterprisePricingContent() {
         <PageFooterPortal>
           <div />
         </PageFooterPortal>
+
+        <SheetBindChannelDialog />
       </Main>
     </EnterprisePricingProvider>
   )

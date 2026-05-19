@@ -48,6 +48,9 @@ func TestMain(m *testing.M) {
 		&model.EnterprisePricingSheet{},
 		&model.EnterprisePricingItem{},
 		&model.EnterpriseUserBinding{},
+		&model.Supplier{},
+		&model.SupplierPricingSheet{},
+		&model.SupplierPricingItem{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

@@ -591,7 +591,7 @@ func TestAddPricingItem_DuplicateModel(t *testing.T) {
 
 	item := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         "gpt-4o",
+		Models:         []string{"gpt-4o"},
 		DiscountType:   model.DiscountTypeRatio,
 		DiscountValue:  0.7,
 	}
@@ -635,7 +635,7 @@ func TestUpdatePricingItem(t *testing.T) {
 
 	item := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         "gpt-4o",
+		Models:         []string{"gpt-4o"},
 		DiscountType:   model.DiscountTypeRatio,
 		DiscountValue:  0.7,
 	}
@@ -680,7 +680,7 @@ func TestDeletePricingItem(t *testing.T) {
 
 	item := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         "gpt-4o",
+		Models:         []string{"gpt-4o"},
 		DiscountType:   model.DiscountTypeRatio,
 		DiscountValue:  0.7,
 	}

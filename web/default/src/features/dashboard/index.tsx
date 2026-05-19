@@ -77,6 +77,12 @@ const LazyUserCharts = lazy(() =>
   }))
 )
 
+const LazySupplierStats = lazy(() =>
+  import('@/features/supplier-stats/components/supplier-stats-section').then(
+    (m) => ({ default: m.SupplierStatsSection })
+  )
+)
+
 function LogStatCardsFallback() {
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -146,6 +152,10 @@ const SECTION_META: Record<
     titleKey: 'User Analytics',
     descriptionKey: 'View user consumption statistics and charts',
   },
+  'supplier-stats': {
+    titleKey: 'Supplier Analytics',
+    descriptionKey: 'View supplier cost and profit statistics',
+  },
 }
 
 export function Dashboard() {
@@ -194,7 +204,9 @@ export function Dashboard() {
   const visibleSections = useMemo(
     () =>
       DASHBOARD_SECTION_IDS.filter(
-        (section) => section !== 'overview' && (section !== 'users' || isAdmin)
+        (section) =>
+          section !== 'overview' &&
+          (section !== 'users' && section !== 'supplier-stats' ? true : isAdmin)
       ),
     [isAdmin]
   )
@@ -304,6 +316,13 @@ export function Dashboard() {
             <FadeIn>
               <Suspense fallback={<ModelChartsFallback />}>
                 <LazyUserCharts />
+              </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'supplier-stats' && isAdmin && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazySupplierStats />
               </Suspense>
             </FadeIn>
           )}

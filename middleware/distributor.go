@@ -13,6 +13,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
@@ -124,6 +125,20 @@ func Distribute() func(c *gin.Context) {
 							selectGroup = usingGroup
 							service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
 						}
+					}
+				}
+
+				// [NEW] 企业报价单渠道路由
+				if channel == nil {
+					enterpriseChannel, found := service.GetEnterpriseChannelForModel(
+						common.GetContextKeyInt(c, constant.ContextKeyUserId),
+						modelRequest.Model,
+						usingGroup,
+					)
+					if found {
+						channel = enterpriseChannel
+						common.SetContextKey(c, constant.ContextKeyEnterpriseChannelId, enterpriseChannel.Id)
+						logger.LogDebug(c, "企业报价单渠道路由命中: channelId=%d model=%s", enterpriseChannel.Id, modelRequest.Model)
 					}
 				}
 

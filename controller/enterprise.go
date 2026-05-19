@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -156,7 +157,7 @@ func DeleteEnterprise(c *gin.Context) {
 	}
 
 	if err := model.DeleteEnterprise(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -211,8 +212,8 @@ func BindUsers(c *gin.Context) {
 		}
 		binding := &model.EnterpriseUserBinding{
 			EnterpriseId: enterpriseId,
-			UserId:        userId,
-			CreatedAt:     now,
+			UserId:       userId,
+			CreatedAt:    now,
 		}
 		if err := binding.Create(); err != nil {
 			continue
@@ -277,6 +278,15 @@ func ListEnterpriseUsers(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": users})
+}
+
+func ListAllUserBindings(c *gin.Context) {
+	bindings, err := model.GetAllUserBindings()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": bindings})
 }
 
 // ---------------------------------------------------------------------------
@@ -479,7 +489,7 @@ func DeletePricingSheet(c *gin.Context) {
 	}
 
 	if err := model.DeletePricingSheet(sheetId); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -535,35 +545,55 @@ func AddPricingItem(c *gin.Context) {
 	}
 
 	var req struct {
-		Model          string  `json:"model"`
-		DiscountType   string  `json:"discount_type"`
-		DiscountValue  float64 `json:"discount_value"`
-		Remark         string  `json:"remark"`
+		VendorType    string   `json:"vendor_type"`
+		Models        []string `json:"models"`
+		DiscountType  string   `json:"discount_type"`
+		DiscountValue float64  `json:"discount_value"`
+		Remark        string   `json:"remark"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid json"})
 		return
 	}
-	if req.Model == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "model is required"})
+	if req.VendorType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "vendor_type is required"})
+		return
+	}
+	if len(req.Models) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "models is required and must not be empty"})
 		return
 	}
 	if req.DiscountType == "" {
 		req.DiscountType = model.DiscountTypeRatio
 	}
 
-	existing, _ := model.GetPricingItemBySheetIdAndModel(sheetId, req.Model)
-	if existing != nil {
-		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "model already exists in this pricing sheet"})
+	// Validate: each model must not already exist in any item in this sheet
+	sheetItems, err := model.GetPricingItemsBySheetId(sheetId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	existingModels := make(map[string]bool)
+	for _, it := range sheetItems {
+		for _, m := range it.Models {
+			existingModels[m] = true
+		}
+	}
+	for _, modelName := range req.Models {
+		if existingModels[modelName] {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": fmt.Sprintf("model %q already exists in this pricing sheet", modelName)})
+			return
+		}
+	}
 
+	// Create a single item with models as JSON array
 	item := &model.EnterprisePricingItem{
 		PricingSheetId: sheetId,
-		Model:          req.Model,
-		DiscountType:   req.DiscountType,
-		DiscountValue:  req.DiscountValue,
-		Remark:         req.Remark,
+		VendorType:    req.VendorType,
+		Models:        req.Models,
+		DiscountType:  req.DiscountType,
+		DiscountValue: req.DiscountValue,
+		Remark:        req.Remark,
 	}
 	if err := item.Create(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
@@ -591,18 +621,43 @@ func UpdatePricingItem(c *gin.Context) {
 	}
 
 	var req struct {
-		Model          string  `json:"model"`
-		DiscountType   string  `json:"discount_type"`
-		DiscountValue  float64 `json:"discount_value"`
-		Remark         string  `json:"remark"`
+		VendorType    string   `json:"vendor_type"`
+		Models        []string `json:"models"`
+		DiscountType  string   `json:"discount_type"`
+		DiscountValue float64  `json:"discount_value"`
+		Remark        string   `json:"remark"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid json"})
 		return
 	}
 
-	if req.Model != "" {
-		item.Model = req.Model
+	if req.VendorType != "" {
+		item.VendorType = req.VendorType
+	}
+	if len(req.Models) > 0 {
+		// Validate: new models must not conflict with other items in this sheet
+		sheetItems, err := model.GetPricingItemsBySheetId(item.PricingSheetId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+		existingModels := make(map[string]bool)
+		for _, it := range sheetItems {
+			if it.Id == item.Id {
+				continue
+			}
+			for _, m := range it.Models {
+				existingModels[m] = true
+			}
+		}
+		for _, modelName := range req.Models {
+			if existingModels[modelName] {
+				c.JSON(http.StatusConflict, gin.H{"success": false, "message": fmt.Sprintf("model %q already exists in another item in this pricing sheet", modelName)})
+				return
+			}
+		}
+		item.Models = req.Models
 	}
 	if req.DiscountType != "" {
 		item.DiscountType = req.DiscountType
@@ -662,4 +717,71 @@ func GetUserActivePricingSheetForBilling(userId int) (int, bool) {
 // GetModelDiscountForBilling returns the discount ratio for a model in a pricing sheet.
 func GetModelDiscountForBilling(sheetId int, modelName string) (float64, bool) {
 	return service.GetModelDiscount(sheetId, modelName)
+}
+
+// ---------------------------------------------------------------------------
+// Pricing Sheet Channel Binding
+// ---------------------------------------------------------------------------
+
+// ListPricingSheetChannels returns all channel IDs bound to a pricing sheet.
+func ListPricingSheetChannels(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	ids, err := model.GetChannelIdsBySheetId(sheetId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": ids})
+}
+
+// BindPricingSheetChannels replaces all channel bindings for a pricing sheet.
+func BindPricingSheetChannels(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	var req struct {
+		ChannelIds []int `json:"channel_ids"`
+	}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid json"})
+		return
+	}
+	if err := model.BindChannelsToSheet(sheetId, req.ChannelIds); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// UnbindPricingSheetChannel removes a single channel binding from a pricing sheet.
+func UnbindPricingSheetChannel(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	channelIdStr := c.Param("channelId")
+	channelId, err := strconv.Atoi(channelIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid channel id"})
+		return
+	}
+	binding := &model.EnterprisePricingSheetChannel{
+		PricingSheetId: sheetId,
+		ChannelId:      channelId,
+	}
+	if err := binding.Delete(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }

@@ -223,6 +223,9 @@ export async function getNotice(): Promise<{
 // 2FA Management APIs
 // ----------------------------------------------------------------------------
 
+// Alias for convenience — the same axios instance is used everywhere.
+export const axiosClient = api
+
 // Get 2FA status
 export async function get2FAStatus() {
   const res = await api.get('/api/user/2fa/status')

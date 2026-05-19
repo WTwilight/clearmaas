@@ -153,6 +153,13 @@ export async function unbindUser(
   return res.data
 }
 
+export async function getAllUserBindings(): Promise<
+  ApiResponse<EnterpriseUserBinding[]>
+> {
+  const res = await api.get('/api/enterprise/bindings/all')
+  return res.data
+}
+
 // ============================================================================
 // Pricing Item APIs
 // ============================================================================
@@ -208,8 +215,36 @@ export async function searchAllUsers(
 // ============================================================================
 
 export async function getEnabledModels(): Promise<string[]> {
-  const res = await api.get('/api/channel/models_enabled', {
+  const res = await api.get('/api/models/enabled', {
     skipErrorHandler: true,
   } as Record<string, unknown>)
   return res.data?.data || []
+}
+
+// ============================================================================
+// Pricing Sheet Channel Binding APIs
+// ============================================================================
+
+export async function getSheetChannels(sheetId: number): Promise<number[]> {
+  const res = await api.get(`/api/pricing-sheet/${sheetId}/channels`)
+  if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to fetch channels')
+  return res.data?.data ?? []
+}
+
+export async function bindSheetChannels(
+  sheetId: number,
+  channelIds: number[]
+): Promise<void> {
+  const res = await api.post(`/api/pricing-sheet/${sheetId}/channels`, {
+    channel_ids: channelIds,
+  })
+  if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to bind channels')
+}
+
+export async function unbindSheetChannel(
+  sheetId: number,
+  channelId: number
+): Promise<void> {
+  const res = await api.delete(`/api/pricing-sheet/${sheetId}/channels/${channelId}`)
+  if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to unbind channel')
 }

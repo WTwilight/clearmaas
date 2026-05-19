@@ -259,6 +259,13 @@ func EnabledListModels(c *gin.Context) {
 	})
 }
 
+func ListEnabledModels(c *gin.Context) {
+	c.JSON(200, gin.H{
+		"success": true,
+		"data":    model.GetEnabledModels(),
+	})
+}
+
 func RetrieveModel(c *gin.Context, modelType int) {
 	modelId := c.Param("model")
 	if aiModel, ok := openAIModelsMap[modelId]; ok {

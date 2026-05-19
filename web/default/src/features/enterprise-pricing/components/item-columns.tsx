@@ -2,7 +2,8 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { DataTableColumnHeader } from '@/components/data-table'
 import { LongText } from '@/components/long-text'
-import { DISCOUNT_TYPES } from '../constants'
+import { Badge } from '@/components/ui/badge'
+import { DISCOUNT_TYPES, getVendorLabel } from '../constants'
 import type { PricingItem } from '../types'
 import { ItemRowActions } from './item-row-actions'
 
@@ -18,19 +19,51 @@ export function useItemColumns(): ColumnDef<PricingItem>[] {
       meta: { label: t('ID'), mobileHidden: true },
     },
     {
-      accessorKey: 'model',
+      accessorKey: 'vendor_type',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Model')} />
+        <DataTableColumnHeader column={column} title={t('Vendor')} />
       ),
       cell: ({ row }) => {
-        const model = row.getValue('model') as string
+        const vendorType = row.original.vendor_type
+        const label = vendorType ? getVendorLabel(vendorType) : null
+        if (!label) return <span className='text-muted-foreground text-sm'>-</span>
+        return <span className='text-xs font-medium'>{label}</span>
+      },
+      meta: { label: t('Vendor'), mobileHidden: true },
+    },
+    {
+      accessorKey: 'models',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Models')} />
+      ),
+      cell: ({ row }) => {
+        const models = row.original.models
+        if (!models || models.length === 0) {
+          return <span className='text-muted-foreground text-sm'>-</span>
+        }
+        if (models.length === 1) {
+          return (
+            <LongText className='max-w-[200px] font-medium'>
+              {models[0]}
+            </LongText>
+          )
+        }
         return (
-          <div className='min-w-[140px]'>
-            <LongText className='max-w-[180px] font-medium'>{model}</LongText>
+          <div className='flex flex-wrap gap-1'>
+            {models.slice(0, 3).map((m) => (
+              <Badge key={m} variant='secondary' className='text-xs'>
+                {m}
+              </Badge>
+            ))}
+            {models.length > 3 && (
+              <Badge variant='outline' className='text-xs'>
+                +{models.length - 3}
+              </Badge>
+            )}
           </div>
         )
       },
-      meta: { label: t('Model'), mobileTitle: true },
+      meta: { label: t('Models'), mobileTitle: true },
     },
     {
       accessorKey: 'discount_type',

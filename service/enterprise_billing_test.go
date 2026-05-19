@@ -80,7 +80,7 @@ func TestEnterpriseBilling_UserWithPricingSheet(t *testing.T) {
 
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  model.DiscountTypeRatio,
 		DiscountValue: 0.5,
 	}
@@ -377,7 +377,7 @@ func TestEnterpriseBilling_ModelNotInSheet_FallsBackToGroup(t *testing.T) {
 	// Sheet only has gpt-4o-mini, NOT gpt-4o
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         "gpt-4o-mini",
+		Models:        []string{"gpt-4o-mini"},
 		DiscountType:  model.DiscountTypeRatio,
 		DiscountValue: 0.3,
 	}
@@ -504,7 +504,7 @@ func TestEnterpriseBilling_PerCall_UserWithPricingSheet(t *testing.T) {
 
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  model.DiscountTypeRatio,
 		DiscountValue: enterpriseRatio,
 	}
@@ -741,7 +741,7 @@ func TestEnterpriseBilling_PerCall_ModelNotInSheet_FallsBackToGroup(t *testing.T
 	// Sheet only has gpt-4o-mini, NOT midjourney
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         "gpt-4o-mini",
+		Models:        []string{"gpt-4o-mini"},
 		DiscountType:  model.DiscountTypeRatio,
 		DiscountValue: 0.3,
 	}
@@ -858,7 +858,7 @@ func TestEnterpriseBilling_PerCallSheet_FixedPricePerCall(t *testing.T) {
 
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  model.DiscountTypePerCall,
 		DiscountValue: perCallPrice,
 	}
@@ -1006,7 +1006,7 @@ func TestEnterpriseBilling_PerCallSheet_WithGroupRatioOverride(t *testing.T) {
 
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  model.DiscountTypePerCall,
 		DiscountValue: perCallPrice,
 	}
@@ -1241,7 +1241,7 @@ func TestEnterpriseBilling_RatioDiscountType_NotPerCall(t *testing.T) {
 
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  model.DiscountTypeRatio, // NOT per_call
 		DiscountValue: ratioValue,
 	}
@@ -1365,7 +1365,7 @@ func TestEnterpriseBilling_FixedPrice_WithSheet(t *testing.T) {
 
 	pricingItem := &model.EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  model.DiscountTypeFixedPrice,
 		DiscountValue: fixedPrice,
 	}

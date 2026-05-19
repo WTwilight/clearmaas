@@ -66,4 +66,7 @@ const (
 	// ContextKeyLanguage stores the user's language preference for i18n
 	ContextKeyLanguage ContextKey = "language"
 	ContextKeyIsStream ContextKey = "is_stream"
+
+	// ContextKeyEnterpriseChannelId stores the channel ID selected by enterprise pricing sheet routing.
+	ContextKeyEnterpriseChannelId ContextKey = "enterprise_channel_id"
 )

@@ -92,7 +92,15 @@ func GetFirstActivePricingSheetByEnterpriseId(enterpriseId int) (*EnterprisePric
 }
 
 // DeletePricingSheet deletes a pricing sheet by ID.
+// Returns an error if the pricing sheet has associated pricing items.
 func DeletePricingSheet(id int) error {
+	items, err := GetPricingItemsBySheetId(id)
+	if err != nil {
+		return err
+	}
+	if len(items) > 0 {
+		return errors.New("cannot delete pricing sheet with associated pricing items")
+	}
 	return DB.Delete(&EnterprisePricingSheet{}, id).Error
 }
 

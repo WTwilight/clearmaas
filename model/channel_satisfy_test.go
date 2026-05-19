@@ -25,16 +25,16 @@ func TestIsChannelEnabledForGroupModel_NilMap(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
-	// When group2model2channels is nil, should return false without panic
-	group2model2channels = nil
+	// When Group2Model2Channels is nil, should return false without panic
+	Group2Model2Channels = nil
 	result := IsChannelEnabledForGroupModel("default", "gpt-4o", 1)
 	require.False(t, result)
 }
@@ -44,19 +44,19 @@ func TestIsChannelEnabledForGroupModel_DirectMatch(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
 	ch := &Channel{Id: 10, Name: "test-channel"}
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gpt-4o": {10}},
 	}
-	channelsIDM = map[int]*Channel{10: ch}
+	ChannelsIDM = map[int]*Channel{10: ch}
 
 	// Exact model match
 	require.True(t, IsChannelEnabledForGroupModel("default", "gpt-4o", 10))
@@ -71,20 +71,20 @@ func TestIsChannelEnabledForGroupModel_NormalizedFallback(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
 	ch := &Channel{Id: 5, Name: "gemini-channel"}
 	// Only normalized key exists
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"default": {"gemini-2.5-flash-thinking-*": {5}},
 	}
-	channelsIDM = map[int]*Channel{5: ch}
+	ChannelsIDM = map[int]*Channel{5: ch}
 
 	// Exact match fails, normalized fallback succeeds
 	result := IsChannelEnabledForGroupModel("default", "gemini-2.5-flash-thinking-exp", 5)
@@ -108,19 +108,19 @@ func TestIsChannelEnabledForAnyGroupModel(t *testing.T) {
 	common.MemoryCacheEnabled = true
 	defer func() { common.MemoryCacheEnabled = origEnabled }()
 
-	origGroup2Model2Channels := group2model2channels
-	origChannelsIDM := channelsIDM
+	origGroup2Model2Channels := Group2Model2Channels
+	origChannelsIDM := ChannelsIDM
 	defer func() {
-		group2model2channels = origGroup2Model2Channels
-		channelsIDM = origChannelsIDM
+		Group2Model2Channels = origGroup2Model2Channels
+		ChannelsIDM = origChannelsIDM
 		InitChannelCache()
 	}()
 
 	ch := &Channel{Id: 7, Name: "vip-channel"}
-	group2model2channels = map[string]map[string][]int{
+	Group2Model2Channels = map[string]map[string][]int{
 		"vip": {"gpt-4o": {7}},
 	}
-	channelsIDM = map[int]*Channel{7: ch}
+	ChannelsIDM = map[int]*Channel{7: ch}
 
 	// Channel in first group
 	groups := []string{"vip", "default"}

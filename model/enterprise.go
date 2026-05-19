@@ -82,7 +82,15 @@ func GetEnterprises(page, pageSize int) ([]*Enterprise, int64, error) {
 }
 
 // DeleteEnterprise deletes an enterprise by ID.
+// Returns an error if the enterprise has associated pricing sheets.
 func DeleteEnterprise(id int) error {
+	sheets, err := GetPricingSheetsByEnterpriseId(id)
+	if err != nil {
+		return err
+	}
+	if len(sheets) > 0 {
+		return errors.New("cannot delete enterprise with associated pricing sheets")
+	}
 	return DB.Delete(&Enterprise{}, id).Error
 }
 

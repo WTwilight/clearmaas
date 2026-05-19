@@ -39,7 +39,7 @@ func GetPricingSheetItems(sheetId int) ([]*model.EnterprisePricingItem, error) {
 // GetModelDiscount returns the discount value (ratio) for a given pricing sheet and model.
 // Returns (ratio, found). The ratio is the discount value from the pricing item.
 func GetModelDiscount(sheetId int, modelName string) (float64, bool) {
-	item, err := model.GetPricingItemBySheetIdAndModel(sheetId, modelName)
+	item, err := model.GetPricingItemBySheetIdAndModelName(sheetId, modelName)
 	if err != nil || item == nil {
 		return 0, false
 	}
@@ -48,7 +48,7 @@ func GetModelDiscount(sheetId int, modelName string) (float64, bool) {
 
 // GetPricingItemDiscountType returns the discount type for a given pricing sheet and model.
 func GetPricingItemDiscountType(sheetId int, modelName string) (string, bool) {
-	item, err := model.GetPricingItemBySheetIdAndModel(sheetId, modelName)
+	item, err := model.GetPricingItemBySheetIdAndModelName(sheetId, modelName)
 	if err != nil || item == nil {
 		return "", false
 	}

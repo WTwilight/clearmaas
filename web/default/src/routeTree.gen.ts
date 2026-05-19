@@ -34,12 +34,14 @@ import { Route as authOtpRouteImport } from './routes/(auth)/otp'
 import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
+import { Route as AuthenticatedSupplierPricingRouteRouteImport } from './routes/_authenticated/supplier-pricing/route'
 import { Route as AuthenticatedEnterprisePricingRouteRouteImport } from './routes/_authenticated/enterprise-pricing/route'
 import { Route as PricingModelIdIndexRouteImport } from './routes/pricing/$modelId/index'
 import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenticated/wallet/index'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authenticated/usage-logs/index'
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
+import { Route as AuthenticatedSupplierPricingIndexRouteImport } from './routes/_authenticated/supplier-pricing/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
@@ -62,6 +64,9 @@ import { Route as AuthenticatedSystemSettingsModelsIndexRouteImport } from './ro
 import { Route as AuthenticatedSystemSettingsContentIndexRouteImport } from './routes/_authenticated/system-settings/content/index'
 import { Route as AuthenticatedSystemSettingsBillingIndexRouteImport } from './routes/_authenticated/system-settings/billing/index'
 import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
+import { Route as AuthenticatedSupplierPricingSuppliersIndexRouteImport } from './routes/_authenticated/supplier-pricing/suppliers/index'
+import { Route as AuthenticatedSupplierPricingSheetsIndexRouteImport } from './routes/_authenticated/supplier-pricing/sheets/index'
+import { Route as AuthenticatedSupplierPricingItemsIndexRouteImport } from './routes/_authenticated/supplier-pricing/items/index'
 import { Route as AuthenticatedEnterprisePricingSheetsIndexRouteImport } from './routes/_authenticated/enterprise-pricing/sheets/index'
 import { Route as AuthenticatedEnterprisePricingItemsIndexRouteImport } from './routes/_authenticated/enterprise-pricing/items/index'
 import { Route as AuthenticatedEnterprisePricingEnterpriseIndexRouteImport } from './routes/_authenticated/enterprise-pricing/enterprise/index'
@@ -197,6 +202,12 @@ const AuthenticatedSystemSettingsRouteRoute =
     path: '/system-settings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSupplierPricingRouteRoute =
+  AuthenticatedSupplierPricingRouteRouteImport.update({
+    id: '/supplier-pricing',
+    path: '/supplier-pricing',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedEnterprisePricingRouteRoute =
   AuthenticatedEnterprisePricingRouteRouteImport.update({
     id: '/enterprise-pricing',
@@ -230,6 +241,12 @@ const AuthenticatedSystemSettingsIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
+  } as any)
+const AuthenticatedSupplierPricingIndexRoute =
+  AuthenticatedSupplierPricingIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSupplierPricingRouteRoute,
   } as any)
 const AuthenticatedSubscriptionsIndexRoute =
   AuthenticatedSubscriptionsIndexRouteImport.update({
@@ -360,6 +377,24 @@ const AuthenticatedSystemSettingsAuthIndexRoute =
     path: '/auth/',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedSupplierPricingSuppliersIndexRoute =
+  AuthenticatedSupplierPricingSuppliersIndexRouteImport.update({
+    id: '/suppliers/',
+    path: '/suppliers/',
+    getParentRoute: () => AuthenticatedSupplierPricingRouteRoute,
+  } as any)
+const AuthenticatedSupplierPricingSheetsIndexRoute =
+  AuthenticatedSupplierPricingSheetsIndexRouteImport.update({
+    id: '/sheets/',
+    path: '/sheets/',
+    getParentRoute: () => AuthenticatedSupplierPricingRouteRoute,
+  } as any)
+const AuthenticatedSupplierPricingItemsIndexRoute =
+  AuthenticatedSupplierPricingItemsIndexRouteImport.update({
+    id: '/items/',
+    path: '/items/',
+    getParentRoute: () => AuthenticatedSupplierPricingRouteRoute,
+  } as any)
 const AuthenticatedEnterprisePricingSheetsIndexRoute =
   AuthenticatedEnterprisePricingSheetsIndexRouteImport.update({
     id: '/sheets/',
@@ -426,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/enterprise-pricing': typeof AuthenticatedEnterprisePricingRouteRouteWithChildren
+  '/supplier-pricing': typeof AuthenticatedSupplierPricingRouteRouteWithChildren
   '/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/forgot-password': typeof authForgotPasswordRoute
   '/oauth': typeof authOauthRoute
@@ -461,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
+  '/supplier-pricing/': typeof AuthenticatedSupplierPricingIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
@@ -476,6 +513,9 @@ export interface FileRoutesByFullPath {
   '/enterprise-pricing/enterprise/': typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
   '/enterprise-pricing/items/': typeof AuthenticatedEnterprisePricingItemsIndexRoute
   '/enterprise-pricing/sheets/': typeof AuthenticatedEnterprisePricingSheetsIndexRoute
+  '/supplier-pricing/items/': typeof AuthenticatedSupplierPricingItemsIndexRoute
+  '/supplier-pricing/sheets/': typeof AuthenticatedSupplierPricingSheetsIndexRoute
+  '/supplier-pricing/suppliers/': typeof AuthenticatedSupplierPricingSuppliersIndexRoute
   '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -522,6 +562,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
+  '/supplier-pricing': typeof AuthenticatedSupplierPricingIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs': typeof AuthenticatedUsageLogsIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
@@ -537,6 +578,9 @@ export interface FileRoutesByTo {
   '/enterprise-pricing/enterprise': typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
   '/enterprise-pricing/items': typeof AuthenticatedEnterprisePricingItemsIndexRoute
   '/enterprise-pricing/sheets': typeof AuthenticatedEnterprisePricingSheetsIndexRoute
+  '/supplier-pricing/items': typeof AuthenticatedSupplierPricingItemsIndexRoute
+  '/supplier-pricing/sheets': typeof AuthenticatedSupplierPricingSheetsIndexRoute
+  '/supplier-pricing/suppliers': typeof AuthenticatedSupplierPricingSuppliersIndexRoute
   '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/billing': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/system-settings/content': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -553,6 +597,7 @@ export interface FileRoutesById {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/user-agreement': typeof UserAgreementRoute
   '/_authenticated/enterprise-pricing': typeof AuthenticatedEnterprisePricingRouteRouteWithChildren
+  '/_authenticated/supplier-pricing': typeof AuthenticatedSupplierPricingRouteRouteWithChildren
   '/_authenticated/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   '/(auth)/forgot-password': typeof authForgotPasswordRoute
   '/(auth)/oauth': typeof authOauthRoute
@@ -588,6 +633,7 @@ export interface FileRoutesById {
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
+  '/_authenticated/supplier-pricing/': typeof AuthenticatedSupplierPricingIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/_authenticated/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
@@ -603,6 +649,9 @@ export interface FileRoutesById {
   '/_authenticated/enterprise-pricing/enterprise/': typeof AuthenticatedEnterprisePricingEnterpriseIndexRoute
   '/_authenticated/enterprise-pricing/items/': typeof AuthenticatedEnterprisePricingItemsIndexRoute
   '/_authenticated/enterprise-pricing/sheets/': typeof AuthenticatedEnterprisePricingSheetsIndexRoute
+  '/_authenticated/supplier-pricing/items/': typeof AuthenticatedSupplierPricingItemsIndexRoute
+  '/_authenticated/supplier-pricing/sheets/': typeof AuthenticatedSupplierPricingSheetsIndexRoute
+  '/_authenticated/supplier-pricing/suppliers/': typeof AuthenticatedSupplierPricingSuppliersIndexRoute
   '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/billing/': typeof AuthenticatedSystemSettingsBillingIndexRoute
   '/_authenticated/system-settings/content/': typeof AuthenticatedSystemSettingsContentIndexRoute
@@ -618,6 +667,7 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/user-agreement'
     | '/enterprise-pricing'
+    | '/supplier-pricing'
     | '/system-settings'
     | '/forgot-password'
     | '/oauth'
@@ -653,6 +703,7 @@ export interface FileRouteTypes {
     | '/profile/'
     | '/redemption-codes/'
     | '/subscriptions/'
+    | '/supplier-pricing/'
     | '/system-settings/'
     | '/usage-logs/'
     | '/users/'
@@ -668,6 +719,9 @@ export interface FileRouteTypes {
     | '/enterprise-pricing/enterprise/'
     | '/enterprise-pricing/items/'
     | '/enterprise-pricing/sheets/'
+    | '/supplier-pricing/items/'
+    | '/supplier-pricing/sheets/'
+    | '/supplier-pricing/suppliers/'
     | '/system-settings/auth/'
     | '/system-settings/billing/'
     | '/system-settings/content/'
@@ -714,6 +768,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/redemption-codes'
     | '/subscriptions'
+    | '/supplier-pricing'
     | '/system-settings'
     | '/usage-logs'
     | '/users'
@@ -729,6 +784,9 @@ export interface FileRouteTypes {
     | '/enterprise-pricing/enterprise'
     | '/enterprise-pricing/items'
     | '/enterprise-pricing/sheets'
+    | '/supplier-pricing/items'
+    | '/supplier-pricing/sheets'
+    | '/supplier-pricing/suppliers'
     | '/system-settings/auth'
     | '/system-settings/billing'
     | '/system-settings/content'
@@ -744,6 +802,7 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/user-agreement'
     | '/_authenticated/enterprise-pricing'
+    | '/_authenticated/supplier-pricing'
     | '/_authenticated/system-settings'
     | '/(auth)/forgot-password'
     | '/(auth)/oauth'
@@ -779,6 +838,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/subscriptions/'
+    | '/_authenticated/supplier-pricing/'
     | '/_authenticated/system-settings/'
     | '/_authenticated/usage-logs/'
     | '/_authenticated/users/'
@@ -794,6 +854,9 @@ export interface FileRouteTypes {
     | '/_authenticated/enterprise-pricing/enterprise/'
     | '/_authenticated/enterprise-pricing/items/'
     | '/_authenticated/enterprise-pricing/sheets/'
+    | '/_authenticated/supplier-pricing/items/'
+    | '/_authenticated/supplier-pricing/sheets/'
+    | '/_authenticated/supplier-pricing/suppliers/'
     | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/billing/'
     | '/_authenticated/system-settings/content/'
@@ -1001,6 +1064,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/supplier-pricing': {
+      id: '/_authenticated/supplier-pricing'
+      path: '/supplier-pricing'
+      fullPath: '/supplier-pricing'
+      preLoaderRoute: typeof AuthenticatedSupplierPricingRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/enterprise-pricing': {
       id: '/_authenticated/enterprise-pricing'
       path: '/enterprise-pricing'
@@ -1042,6 +1112,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/system-settings/'
       preLoaderRoute: typeof AuthenticatedSystemSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
+    }
+    '/_authenticated/supplier-pricing/': {
+      id: '/_authenticated/supplier-pricing/'
+      path: '/'
+      fullPath: '/supplier-pricing/'
+      preLoaderRoute: typeof AuthenticatedSupplierPricingIndexRouteImport
+      parentRoute: typeof AuthenticatedSupplierPricingRouteRoute
     }
     '/_authenticated/subscriptions/': {
       id: '/_authenticated/subscriptions/'
@@ -1197,6 +1274,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsAuthIndexRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/supplier-pricing/suppliers/': {
+      id: '/_authenticated/supplier-pricing/suppliers/'
+      path: '/suppliers'
+      fullPath: '/supplier-pricing/suppliers/'
+      preLoaderRoute: typeof AuthenticatedSupplierPricingSuppliersIndexRouteImport
+      parentRoute: typeof AuthenticatedSupplierPricingRouteRoute
+    }
+    '/_authenticated/supplier-pricing/sheets/': {
+      id: '/_authenticated/supplier-pricing/sheets/'
+      path: '/sheets'
+      fullPath: '/supplier-pricing/sheets/'
+      preLoaderRoute: typeof AuthenticatedSupplierPricingSheetsIndexRouteImport
+      parentRoute: typeof AuthenticatedSupplierPricingRouteRoute
+    }
+    '/_authenticated/supplier-pricing/items/': {
+      id: '/_authenticated/supplier-pricing/items/'
+      path: '/items'
+      fullPath: '/supplier-pricing/items/'
+      preLoaderRoute: typeof AuthenticatedSupplierPricingItemsIndexRouteImport
+      parentRoute: typeof AuthenticatedSupplierPricingRouteRoute
+    }
     '/_authenticated/enterprise-pricing/sheets/': {
       id: '/_authenticated/enterprise-pricing/sheets/'
       path: '/sheets'
@@ -1318,6 +1416,30 @@ const AuthenticatedEnterprisePricingRouteRouteWithChildren =
     AuthenticatedEnterprisePricingRouteRouteChildren,
   )
 
+interface AuthenticatedSupplierPricingRouteRouteChildren {
+  AuthenticatedSupplierPricingIndexRoute: typeof AuthenticatedSupplierPricingIndexRoute
+  AuthenticatedSupplierPricingItemsIndexRoute: typeof AuthenticatedSupplierPricingItemsIndexRoute
+  AuthenticatedSupplierPricingSheetsIndexRoute: typeof AuthenticatedSupplierPricingSheetsIndexRoute
+  AuthenticatedSupplierPricingSuppliersIndexRoute: typeof AuthenticatedSupplierPricingSuppliersIndexRoute
+}
+
+const AuthenticatedSupplierPricingRouteRouteChildren: AuthenticatedSupplierPricingRouteRouteChildren =
+  {
+    AuthenticatedSupplierPricingIndexRoute:
+      AuthenticatedSupplierPricingIndexRoute,
+    AuthenticatedSupplierPricingItemsIndexRoute:
+      AuthenticatedSupplierPricingItemsIndexRoute,
+    AuthenticatedSupplierPricingSheetsIndexRoute:
+      AuthenticatedSupplierPricingSheetsIndexRoute,
+    AuthenticatedSupplierPricingSuppliersIndexRoute:
+      AuthenticatedSupplierPricingSuppliersIndexRoute,
+  }
+
+const AuthenticatedSupplierPricingRouteRouteWithChildren =
+  AuthenticatedSupplierPricingRouteRoute._addFileChildren(
+    AuthenticatedSupplierPricingRouteRouteChildren,
+  )
+
 interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsIndexRoute: typeof AuthenticatedSystemSettingsIndexRoute
   AuthenticatedSystemSettingsAuthSectionRoute: typeof AuthenticatedSystemSettingsAuthSectionRoute
@@ -1377,6 +1499,7 @@ const AuthenticatedSystemSettingsRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedEnterprisePricingRouteRoute: typeof AuthenticatedEnterprisePricingRouteRouteWithChildren
+  AuthenticatedSupplierPricingRouteRoute: typeof AuthenticatedSupplierPricingRouteRouteWithChildren
   AuthenticatedSystemSettingsRouteRoute: typeof AuthenticatedSystemSettingsRouteRouteWithChildren
   AuthenticatedChat2linkRoute: typeof AuthenticatedChat2linkRoute
   AuthenticatedChatChatIdRoute: typeof AuthenticatedChatChatIdRoute
@@ -1400,6 +1523,8 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEnterprisePricingRouteRoute:
     AuthenticatedEnterprisePricingRouteRouteWithChildren,
+  AuthenticatedSupplierPricingRouteRoute:
+    AuthenticatedSupplierPricingRouteRouteWithChildren,
   AuthenticatedSystemSettingsRouteRoute:
     AuthenticatedSystemSettingsRouteRouteWithChildren,
   AuthenticatedChat2linkRoute: AuthenticatedChat2linkRoute,

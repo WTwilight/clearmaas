@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,45 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// supplierCostOtherKeys lists the Other field keys that contain supplier cost
+// information. These are stripped from log responses for non-admin users.
+var supplierCostOtherKeys = []string{
+	"supplier_cost",
+	"supplier_cost_type",
+	"supplier_sheet_id",
+	"supplier_sheet_name",
+}
+
+// filterSupplierCostFieldsFromOther removes supplier cost fields from the Other
+// JSON map of a log entry, preventing non-admin users from seeing cost data.
+func filterSupplierCostFieldsFromOther(log *model.Log) {
+	if log.Other == "" {
+		return
+	}
+	var other map[string]interface{}
+	if err := json.Unmarshal([]byte(log.Other), &other); err != nil {
+		return
+	}
+	changed := false
+	for _, key := range supplierCostOtherKeys {
+		if _, ok := other[key]; ok {
+			delete(other, key)
+			changed = true
+		}
+	}
+	if changed {
+		bytes, _ := json.Marshal(other)
+		log.Other = string(bytes)
+	}
+}
+
+// isSystemAdmin returns true when the authenticated user has system-admin
+// privileges (role >= 10). The role is read from the Gin context, which is
+// set by the auth middleware.
+func isSystemAdmin(c *gin.Context) bool {
+	return c.GetInt("role") >= common.RoleAdminUser
+}
 
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
@@ -26,6 +66,12 @@ func GetAllLogs(c *gin.Context) {
 	if err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	// Strip supplier cost fields from Other for non-system-admin users.
+	if !isSystemAdmin(c) {
+		for _, log := range logs {
+			filterSupplierCostFieldsFromOther(log)
+		}
 	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)

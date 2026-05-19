@@ -48,6 +48,13 @@ func GetBindingsByEnterpriseId(enterpriseId int) ([]*EnterpriseUserBinding, erro
 	return bindings, err
 }
 
+// GetAllUserBindings returns all user bindings.
+func GetAllUserBindings() ([]*EnterpriseUserBinding, error) {
+	var bindings []*EnterpriseUserBinding
+	err := DB.Find(&bindings).Error
+	return bindings, err
+}
+
 // DeleteUserBinding deletes a binding by user ID.
 func DeleteUserBinding(userId int) error {
 	return DB.Where("user_id = ?", userId).Delete(&EnterpriseUserBinding{}).Error

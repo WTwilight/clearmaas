@@ -37,7 +37,8 @@ export type PricingSheet = z.infer<typeof pricingSheetSchema>
 export const pricingItemSchema = z.object({
   id: z.number(),
   pricing_sheet_id: z.number(),
-  model: z.string(),
+  vendor_type: z.string(),
+  models: z.array(z.string()),
   discount_type: z.enum(['ratio', 'fixed_price', 'per_call']),
   discount_value: z.number(),
   remark: z.string().optional(),
@@ -139,13 +140,19 @@ export interface UpdateSheetData extends CreateSheetData {
 // ============================================================================
 
 export interface CreatePricingItemData {
-  model: string
+  vendor_type: string
+  models: string[]
   discount_type: 'ratio' | 'fixed_price' | 'per_call'
   discount_value: number
   remark?: string
 }
 
-export interface UpdatePricingItemData extends CreatePricingItemData {
+export interface UpdatePricingItemData {
+  vendor_type?: string
+  models?: string[]
+  discount_type: 'ratio' | 'fixed_price' | 'per_call'
+  discount_value: number
+  remark?: string
   id: number
 }
 

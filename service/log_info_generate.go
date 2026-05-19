@@ -80,6 +80,7 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	appendParamOverrideInfo(relayInfo, other)
 	appendStreamStatus(relayInfo, other)
 	appendEnterprisePricingInfo(relayInfo, other)
+	appendSupplierCostInfo(relayInfo, other)
 	return other
 }
 
@@ -97,6 +98,26 @@ func appendEnterprisePricingInfo(relayInfo *relaycommon.RelayInfo, other map[str
 	}
 	if ratioInfo.EnterpriseSheetName != "" {
 		other["enterprise_sheet_name"] = ratioInfo.EnterpriseSheetName
+	}
+}
+
+func appendSupplierCostInfo(relayInfo *relaycommon.RelayInfo, other map[string]interface{}) {
+	if relayInfo == nil || other == nil {
+		return
+	}
+	ratioInfo := relayInfo.PriceData.GroupRatioInfo
+	if ratioInfo.SupplierCost <= 0 {
+		return
+	}
+	other["supplier_cost"] = ratioInfo.SupplierCost
+	if ratioInfo.SupplierCostType != "" {
+		other["supplier_cost_type"] = ratioInfo.SupplierCostType
+	}
+	if ratioInfo.SupplierSheetId != 0 {
+		other["supplier_sheet_id"] = ratioInfo.SupplierSheetId
+	}
+	if ratioInfo.SupplierSheetName != "" {
+		other["supplier_sheet_name"] = ratioInfo.SupplierSheetName
 	}
 }
 
@@ -287,6 +308,19 @@ func GenerateMjOtherInfo(relayInfo *relaycommon.RelayInfo, priceData types.Price
 		}
 	}
 	appendRequestPath(nil, relayInfo, other)
+	// Supplier cost info
+	if priceData.GroupRatioInfo.SupplierCost > 0 {
+		other["supplier_cost"] = priceData.GroupRatioInfo.SupplierCost
+		if priceData.GroupRatioInfo.SupplierCostType != "" {
+			other["supplier_cost_type"] = priceData.GroupRatioInfo.SupplierCostType
+		}
+		if priceData.GroupRatioInfo.SupplierSheetId != 0 {
+			other["supplier_sheet_id"] = priceData.GroupRatioInfo.SupplierSheetId
+		}
+		if priceData.GroupRatioInfo.SupplierSheetName != "" {
+			other["supplier_sheet_name"] = priceData.GroupRatioInfo.SupplierSheetName
+		}
+	}
 	return other
 }
 
@@ -306,4 +340,5 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier
 	}
+	// Supplier cost is already injected by GenerateTextOtherInfo -> appendSupplierCostInfo.
 }

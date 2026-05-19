@@ -11,5 +11,6 @@ export const Route = createFileRoute('/_authenticated/enterprise-pricing/sheets/
 })
 
 function RouteComponent() {
-  return <SheetSection />
+  const { enterpriseId } = Route.useSearch()
+  return <SheetSection enterpriseId={enterpriseId} />
 }

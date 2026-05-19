@@ -24,14 +24,14 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Combobox } from '@/components/ui/combobox'
-import { getEnterpriseUsers, bindUser, unbindUser, searchAllUsers } from '../api'
+import { getEnterpriseUsers, bindUser, unbindUser, searchAllUsers, getAllUserBindings } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import { useEnterprisePricing } from './enterprise-pricing-provider'
 import { z } from 'zod'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LongText } from '@/components/long-text'
 import { formatTimestamp } from '@/lib/format'
-import type { EnterpriseUserWithBinding } from '../types'
+import type { EnterpriseUserBinding, EnterpriseUserWithBinding } from '../types'
 
 const bindFormSchema = z.object({
   user_id: z.string().min(1, 'Please select a user'),
@@ -68,7 +68,24 @@ export function BindUserDialog() {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Fetch bound users for the current enterprise
+  // Fetch all bindings across all enterprises to filter out already-bound users
+  const { data: allBindingsData, isLoading: isLoadingAllBindings } = useQuery<EnterpriseUserBinding[]>({
+    queryKey: ['enterprise-users', 'all-bindings'],
+    queryFn: async () => {
+      const result = await getAllUserBindings()
+      if (!result.success) {
+        return []
+      }
+      return result.data || []
+    },
+    enabled: bindingOpen === 'bind',
+    staleTime: 30 * 1000,
+  })
+
+  // Get IDs of users already bound to any enterprise
+  const boundUserIds = new Set((allBindingsData || []).map((b) => b.user_id))
+
+  // Fetch bound users for the current enterprise (for display only)
   const { data: boundUsersData, isLoading: isLoadingBoundUsers } = useQuery<EnterpriseUserWithBinding[]>({
     queryKey: ['enterprise-users', selectedEnterpriseId, 'binding-dialog'],
     queryFn: async () => {
@@ -82,9 +99,6 @@ export function BindUserDialog() {
     enabled: bindingOpen === 'bind' && !!selectedEnterpriseId,
     staleTime: 30 * 1000,
   })
-
-  // Get IDs of already bound users
-  const boundUserIds = new Set((boundUsersData || []).map((u) => u.user_id))
 
   // Filter out already bound users from the options
   const availableUsers = (allUsersData || []).filter(
@@ -105,6 +119,7 @@ export function BindUserDialog() {
         form.reset()
         await queryClient.invalidateQueries({ queryKey: ['enterprise-users', selectedEnterpriseId] })
         await queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
+        await queryClient.invalidateQueries({ queryKey: ['enterprise-users', 'all-bindings'] })
       } else {
         toast.error(result.message || t(ERROR_MESSAGES.BIND_FAILED))
       }
@@ -124,6 +139,7 @@ export function BindUserDialog() {
         toast.success(t(SUCCESS_MESSAGES.USER_UNBOUND))
         await queryClient.invalidateQueries({ queryKey: ['enterprise-users', selectedEnterpriseId] })
         await queryClient.invalidateQueries({ queryKey: ['users', 'all'] })
+        await queryClient.invalidateQueries({ queryKey: ['enterprise-users', 'all-bindings'] })
       } else {
         toast.error(result.message || t(ERROR_MESSAGES.UNBIND_FAILED))
       }

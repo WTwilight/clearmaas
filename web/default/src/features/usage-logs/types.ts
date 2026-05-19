@@ -171,6 +171,11 @@ export interface LogOtherData {
     end_error?: string
     errors?: string[]
   }
+  // Supplier cost fields (admin only)
+  supplier_cost?: number
+  supplier_cost_type?: string
+  supplier_sheet_id?: number
+  supplier_sheet_name?: string
   // Violation fee fields
   violation_fee?: boolean
   violation_fee_code?: string

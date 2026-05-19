@@ -92,6 +92,19 @@ func buildTaskLogOther(info *relaycommon.RelayInfo) map[string]interface{} {
 			other["enterprise_sheet_name"] = ratioInfo.EnterpriseSheetName
 		}
 	}
+	// Supplier cost fields
+	if ratioInfo.SupplierCost > 0 {
+		other["supplier_cost"] = ratioInfo.SupplierCost
+		if ratioInfo.SupplierCostType != "" {
+			other["supplier_cost_type"] = ratioInfo.SupplierCostType
+		}
+		if ratioInfo.SupplierSheetId != 0 {
+			other["supplier_sheet_id"] = ratioInfo.SupplierSheetId
+		}
+		if ratioInfo.SupplierSheetName != "" {
+			other["supplier_sheet_name"] = ratioInfo.SupplierSheetName
+		}
+	}
 	return other
 }
 

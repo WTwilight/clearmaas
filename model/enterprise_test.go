@@ -190,10 +190,11 @@ func TestEnterprisePricingItem_CRUD(t *testing.T) {
 	// Create item
 	item := &EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:          "gpt-4o",
-		DiscountType:   DiscountTypeRatio,
-		DiscountValue:  0.7,
-		Remark:         "7折",
+		VendorType:    "openai",
+		Models:        []string{"gpt-4o"},
+		DiscountType:  DiscountTypeRatio,
+		DiscountValue: 0.7,
+		Remark:        "7折",
 	}
 	require.NoError(t, DB.Create(item).Error)
 	require.NotZero(t, item.Id)
@@ -202,7 +203,7 @@ func TestEnterprisePricingItem_CRUD(t *testing.T) {
 	found, err := GetPricingItemById(item.Id)
 	require.NoError(t, err)
 	require.NotNil(t, found)
-	assert.Equal(t, "gpt-4o", found.Model)
+	assert.Equal(t, []string{"gpt-4o"}, found.Models)
 	assert.Equal(t, DiscountTypeRatio, found.DiscountType)
 	assert.Equal(t, 0.7, found.DiscountValue)
 
@@ -241,22 +242,22 @@ func TestEnterprisePricingItem_GetBySheetId(t *testing.T) {
 	require.NoError(t, DB.Create(sheet).Error)
 
 	models := []string{"gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet"}
-	for _, m := range models {
-		item := &EnterprisePricingItem{
-			PricingSheetId: sheet.Id,
-			Model:          m,
-			DiscountType:   DiscountTypeRatio,
-			DiscountValue:  0.8,
-		}
-		require.NoError(t, DB.Create(item).Error)
+	item := &EnterprisePricingItem{
+		PricingSheetId: sheet.Id,
+		VendorType:    "openai",
+		Models:        models,
+		DiscountType:  DiscountTypeRatio,
+		DiscountValue: 0.8,
 	}
+	require.NoError(t, DB.Create(item).Error)
 
 	items, err := GetPricingItemsBySheetId(sheet.Id)
 	require.NoError(t, err)
-	assert.Len(t, items, 3)
+	assert.Len(t, items, 1)
+	assert.Equal(t, models, items[0].Models)
 }
 
-func TestEnterprisePricingItem_GetBySheetIdAndModel(t *testing.T) {
+func TestEnterprisePricingItem_GetBySheetIdAndModelName(t *testing.T) {
 	truncateEnterprise(t)
 
 	e := &Enterprise{Name: "Corp", Status: EnterpriseStatusEnabled}
@@ -275,24 +276,32 @@ func TestEnterprisePricingItem_GetBySheetIdAndModel(t *testing.T) {
 	sheet.UpdatedAt = time.Now().Unix()
 	require.NoError(t, DB.Create(sheet).Error)
 
+	// One item with multiple models
 	item := &EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:          "gpt-4o",
-		DiscountType:   DiscountTypeRatio,
-		DiscountValue:  0.6,
+		VendorType:    "openai",
+		Models:        []string{"gpt-4o", "gpt-4o-mini"},
+		DiscountType:  DiscountTypeRatio,
+		DiscountValue: 0.6,
 	}
 	require.NoError(t, DB.Create(item).Error)
 
-	// Exact match
-	found, err := GetPricingItemBySheetIdAndModel(sheet.Id, "gpt-4o")
+	// Exact match within the array
+	found, err := GetPricingItemBySheetIdAndModelName(sheet.Id, "gpt-4o")
 	require.NoError(t, err)
 	require.NotNil(t, found)
 	assert.Equal(t, 0.6, found.DiscountValue)
 
-	// Not found
-	found2, err := GetPricingItemBySheetIdAndModel(sheet.Id, "gpt-4o-mini")
+	// Match other model in the same array
+	found2, err := GetPricingItemBySheetIdAndModelName(sheet.Id, "gpt-4o-mini")
 	require.NoError(t, err)
-	require.Nil(t, found2)
+	require.NotNil(t, found2)
+	assert.Equal(t, 0.6, found2.DiscountValue)
+
+	// Not found
+	found3, err := GetPricingItemBySheetIdAndModelName(sheet.Id, "claude-3-5-sonnet")
+	require.NoError(t, err)
+	require.Nil(t, found3)
 }
 
 func TestEnterprisePricingItem_GetById_NotFound(t *testing.T) {
@@ -573,20 +582,22 @@ func TestPricingItem_UniqueModelPerSheet(t *testing.T) {
 
 	item1 := &EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:          "gpt-4o",
-		DiscountType:   DiscountTypeRatio,
-		DiscountValue:  0.7,
+		VendorType:    "openai",
+		Models:        []string{"gpt-4o"},
+		DiscountType:  DiscountTypeRatio,
+		DiscountValue: 0.7,
 	}
 	require.NoError(t, DB.Create(item1).Error)
 
-	// Duplicate model in same sheet should fail
+	// Same vendor+model can be created in DB (controller-level dedup is tested separately)
 	item2 := &EnterprisePricingItem{
 		PricingSheetId: sheet.Id,
-		Model:          "gpt-4o", // same model
-		DiscountType:   DiscountTypeRatio,
-		DiscountValue:  0.5,
+		VendorType:    "openai",
+		Models:        []string{"gpt-4o"},
+		DiscountType:  DiscountTypeRatio,
+		DiscountValue: 0.5,
 	}
-	assert.Error(t, DB.Create(item2).Error)
+	require.NoError(t, DB.Create(item2).Error)
 }
 
 // ---------------------------------------------------------------------------

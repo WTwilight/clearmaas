@@ -12,6 +12,12 @@ type GroupRatioInfo struct {
 	// PerCallPriceSheet is the fixed per-call price from the enterprise pricing sheet (美元/次).
 	// A value > 0 indicates the pricing sheet item is of type per_call.
 	PerCallPriceSheet float64
+	// SupplierCost is the supplier's cost for this model from the supplier pricing sheet.
+	// It is independent of the GroupRatio and does not affect customer billing.
+	SupplierCost      float64
+	SupplierCostType  string // "ratio", "fixed_price", "per_call", "" if not found
+	SupplierSheetId    int
+	SupplierSheetName string
 }
 
 type PriceData struct {
@@ -49,6 +55,8 @@ func (p *PriceData) AddOtherRatio(key string, ratio float64) {
 }
 
 func (p *PriceData) ToSetting() string {
-	return fmt.Sprintf("ModelPrice: %f, ModelRatio: %f, CompletionRatio: %f, CacheRatio: %f, GroupRatio: %f (source: %s, sheetId: %d, sheet: %s), UsePrice: %t, CacheCreationRatio: %f, CacheCreation5mRatio: %f, CacheCreation1hRatio: %f, QuotaToPreConsume: %d, ImageRatio: %f, AudioRatio: %f, AudioCompletionRatio: %f, PerCallPriceSheet: %f",
-		p.ModelPrice, p.ModelRatio, p.CompletionRatio, p.CacheRatio, p.GroupRatioInfo.GroupRatio, p.GroupRatioInfo.RatioSource, p.GroupRatioInfo.EnterpriseSheetId, p.GroupRatioInfo.EnterpriseSheetName, p.UsePrice, p.CacheCreationRatio, p.CacheCreation5mRatio, p.CacheCreation1hRatio, p.QuotaToPreConsume, p.ImageRatio, p.AudioRatio, p.AudioCompletionRatio, p.PerCallPriceSheet)
+	return fmt.Sprintf("ModelPrice: %f, ModelRatio: %f, CompletionRatio: %f, CacheRatio: %f, GroupRatio: %f (source: %s, sheetId: %d, sheet: %s), SupplierCost: %f (type: %s, sheetId: %d, sheet: %s), UsePrice: %t, CacheCreationRatio: %f, CacheCreation5mRatio: %f, CacheCreation1hRatio: %f, QuotaToPreConsume: %d, ImageRatio: %f, AudioRatio: %f, AudioCompletionRatio: %f, PerCallPriceSheet: %f",
+		p.ModelPrice, p.ModelRatio, p.CompletionRatio, p.CacheRatio, p.GroupRatioInfo.GroupRatio, p.GroupRatioInfo.RatioSource, p.GroupRatioInfo.EnterpriseSheetId, p.GroupRatioInfo.EnterpriseSheetName,
+		p.GroupRatioInfo.SupplierCost, p.GroupRatioInfo.SupplierCostType, p.GroupRatioInfo.SupplierSheetId, p.GroupRatioInfo.SupplierSheetName,
+		p.UsePrice, p.CacheCreationRatio, p.CacheCreation5mRatio, p.CacheCreation1hRatio, p.QuotaToPreConsume, p.ImageRatio, p.AudioRatio, p.AudioCompletionRatio, p.PerCallPriceSheet)
 }

@@ -36,7 +36,8 @@ func modelPriceNotConfiguredError(modelName string, userId int) error {
 const claudeCacheCreation1hMultiplier = 6 / 3.75
 
 // HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present.
-// It also checks for enterprise pricing sheet discounts which take precedence over group ratios.
+// It also checks for enterprise pricing sheet discounts which take precedence over group ratios,
+// and for supplier pricing sheet costs which are independent of customer billing.
 func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.GroupRatioInfo {
 	groupRatioInfo := types.GroupRatioInfo{
 		GroupRatio:        1.0, // default ratio
@@ -65,7 +66,12 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 	}
 
 	// check enterprise pricing sheet - takes precedence over group ratios
-	return HandleEnterprisePricingSheet(ctx, relayInfo, groupRatioInfo)
+	groupRatioInfo = HandleEnterprisePricingSheet(ctx, relayInfo, groupRatioInfo)
+
+	// check supplier pricing sheet - records supplier cost independently
+	groupRatioInfo = HandleSupplierPricingSheet(ctx, relayInfo, groupRatioInfo)
+
+	return groupRatioInfo
 }
 
 // HandleEnterprisePricingSheet checks if the user is bound to an enterprise with an active pricing sheet
@@ -120,12 +126,13 @@ type PricingItemResult struct {
 }
 
 // getPricingItemResult returns the pricing item for a specific sheet and model.
+// Returns only an exact model match; no vendor-type fallback (group_ratio handles fallback).
 func getPricingItemResult(sheetId int, modelName string) PricingItemResult {
-	item, err := model.GetPricingItemBySheetIdAndModel(sheetId, modelName)
-	if err != nil || item == nil {
-		return PricingItemResult{Found: false}
+	item, err := model.GetPricingItemBySheetIdAndModelName(sheetId, modelName)
+	if err == nil && item != nil {
+		return PricingItemResult{Item: item, Found: true}
 	}
-	return PricingItemResult{Item: item, Found: true}
+	return PricingItemResult{Found: false}
 }
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
@@ -425,4 +432,77 @@ func modelPriceHelperTiered(c *gin.Context, info *relaycommon.RelayInfo, promptT
 
 	info.PriceData = priceData
 	return priceData, nil
+}
+
+// HandleSupplierPricingSheet looks up the supplier pricing sheet for the current channel
+// and records the supplier cost in the GroupRatioInfo.
+// This does NOT affect the customer's billing ratio - it is purely for cost tracking.
+func HandleSupplierPricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseInfo types.GroupRatioInfo) types.GroupRatioInfo {
+	channelId := 0
+	if relayInfo.ChannelMeta != nil {
+		channelId = relayInfo.ChannelMeta.ChannelId
+	}
+
+	if channelId <= 0 {
+		return baseInfo
+	}
+
+	sheetId, found := getSupplierActivePricingSheetForBilling(channelId)
+	if !found {
+		return baseInfo
+	}
+
+	cost, costFound := getSupplierModelCostForBilling(sheetId, relayInfo.OriginModelName)
+	if !costFound {
+		return baseInfo
+	}
+
+	discountType := getSupplierModelCostTypeForBilling(sheetId, relayInfo.OriginModelName)
+	sheet := getSupplierPricingSheetById(sheetId)
+
+	baseInfo.SupplierCost = cost
+	baseInfo.SupplierCostType = discountType
+	if sheet != nil {
+		baseInfo.SupplierSheetId = sheet.Id
+		baseInfo.SupplierSheetName = sheet.Name
+	}
+
+	logger.LogDebug(ctx, fmt.Sprintf("supplier pricing sheet applied: sheetId=%d sheet=%s cost=%.6f type=%s", sheetId, baseInfo.SupplierSheetName, cost, discountType))
+	return baseInfo
+}
+
+// getSupplierActivePricingSheetForBilling is the internal helper for billing.
+func getSupplierActivePricingSheetForBilling(channelId int) (int, bool) {
+	sheet, err := model.GetFirstActivePricingSheetByChannelIdOnly(channelId)
+	if err != nil || sheet == nil {
+		return 0, false
+	}
+	return sheet.Id, true
+}
+
+// getSupplierModelCostForBilling returns the supplier cost for a given pricing sheet and model.
+func getSupplierModelCostForBilling(sheetId int, modelName string) (float64, bool) {
+	item, err := model.GetSupplierPricingItemBySheetIdAndModel(sheetId, modelName)
+	if err != nil || item == nil {
+		return 0, false
+	}
+	return item.DiscountValue, true
+}
+
+// getSupplierModelCostTypeForBilling returns the supplier cost type for a given pricing sheet and model.
+func getSupplierModelCostTypeForBilling(sheetId int, modelName string) string {
+	item, err := model.GetSupplierPricingItemBySheetIdAndModel(sheetId, modelName)
+	if err != nil || item == nil {
+		return ""
+	}
+	return item.DiscountType
+}
+
+// getSupplierPricingSheetById returns the pricing sheet name for a given sheet id.
+func getSupplierPricingSheetById(sheetId int) *model.SupplierPricingSheet {
+	sheet, err := model.GetSupplierPricingSheetById(sheetId)
+	if err != nil || sheet == nil {
+		return nil
+	}
+	return sheet
 }

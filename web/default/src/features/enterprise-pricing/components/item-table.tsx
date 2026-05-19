@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { DataTablePage } from '@/components/data-table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { getPricingItems, getEnterprises, getSheets } from '../api'
+import { getPricingItems, getEnterprises, getSheets, getAllSheets } from '../api'
 import { useItemColumns } from './item-columns'
 import { useEnterprisePricing } from './enterprise-pricing-provider'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -43,12 +43,21 @@ export function ItemTable({ onSheetIdChange }: ItemTableProps) {
     onSheetIdChange?.(currentSheetId)
   }, [currentSheetId, onSheetIdChange])
 
-  // Fetch enterprises
+  // Fetch all enterprises and all sheets, then filter to enterprises that have at least one sheet
   const { data: enterprisesData, isLoading: isLoadingEnterprises } = useQuery({
     queryKey: ['enterprises', 'item-selector'],
     queryFn: async () => {
-      const result = await getEnterprises({ p: 1, page_size: 1000 })
-      return result.data?.items || []
+      const [entResult, sheetsResult] = await Promise.all([
+        getEnterprises({ p: 1, page_size: 1000 }),
+        getAllSheets({ p: 1, page_size: 10000 }),
+      ])
+      const enterprises = entResult.data?.items || []
+      const sheets = sheetsResult.data?.items || []
+
+      // Collect enterprise IDs that have at least one pricing sheet
+      const enterpriseIdsWithSheets = new Set(sheets.map((s) => s.enterprise_id))
+
+      return enterprises.filter((e) => enterpriseIdsWithSheets.has(e.id))
     },
     staleTime: 5 * 60 * 1000,
   })

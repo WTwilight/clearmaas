@@ -106,9 +106,10 @@ func seedBillingTestData(db *gorm.DB) {
 
 	item2 := &model.EnterprisePricingItem{
 		PricingSheetId: sheet2.Id,
-		Model:          "gpt-4o-mini",
-		DiscountType:   model.DiscountTypeRatio,
-		DiscountValue:  0.5,
+		VendorType:    "openai",
+		Models:        []string{"gpt-4o-mini"},
+		DiscountType:  model.DiscountTypeRatio,
+		DiscountValue: 0.5,
 	}
 	db.Create(item2)
 
@@ -139,9 +140,10 @@ func seedBillingTestData(db *gorm.DB) {
 
 	item3 := &model.EnterprisePricingItem{
 		PricingSheetId: sheet3.Id,
-		Model:          "gpt-4o",
-		DiscountType:   model.DiscountTypeRatio,
-		DiscountValue:  0.5,
+		VendorType:    "openai",
+		Models:        []string{"gpt-4o"},
+		DiscountType:  model.DiscountTypeRatio,
+		DiscountValue: 0.5,
 	}
 	db.Create(item3)
 

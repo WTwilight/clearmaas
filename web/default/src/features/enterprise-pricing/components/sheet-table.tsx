@@ -29,7 +29,11 @@ const route = getRouteApi('/_authenticated/enterprise-pricing/sheets/')
 // Selector option for "all enterprises"
 const ALL_ENTERPRISES_VALUE = 'all'
 
-export function SheetTable() {
+type SheetTableProps = {
+  onEnterpriseFilterChange?: (value: string | null) => void
+}
+
+export function SheetTable({ onEnterpriseFilterChange }: SheetTableProps) {
   const { t } = useTranslation()
   const { sheetRefreshTrigger } = useEnterprisePricing()
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -158,6 +162,7 @@ export function SheetTable() {
   const handleEnterpriseFilterChange = (value: string | null) => {
     setFilterEnterpriseId(value ?? ALL_ENTERPRISES_VALUE)
     onPaginationChange({ pageIndex: 0, pageSize: pagination.pageSize })
+    onEnterpriseFilterChange?.(value ?? ALL_ENTERPRISES_VALUE)
   }
 
   const selectedEnterpriseName = filterEnterpriseId === ALL_ENTERPRISES_VALUE

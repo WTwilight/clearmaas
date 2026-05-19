@@ -442,6 +442,82 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     )
   }
 
+  // Supplier cost columns - admin only
+  if (isAdmin) {
+    columns.push(
+      {
+        accessorKey: 'supplier_cost',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Supplier Cost')} />
+        ),
+        cell: ({ row }) => {
+          const log = row.original
+          if (!isDisplayableLogType(log.type)) return null
+          const other = parseLogOther(log.other)
+          const supplierCost = other?.supplier_cost
+          if (supplierCost == null || supplierCost <= 0) return null
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className='inline-flex cursor-help items-center gap-1 font-mono text-xs tabular-nums text-muted-foreground'>
+                      {formatBillingCurrencyFromUSD(supplierCost)}
+                    </span>
+                  }
+                >
+                  <span />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className='space-y-0.5 text-xs'>
+                    <p>
+                      {t('Supplier Cost')}: {formatBillingCurrencyFromUSD(supplierCost)}
+                    </p>
+                    {other?.supplier_sheet_name && (
+                      <p className='text-muted-foreground'>
+                        {t('Sheet')}: {other.supplier_sheet_name}
+                      </p>
+                    )}
+                    {other?.supplier_cost_type && (
+                      <p className='text-muted-foreground'>
+                        {t('Cost Type')}: {other.supplier_cost_type}
+                      </p>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )
+        },
+        meta: { label: t('Supplier Cost'), mobileHidden: true },
+      },
+      {
+        accessorKey: 'gross_profit',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Profit')} />
+        ),
+        cell: ({ row }) => {
+          const log = row.original
+          if (!isDisplayableLogType(log.type)) return null
+          const other = parseLogOther(log.other)
+          const supplierCost = other?.supplier_cost
+          if (supplierCost == null || supplierCost <= 0) return null
+          const quota = row.getValue('quota') as number
+          const profit = quota - supplierCost
+          return (
+            <span
+              className={`font-mono text-xs tabular-nums ${
+                profit >= 0 ? 'text-success' : 'text-destructive'
+              }`}>
+              {formatBillingCurrencyFromUSD(profit)}
+            </span>
+          )
+        },
+        meta: { label: t('Profit'), mobileHidden: true },
+      }
+    )
+  }
+
   columns.push({
     accessorKey: 'token_name',
     header: ({ column }) => (

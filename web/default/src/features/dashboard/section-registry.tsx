@@ -42,11 +42,18 @@ const DASHBOARD_SECTIONS = [
     adminOnly: true,
     build: () => null,
   },
+  {
+    id: 'supplier-stats',
+    titleKey: 'Supplier Analytics',
+    descriptionKey: 'View supplier cost and profit statistics',
+    adminOnly: true,
+    build: () => null,
+  },
 ] as const
 
 export type DashboardSectionId = (typeof DASHBOARD_SECTIONS)[number]['id']
 
-const ADMIN_ONLY_SECTIONS = new Set<string>(['users'])
+export const ADMIN_ONLY_SECTIONS = new Set<string>(['users', 'supplier-stats'])
 
 const dashboardRegistry = createSectionRegistry<
   DashboardSectionId,

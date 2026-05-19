@@ -296,7 +296,7 @@ func seedPricingItem(t *testing.T, sheetId int, modelName string, discountType s
 	t.Helper()
 	item := &model.EnterprisePricingItem{
 		PricingSheetId: sheetId,
-		Model:         modelName,
+		Models:        []string{modelName},
 		DiscountType:  discountType,
 		DiscountValue: discountValue,
 	}
@@ -304,10 +304,22 @@ func seedPricingItem(t *testing.T, sheetId int, modelName string, discountType s
 	return item
 }
 
+func seedSheetChannelBinding(t *testing.T, sheetId, channelId int) *model.EnterprisePricingSheetChannel {
+	t.Helper()
+	binding := &model.EnterprisePricingSheetChannel{
+		PricingSheetId: sheetId,
+		ChannelId:      channelId,
+		CreatedAt:      time.Now().Unix(),
+	}
+	require.NoError(t, model.DB.Create(binding).Error)
+	return binding
+}
+
 func truncateEnterprise(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
 		model.DB.Exec("DELETE FROM enterprise_pricing_items")
+		model.DB.Exec("DELETE FROM enterprise_pricing_sheet_channels")
 		model.DB.Exec("DELETE FROM enterprise_pricing_sheets")
 		model.DB.Exec("DELETE FROM enterprise_user_bindings")
 		model.DB.Exec("DELETE FROM enterprises")

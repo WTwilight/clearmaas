@@ -157,8 +157,13 @@ export function useSidebarData(): SidebarData {
             url: '/enterprise-pricing',
             icon: Briefcase,
           },
+          {
+            title: t('Supplier Pricing'),
+            url: '/supplier-pricing',
+            icon: Briefcase,
+          },
         ],
       },
     ],
-  }
+  };
 }

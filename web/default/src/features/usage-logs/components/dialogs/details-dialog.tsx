@@ -326,6 +326,26 @@ function BillingBreakdown(props: {
     value: formatLogQuota(log.quota),
   })
 
+  // Supplier cost fields - admin only
+  if (isAdmin && other.supplier_cost != null && other.supplier_cost > 0) {
+    rows.push({
+      label: t('Supplier Cost'),
+      value: formatBillingCurrencyFromUSD(other.supplier_cost),
+    })
+    const profit = log.quota - other.supplier_cost
+    const profitStr = formatBillingCurrencyFromUSD(Math.abs(profit))
+    rows.push({
+      label: t('Gross Profit'),
+      value: profit >= 0 ? `+${profitStr}` : `-${profitStr}`,
+    })
+    if (other.supplier_sheet_name) {
+      rows.push({
+        label: t('Supplier Sheet'),
+        value: String(other.supplier_sheet_name),
+      })
+    }
+  }
+
   if (rows.length === 0) return null
 
   return (

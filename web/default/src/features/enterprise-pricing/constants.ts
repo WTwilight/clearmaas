@@ -87,12 +87,70 @@ export const getDiscountTypeOptions = (t: (key: string) => string) => [
   { label: t('Per Call'), value: DISCOUNT_TYPE.PER_CALL },
 ]
 
+// Mirrors the pattern-matching rules from resolveModelProvider in model-badge.tsx
+export const VENDOR_TYPES = {
+  openai: {
+    labelKey: 'OpenAI',
+    patterns: ['gpt-', 'chatgpt-', 'dall-', 'whisper-', 'tts-', 'o1', 'o3', 'o4'],
+  },
+  anthropic: { labelKey: 'Anthropic', patterns: ['claude-', 'anthropic-'] },
+  google: { labelKey: 'Google', patterns: ['gemini-', 'learnlm-'] },
+  xai: { labelKey: 'xAI', patterns: ['grok-', 'xai-'] },
+  deepseek: { labelKey: 'DeepSeek', patterns: ['deepseek-'] },
+  qwen: { labelKey: 'Qwen', patterns: ['qwen', 'qwq-'] },
+  doubao: { labelKey: 'Doubao', patterns: ['doubao-', 'volcengine'] },
+  moonshot: { labelKey: 'Moonshot', patterns: ['moonshot-', 'kimi-'] },
+  mistral: { labelKey: 'Mistral', patterns: ['mistral-', 'mixtral-'] },
+  meta: { labelKey: 'Meta', patterns: ['llama-', 'meta-'] },
+  cohere: { labelKey: 'Cohere', patterns: ['command-', 'cohere-'] },
+} as const
+
+export type VendorType = keyof typeof VENDOR_TYPES
+
+const hasAny = (model: string, keywords: string[]) =>
+  keywords.some((kw) => model.includes(kw))
+
+function doResolveVendorType(modelName: string): VendorType | null {
+  const model = modelName.toLowerCase()
+  if (hasAny(model, VENDOR_TYPES.openai.patterns)) return 'openai'
+  if (hasAny(model, VENDOR_TYPES.anthropic.patterns)) return 'anthropic'
+  if (hasAny(model, VENDOR_TYPES.google.patterns)) return 'google'
+  if (hasAny(model, VENDOR_TYPES.xai.patterns)) return 'xai'
+  if (hasAny(model, VENDOR_TYPES.deepseek.patterns)) return 'deepseek'
+  if (hasAny(model, VENDOR_TYPES.qwen.patterns)) return 'qwen'
+  if (hasAny(model, VENDOR_TYPES.doubao.patterns)) return 'doubao'
+  if (hasAny(model, VENDOR_TYPES.moonshot.patterns)) return 'moonshot'
+  if (hasAny(model, VENDOR_TYPES.mistral.patterns)) return 'mistral'
+  if (hasAny(model, VENDOR_TYPES.meta.patterns)) return 'meta'
+  if (hasAny(model, VENDOR_TYPES.cohere.patterns)) return 'cohere'
+  return null
+}
+
+export function resolveVendorType(modelName: string): VendorType | null {
+  return doResolveVendorType(modelName)
+}
+
+export function getVendorTypeOptions(t: (key: string) => string) {
+  return (Object.keys(VENDOR_TYPES) as VendorType[]).map((key) => ({
+    value: key,
+    label: t(VENDOR_TYPES[key].labelKey),
+  }))
+}
+
+export function getModelsByVendor(vendor: VendorType, allModels: string[]): string[] {
+  const patterns = VENDOR_TYPES[vendor].patterns
+  return allModels.filter((model) => hasAny(model.toLowerCase(), patterns))
+}
+
+export function getVendorLabel(vendor: VendorType | string): string {
+  return VENDOR_TYPES[vendor as VendorType]?.labelKey ?? vendor
+}
+
 // ============================================================================
 // Error Messages
 // ============================================================================
 
 export const ERROR_MESSAGES = {
-  UNEXPECTED: 'An unexpected error occurred',
   LOAD_FAILED: 'Failed to load data',
   CREATE_FAILED: 'Failed to create',
   UPDATE_FAILED: 'Failed to update',

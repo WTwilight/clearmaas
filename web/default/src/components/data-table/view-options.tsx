@@ -25,6 +25,7 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
@@ -36,6 +37,14 @@ export function DataTableViewOptions<TData>({
   table,
 }: DataTableViewOptionsProps<TData>) {
   const { t } = useTranslation()
+
+  const hideableColumns = table
+    .getAllColumns()
+    .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
+
+  const showAll = () => hideableColumns.forEach((col) => col.setVisibility(true))
+  const hideAll = () => hideableColumns.forEach((col) => col.setVisibility(false))
+
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger
@@ -49,27 +58,40 @@ export function DataTableViewOptions<TData>({
       >
         {t('View')}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' className='w-[150px]'>
+      <DropdownMenuContent align='end' className='w-[180px]'>
         <DropdownMenuGroup>
           <DropdownMenuLabel>{t('Toggle columns')}</DropdownMenuLabel>
-          {table
-            .getAllColumns()
-            .filter(
-              (column) =>
-                typeof column.accessorFn !== 'undefined' && column.getCanHide()
+          <div className='flex gap-1 px-2 py-1'>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 flex-1 text-xs'
+              onClick={showAll}
+            >
+              {t('Show all')}
+            </Button>
+            <Button
+              variant='ghost'
+              size='sm'
+              className='h-7 flex-1 text-xs'
+              onClick={hideAll}
+            >
+              {t('Hide all')}
+            </Button>
+          </div>
+          <DropdownMenuSeparator />
+          {hideableColumns.map((column) => {
+            return (
+              <DropdownMenuCheckboxItem
+                key={column.id}
+                className='capitalize'
+                checked={column.getIsVisible()}
+                onCheckedChange={(value) => column.toggleVisibility(!!value)}
+              >
+                {column.columnDef.meta?.label ?? column.id}
+              </DropdownMenuCheckboxItem>
             )
-            .map((column) => {
-              return (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className='capitalize'
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {column.columnDef.meta?.label ?? column.id}
-                </DropdownMenuCheckboxItem>
-              )
-            })}
+          })}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
