@@ -198,6 +198,9 @@ func CreateSupplierPricingSheet(c *gin.Context) {
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}
+	if sheet.EndTime == 0 {
+		sheet.EndTime = 1<<62 - 1 // permanent (max int64)
+	}
 	if err := sheet.Create(); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
@@ -280,10 +283,12 @@ func UpdateSupplierPricingSheet(c *gin.Context) {
 
 	sheet.Name = req.Name
 	sheet.Status = req.Status
-	sheet.ChannelId = req.ChannelId
 	sheet.StartTime = req.StartTime
 	sheet.EndTime = req.EndTime
 	sheet.UpdatedAt = time.Now().Unix()
+	if sheet.EndTime == 0 {
+		sheet.EndTime = 1<<62 - 1 // permanent (max int64)
+	}
 	if err := sheet.Update(); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
@@ -301,6 +306,70 @@ func DeleteSupplierPricingSheet(c *gin.Context) {
 
 	if err := model.DeleteSupplierPricingSheet(sheetId); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ---------------------------------------------------------------------------
+// SupplierPricingSheet Channel Binding (multi-channel)
+// ---------------------------------------------------------------------------
+
+func ListSupplierPricingSheetChannels(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	ids, err := model.GetSupplierPricingSheetChannelIds(sheetId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": ids})
+}
+
+func BindSupplierPricingSheetChannels(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	var req struct {
+		ChannelIds []int `json:"channel_ids"`
+	}
+	if err := json.NewDecoder(c.Request.Body).Decode(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid json"})
+		return
+	}
+	if err := model.BindChannelsToSupplierPricingSheet(sheetId, req.ChannelIds); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func UnbindSupplierPricingSheetChannel(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	channelIdStr := c.Param("channelId")
+	channelId, err := strconv.Atoi(channelIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid channel id"})
+		return
+	}
+	binding := &model.SupplierPricingSheetChannel{
+		PricingSheetId: sheetId,
+		ChannelId:     channelId,
+	}
+	if err := binding.Delete(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -494,6 +563,8 @@ func DeleteSupplierPricingItem(c *gin.Context) {
 func ListAllSupplierPricingSheets(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	supplierIdStr := c.Query("supplier_id")
+	nameStr := c.Query("name")
 	if p < 1 {
 		p = 1
 	}
@@ -501,7 +572,7 @@ func ListAllSupplierPricingSheets(c *gin.Context) {
 		pageSize = 20
 	}
 
-	sheets, total, err := model.GetAllSupplierPricingSheets(p, pageSize)
+	sheets, total, err := model.GetAllSupplierPricingSheets(p, pageSize, supplierIdStr, nameStr)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return

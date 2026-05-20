@@ -193,19 +193,34 @@ func PopulateChannelBindings(sheets []*SupplierPricingSheetWithSupplier) {
 }
 
 // GetAllSupplierPricingSheets returns all supplier pricing sheets across all suppliers with pagination.
-func GetAllSupplierPricingSheets(page, pageSize int) ([]*SupplierPricingSheetWithSupplier, int64, error) {
+func GetAllSupplierPricingSheets(page, pageSize int, supplierIdStr, nameStr string) ([]*SupplierPricingSheetWithSupplier, int64, error) {
 	var sheets []*SupplierPricingSheetWithSupplier
 	var total int64
 
-	if err := DB.Model(&SupplierPricingSheet{}).Count(&total).Error; err != nil {
+	query := DB.Model(&SupplierPricingSheet{})
+	if supplierIdStr != "" {
+		query = query.Where("supplier_pricing_sheets.supplier_id = ?", supplierIdStr)
+	}
+	if nameStr != "" {
+		query = query.Where("supplier_pricing_sheets.name LIKE ?", "%"+nameStr+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	err := DB.Table("supplier_pricing_sheets").
+	dbQuery := DB.Table("supplier_pricing_sheets").
 		Select("supplier_pricing_sheets.*, suppliers.name as supplier_name, channels.name as channel_name").
 		Joins("LEFT JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
-		Joins("LEFT JOIN channels ON channels.id = supplier_pricing_sheets.channel_id").
+		Joins("LEFT JOIN channels ON channels.id = supplier_pricing_sheets.channel_id")
+	if supplierIdStr != "" {
+		dbQuery = dbQuery.Where("supplier_pricing_sheets.supplier_id = ?", supplierIdStr)
+	}
+	if nameStr != "" {
+		dbQuery = dbQuery.Where("supplier_pricing_sheets.name LIKE ?", "%"+nameStr+"%")
+	}
+	err := dbQuery.
 		Order("supplier_pricing_sheets.id desc").
 		Offset(offset).
 		Limit(pageSize).

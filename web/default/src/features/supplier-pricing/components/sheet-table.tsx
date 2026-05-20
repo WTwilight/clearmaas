@@ -6,9 +6,6 @@ import {
   type SortingState,
   type VisibilityState,
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
@@ -90,6 +87,8 @@ export function SheetTable() {
       const result = await getSupplierPricingSheets({
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
+        supplier_id: effectiveSupplierId,
+        name: globalFilter || undefined,
       });
       if (!result.success) {
         toast.error(result.message || t('Failed to load pricing sheets'));
@@ -110,28 +109,16 @@ export function SheetTable() {
       sorting,
       columnVisibility,
       rowSelection,
-      globalFilter,
       pagination,
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
-    globalFilterFn: (row, _columnId, filterValue) => {
-      const searchValue = String(filterValue).toLowerCase();
-      const fields = [row.original.name, row.original.supplier_name];
-      return fields.some((field) =>
-        String(field || '').toLowerCase().includes(searchValue)
-      );
-    },
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
     onPaginationChange,
-    onGlobalFilterChange,
     pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize),
   });
 
@@ -179,7 +166,10 @@ export function SheetTable() {
         <input
           placeholder={t('Filter by name...')}
           value={globalFilter}
-          onChange={(e) => onGlobalFilterChange?.(e.target.value)}
+          onChange={(e) => {
+            onGlobalFilterChange?.(e.target.value);
+            onPaginationChange({ pageIndex: 0, pageSize: pagination.pageSize });
+          }}
           className='h-9 w-full rounded-md border border-input bg-background px-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:w-[200px] lg:w-[240px]'
         />
       </div>

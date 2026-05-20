@@ -61,6 +61,8 @@ export async function deleteSupplier(id: number): Promise<void> {
 export async function getSupplierPricingSheets(params?: {
   p?: number;
   page_size?: number;
+  supplier_id?: number;
+  name?: string;
 }): Promise<ApiResponse<SupplierPricingSheetListResponse>> {
   const { data } = await axiosClient.get<ApiResponse<SupplierPricingSheetListResponse>>(
     '/api/supplier-pricing-sheets',
@@ -197,6 +199,44 @@ export async function deleteSupplierPricingItem(
     `/api/supplier/${supplierId}/pricing-sheet/${sheetId}/items/${itemId}`
   );
   if (!data.success) throw new Error(data.message);
+}
+
+// ---------------------------------------------------------------------------
+// SupplierPricingSheet Channel Binding APIs (multi-channel)
+// ---------------------------------------------------------------------------
+
+export async function getSupplierPricingSheetChannels(
+  supplierId: number,
+  sheetId: number
+): Promise<number[]> {
+  const res = await axiosClient.get<ApiResponse<number[]>>(
+    `/api/supplier/${supplierId}/pricing-sheet/${sheetId}/channels`
+  );
+  if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to fetch channels');
+  return res.data?.data ?? [];
+}
+
+export async function bindSupplierPricingSheetChannels(
+  supplierId: number,
+  sheetId: number,
+  channelIds: number[]
+): Promise<void> {
+  const { data } = await axiosClient.post<ApiResponse>(
+    `/api/supplier/${supplierId}/pricing-sheet/${sheetId}/channels`,
+    { channel_ids: channelIds }
+  );
+  if (!data.success) throw new Error(data.message ?? 'Failed to bind channels');
+}
+
+export async function unbindSupplierPricingSheetChannel(
+  supplierId: number,
+  sheetId: number,
+  channelId: number
+): Promise<void> {
+  const { data } = await axiosClient.delete<ApiResponse>(
+    `/api/supplier/${supplierId}/pricing-sheet/${sheetId}/channels/${channelId}`
+  );
+  if (!data.success) throw new Error(data.message ?? 'Failed to unbind channel');
 }
 
 // ---------------------------------------------------------------------------
