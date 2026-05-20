@@ -75,34 +75,46 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 }
 
 // HandleEnterprisePricingSheet checks if the user is bound to an enterprise with an active pricing sheet
-// and overrides the group ratio if a model discount is found.
-// It takes the base ratio info (from group/group-group settings) and returns it with potential overrides.
-// For per_call type items, it sets PerCallPriceSheet to the absolute price instead of overriding GroupRatio.
+// and overrides the group ratio if a model discount is found and the current channel is bound to the sheet.
+// Layer 2: only applies enterprise pricing when the channel bound to the sheet matches the current channel.
+// Otherwise falls through to default group/group-group ratio logic.
 func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
 	sheet, err := getUserActivePricingSheetForBilling(relayInfo.UserId)
-	if err == nil && sheet != nil {
-		pricingItem := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
-		if pricingItem.Found && pricingItem.Item != nil {
-			if pricingItem.Item.DiscountType == model.DiscountTypePerCall {
-				// per_call: store absolute price, do not override GroupRatio
-				baseRatioInfo.PerCallPriceSheet = pricingItem.Item.DiscountValue
-				baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
-				baseRatioInfo.EnterpriseSheetId = sheet.Id
-				baseRatioInfo.EnterpriseSheetName = sheet.Name
-				logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied (per_call): sheet=%s price=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
-			} else {
-				// ratio / fixed_price: override GroupRatio with DiscountValue
-				baseRatioInfo.GroupRatio = pricingItem.Item.DiscountValue
-				baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
-				baseRatioInfo.EnterpriseSheetId = sheet.Id
-				baseRatioInfo.EnterpriseSheetName = sheet.Name
-				logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied: sheet=%s ratio=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
-			}
-		}
-	}
-	if baseRatioInfo.RatioSource == "" {
+	if err != nil || sheet == nil {
 		baseRatioInfo.RatioSource = "group_ratio"
+		return baseRatioInfo
 	}
+
+	// Layer 2: check if the current channel is bound to this enterprise pricing sheet
+	channelId := getChannelIdFromRelayInfo(relayInfo)
+	if !isChannelBoundToEnterpriseSheet(sheet.Id, channelId) {
+		// channel not bound to this enterprise pricing sheet — skip enterprise pricing
+		baseRatioInfo.RatioSource = "group_ratio"
+		return baseRatioInfo
+	}
+
+	pricingItem := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
+	if pricingItem.Found && pricingItem.Item != nil {
+		if pricingItem.Item.DiscountType == model.DiscountTypePerCall {
+			// per_call: store absolute price, do not override GroupRatio
+			baseRatioInfo.PerCallPriceSheet = pricingItem.Item.DiscountValue
+			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
+			baseRatioInfo.EnterpriseSheetId = sheet.Id
+			baseRatioInfo.EnterpriseSheetName = sheet.Name
+			logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied (per_call): sheet=%s price=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
+		} else {
+			// ratio / fixed_price: override GroupRatio with DiscountValue
+			baseRatioInfo.GroupRatio = pricingItem.Item.DiscountValue
+			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
+			baseRatioInfo.EnterpriseSheetId = sheet.Id
+			baseRatioInfo.EnterpriseSheetName = sheet.Name
+			logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied: sheet=%s ratio=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
+		}
+		return baseRatioInfo
+	}
+
+	// model not found in this enterprise pricing sheet — fall back to group ratio
+	baseRatioInfo.RatioSource = "group_ratio"
 	return baseRatioInfo
 }
 
@@ -117,6 +129,32 @@ func getUserActivePricingSheetForBilling(userId int) (*model.EnterprisePricingSh
 		return nil, nil
 	}
 	return model.GetFirstActivePricingSheetByEnterpriseId(enterpriseId)
+}
+
+// getChannelIdFromRelayInfo extracts the current channel ID from relayInfo.
+func getChannelIdFromRelayInfo(relayInfo *relaycommon.RelayInfo) int {
+	if relayInfo.ChannelMeta != nil {
+		return relayInfo.ChannelMeta.ChannelId
+	}
+	return 0
+}
+
+// isChannelBoundToEnterpriseSheet checks whether the given channelId is bound to
+// the given enterprise pricing sheet. Returns true if bound; false otherwise.
+func isChannelBoundToEnterpriseSheet(sheetId int, channelId int) bool {
+	if channelId <= 0 || sheetId <= 0 {
+		return false
+	}
+	ids, err := model.GetChannelIdsBySheetId(sheetId)
+	if err != nil || len(ids) == 0 {
+		return false
+	}
+	for _, id := range ids {
+		if id == channelId {
+			return true
+		}
+	}
+	return false
 }
 
 // PricingItemResult holds the resolved discount from a pricing sheet.

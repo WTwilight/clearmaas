@@ -26,6 +26,13 @@ type SupplierPricingSheet struct {
 	UpdatedAt  int64  `json:"updated_at"`
 }
 
+// timeFilterExpr returns the raw SQL time validity expression for pricing sheets.
+// start_time = 0 means "no start restriction"
+// end_time = 0 means "no end restriction" (permanently valid)
+func timeFilterExpr() string {
+	return "(start_time = 0 OR start_time <= ?) AND (end_time = 0 OR end_time >= ?)"
+}
+
 func (s *SupplierPricingSheet) TableName() string {
 	return "supplier_pricing_sheets"
 }
@@ -60,11 +67,20 @@ func GetSupplierPricingSheetById(id int) (*SupplierPricingSheet, error) {
 	return &sheet, nil
 }
 
-// GetPricingSheetsBySupplierId returns all pricing sheets for a supplier.
-func GetPricingSheetsBySupplierId(supplierId int) ([]*SupplierPricingSheet, error) {
-	var sheets []*SupplierPricingSheet
-	err := DB.Where("supplier_id = ?", supplierId).Order("id desc").Find(&sheets).Error
-	return sheets, err
+// GetPricingSheetsBySupplierId returns all pricing sheets for a supplier with channel name.
+func GetPricingSheetsBySupplierId(supplierId int) ([]*SupplierPricingSheetWithSupplier, error) {
+	var sheets []*SupplierPricingSheetWithSupplier
+	err := DB.Table("supplier_pricing_sheets").
+		Select("supplier_pricing_sheets.*, channels.name as channel_name").
+		Joins("LEFT JOIN channels ON channels.id = supplier_pricing_sheets.channel_id").
+		Where("supplier_pricing_sheets.supplier_id = ?", supplierId).
+		Order("supplier_pricing_sheets.id desc").
+		Find(&sheets).Error
+	if err != nil {
+		return nil, err
+	}
+	PopulateChannelBindings(sheets)
+	return sheets, nil
 }
 
 // GetActivePricingSheetsBySupplierId returns active (status=1, within time range, supplier enabled) sheets.
@@ -75,7 +91,7 @@ func GetActivePricingSheetsBySupplierId(supplierId int) ([]*SupplierPricingSheet
 	}
 	var sheets []*SupplierPricingSheet
 	now := time.Now().Unix()
-	err := DB.Where("supplier_id = ? AND status = ? AND start_time <= ? AND end_time >= ?",
+	err := DB.Where("supplier_id = ? AND status = ? AND "+timeFilterExpr(),
 		supplierId, SupplierPricingSheetStatusActive, now, now).
 		Order("id desc").
 		Limit(1).
@@ -89,7 +105,7 @@ func GetActivePricingSheetsByChannelId(channelId int) ([]*SupplierPricingSheet, 
 	var sheets []*SupplierPricingSheet
 	now := time.Now().Unix()
 
-	query := DB.Where("status = ? AND start_time <= ? AND end_time >= ? AND supplier_id > 0",
+	query := DB.Where("status = ? AND "+timeFilterExpr()+" AND supplier_id > 0",
 		SupplierPricingSheetStatusActive, now, now)
 
 	if channelId == 0 {
@@ -106,52 +122,20 @@ func GetActivePricingSheetsByChannelId(channelId int) ([]*SupplierPricingSheet, 
 	return sheets, err
 }
 
+// GetFirstActivePricingSheetByChannelIdOnly returns the active sheet matching channelId without requiring supplierId.
+// Uses the new supplier_pricing_sheet_channels binding table.
+// Priority: channel binding in supplier_pricing_sheet_channels > universal (channel_id = 0, no explicit bindings).
+// Requires: supplier enabled, status=active, current time within [start_time, end_time]
+func GetFirstActivePricingSheetByChannelIdOnly(channelId int) (*SupplierPricingSheet, error) {
+	return GetActivePricingSheetByChannelIdBinding(channelId)
+}
+
 // GetFirstActivePricingSheetByChannelId returns the first active sheet matching channelId for a supplier.
-// Priority: channel_id = channelId > channel_id = 0 (universal)
+// Uses the new supplier_pricing_sheet_channels binding table.
+// Priority: channel binding in supplier_pricing_sheet_channels > universal (channel_id = 0, no explicit bindings).
 // Requires: supplier enabled, status=active, current time within [start_time, end_time]
 func GetFirstActivePricingSheetByChannelId(supplierId int, channelId int) (*SupplierPricingSheet, error) {
-	now := time.Now().Unix()
-
-	// First try exact channel match (channel_id > 0)
-	if channelId > 0 {
-		var sheet SupplierPricingSheet
-		err := DB.
-			Joins("JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
-			Where("supplier_pricing_sheets.supplier_id = ?", supplierId).
-			Where("supplier_pricing_sheets.channel_id = ?", channelId).
-			Where("supplier_pricing_sheets.status = ?", SupplierPricingSheetStatusActive).
-			Where("supplier_pricing_sheets.start_time <= ?", now).
-			Where("supplier_pricing_sheets.end_time >= ?", now).
-			Where("suppliers.status = ?", SupplierStatusEnabled).
-			Order("supplier_pricing_sheets.id desc").
-			First(&sheet).Error
-		if err == nil {
-			return &sheet, nil
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-	}
-
-	// Fall back to universal sheet (channel_id = 0)
-	var sheet SupplierPricingSheet
-	err := DB.
-		Joins("JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
-		Where("supplier_pricing_sheets.supplier_id = ?", supplierId).
-		Where("supplier_pricing_sheets.channel_id = ?", 0).
-		Where("supplier_pricing_sheets.status = ?", SupplierPricingSheetStatusActive).
-		Where("supplier_pricing_sheets.start_time <= ?", now).
-		Where("supplier_pricing_sheets.end_time >= ?", now).
-		Where("suppliers.status = ?", SupplierStatusEnabled).
-		Order("supplier_pricing_sheets.id desc").
-		First(&sheet).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &sheet, nil
+	return GetActivePricingSheetBySupplierIdBinding(supplierId, channelId)
 }
 
 // GetFirstActivePricingSheetBySupplierId returns the first active sheet for a supplier.
@@ -174,10 +158,38 @@ func GetPricingSheetsByChannelId(channelId int) ([]*SupplierPricingSheet, error)
 	return sheets, err
 }
 
-// SupplierPricingSheetWithSupplier represents a pricing sheet with supplier info.
+// SupplierPricingSheetWithSupplier represents a pricing sheet with supplier and channel info.
 type SupplierPricingSheetWithSupplier struct {
 	SupplierPricingSheet
-	SupplierName string `json:"supplier_name"`
+	SupplierName string   `json:"supplier_name"`
+	ChannelName  string   `json:"channel_name"`
+	ChannelIds   []int    `json:"channel_ids"`
+	ChannelNames []string `json:"channel_names"`
+}
+
+// PopulateChannelBindings populates ChannelIds and ChannelNames for a list of sheets.
+func PopulateChannelBindings(sheets []*SupplierPricingSheetWithSupplier) {
+	for _, sheet := range sheets {
+		ids, err := GetSupplierPricingSheetChannelIds(sheet.Id)
+		if err != nil || len(ids) == 0 {
+			sheet.ChannelIds = []int{}
+			sheet.ChannelNames = []string{}
+			continue
+		}
+		sheet.ChannelIds = ids
+		channels, err := GetSupplierPricingSheetChannels(sheet.Id)
+		if err != nil || len(channels) == 0 {
+			sheet.ChannelNames = []string{}
+			continue
+		}
+		names := make([]string, 0, len(channels))
+		for _, ch := range channels {
+			if ch != nil {
+				names = append(names, ch.Name)
+			}
+		}
+		sheet.ChannelNames = names
+	}
 }
 
 // GetAllSupplierPricingSheets returns all supplier pricing sheets across all suppliers with pagination.
@@ -191,8 +203,9 @@ func GetAllSupplierPricingSheets(page, pageSize int) ([]*SupplierPricingSheetWit
 
 	offset := (page - 1) * pageSize
 	err := DB.Table("supplier_pricing_sheets").
-		Select("supplier_pricing_sheets.*, suppliers.name as supplier_name").
+		Select("supplier_pricing_sheets.*, suppliers.name as supplier_name, channels.name as channel_name").
 		Joins("LEFT JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
+		Joins("LEFT JOIN channels ON channels.id = supplier_pricing_sheets.channel_id").
 		Order("supplier_pricing_sheets.id desc").
 		Offset(offset).
 		Limit(pageSize).
@@ -200,16 +213,17 @@ func GetAllSupplierPricingSheets(page, pageSize int) ([]*SupplierPricingSheetWit
 	if err != nil {
 		return nil, 0, err
 	}
-
+	PopulateChannelBindings(sheets)
 	return sheets, total, nil
 }
 
-// GetPricingSheetByIdWithSupplier returns a pricing sheet with supplier info by ID.
+// GetPricingSheetByIdWithSupplier returns a pricing sheet with supplier and channel info by ID.
 func GetPricingSheetByIdWithSupplier(id int) (*SupplierPricingSheetWithSupplier, error) {
 	var sheet SupplierPricingSheetWithSupplier
 	err := DB.Table("supplier_pricing_sheets").
-		Select("supplier_pricing_sheets.*, suppliers.name as supplier_name").
+		Select("supplier_pricing_sheets.*, suppliers.name as supplier_name, channels.name as channel_name").
 		Joins("LEFT JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
+		Joins("LEFT JOIN channels ON channels.id = supplier_pricing_sheets.channel_id").
 		Where("supplier_pricing_sheets.id = ?", id).
 		First(&sheet).Error
 	if err != nil {
@@ -218,56 +232,11 @@ func GetPricingSheetByIdWithSupplier(id int) (*SupplierPricingSheetWithSupplier,
 		}
 		return nil, err
 	}
+	PopulateChannelBindings([]*SupplierPricingSheetWithSupplier{&sheet})
 	return &sheet, nil
 }
 
 // DeleteSupplierPricingSheet deletes a pricing sheet by ID.
 func DeleteSupplierPricingSheet(id int) error {
 	return DB.Delete(&SupplierPricingSheet{}, id).Error
-}
-
-// GetFirstActivePricingSheetByChannelIdOnly returns the active sheet matching channelId without requiring supplierId.
-// Priority: channel_id = channelId > channel_id = 0 (universal)
-// Requires: supplier enabled, status=active, current time within [start_time, end_time]
-func GetFirstActivePricingSheetByChannelIdOnly(channelId int) (*SupplierPricingSheet, error) {
-	now := time.Now().Unix()
-
-	// 1. Try exact channel match (channel_id > 0)
-	if channelId > 0 {
-		var sheet SupplierPricingSheet
-		err := DB.
-			Joins("JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
-			Where("supplier_pricing_sheets.channel_id = ?", channelId).
-			Where("supplier_pricing_sheets.status = ?", SupplierPricingSheetStatusActive).
-			Where("supplier_pricing_sheets.start_time <= ?", now).
-			Where("supplier_pricing_sheets.end_time >= ?", now).
-			Where("suppliers.status = ?", SupplierStatusEnabled).
-			Order("supplier_pricing_sheets.id desc").
-			First(&sheet).Error
-		if err == nil {
-			return &sheet, nil
-		}
-		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-	}
-
-	// 2. Fall back to universal sheet (channel_id = 0)
-	var sheet SupplierPricingSheet
-	err := DB.
-		Joins("JOIN suppliers ON suppliers.id = supplier_pricing_sheets.supplier_id").
-		Where("supplier_pricing_sheets.channel_id = ?", 0).
-		Where("supplier_pricing_sheets.status = ?", SupplierPricingSheetStatusActive).
-		Where("supplier_pricing_sheets.start_time <= ?", now).
-		Where("supplier_pricing_sheets.end_time >= ?", now).
-		Where("suppliers.status = ?", SupplierStatusEnabled).
-		Order("supplier_pricing_sheets.id desc").
-		First(&sheet).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &sheet, nil
 }
