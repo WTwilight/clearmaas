@@ -300,8 +300,6 @@ func migrateDB() error {
 		&EnterprisePricingSheet{},
 		&EnterprisePricingItem{},
 		&EnterpriseUserBinding{},
-		&EnterprisePricingSheetChannel{},
-		&SupplierPricingSheetChannel{},
 	)
 	if err != nil {
 		return err
@@ -355,8 +353,7 @@ func migrateDBFast() error {
 		{&EnterprisePricingSheet{}, "EnterprisePricingSheet"},
 		{&EnterprisePricingItem{}, "EnterprisePricingItem"},
 		{&EnterpriseUserBinding{}, "EnterpriseUserBinding"},
-		{&EnterprisePricingSheetChannel{}, "EnterprisePricingSheetChannel"},
-		{&SupplierPricingSheetChannel{}, "SupplierPricingSheetChannel"},
+		// SupplierPricingSheetChannel is created via SQL migration, not GORM AutoMigrate
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
