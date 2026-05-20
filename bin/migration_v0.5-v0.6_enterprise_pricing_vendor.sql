@@ -1,14 +1,15 @@
 -- Migration: Change model to models array + add vendor_type
 -- One row = vendor_type + models JSON array + discount settings (batch config)
+-- Compatible with: PostgreSQL
 
 -- Step 1: Add vendor_type column
 ALTER TABLE enterprise_pricing_items ADD COLUMN vendor_type VARCHAR(64) NOT NULL DEFAULT '';
 
--- Step 2: Add models column as JSON (stores array of model names)
-ALTER TABLE enterprise_pricing_items ADD COLUMN models JSON;
+-- Step 2: Add models column as JSONB (stores array of model names)
+ALTER TABLE enterprise_pricing_items ADD COLUMN models JSONB;
 
 -- Step 3: Backfill models array from existing model name
-UPDATE enterprise_pricing_items SET models = JSON_ARRAY(model);
+UPDATE enterprise_pricing_items SET models = to_jsonb(ARRAY[model]::TEXT[]);
 
 -- Step 4: Backfill vendor_type based on model name patterns
 UPDATE enterprise_pricing_items SET vendor_type = (
@@ -28,9 +29,8 @@ UPDATE enterprise_pricing_items SET vendor_type = (
   END
 );
 
--- Step 5: Drop the old model column and its unique index
-ALTER TABLE enterprise_pricing_items DROP INDEX idx_sheet_model;
-ALTER TABLE enterprise_pricing_items DROP COLUMN model;
+-- Step 5: Drop the old model column (requires CASCADE to remove dependent objects)
+ALTER TABLE enterprise_pricing_items DROP COLUMN IF EXISTS model CASCADE;
 
 -- Step 6: Drop NOT NULL on vendor_type
 ALTER TABLE enterprise_pricing_items ALTER COLUMN vendor_type DROP NOT NULL;
