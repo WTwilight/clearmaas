@@ -15,7 +15,7 @@ import (
 type SupplierStatsFilter struct {
 	StartTimestamp int64
 	EndTimestamp  int64
-	SupplierId   int
+	SupplierId    int
 	ChannelId     int
 	ModelName     string
 }
@@ -153,44 +153,100 @@ func computeProfit(totalCharge, totalCost float64) (grossProfit, profitMargin fl
 	return grossProfit, profitMargin
 }
 
-// costExpr returns the SQL CASE expression for computing total_cost from Other JSON.
-func costExpr(sqlDialect string) string {
-	if sqlDialect == "sqlite" {
-		return `
-			CASE CAST(json_extract(l.other, '$.supplier_cost_type') AS TEXT)
-				WHEN 'ratio' THEN
-					CAST(json_extract(l.other, '$.supplier_cost') AS REAL)
-					* (CAST(l.prompt_tokens AS REAL) + CAST(l.completion_tokens AS REAL))
-					/ 1000000.0
-				ELSE
-					CAST(json_extract(l.other, '$.supplier_cost') AS REAL)
-			END`
-	}
-	return `
-		CASE CAST(json_extract(l.other, '$.supplier_cost_type') AS CHAR)
-			WHEN 'ratio' THEN
-				CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10))
-				* (CAST(l.prompt_tokens AS DECIMAL(20,0)) + CAST(l.completion_tokens AS DECIMAL(20,0)))
-				/ 1000000.0
-			ELSE
-				CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10))
-		END`
-}
+// ============================================================================
+// SQL dialect helpers
+// ============================================================================
 
-func costExprAlias(sqlDialect, alias string) string {
-	return costExpr(sqlDialect) + " AS " + alias
-}
-
-func sumCostExpr(sqlDialect string) string {
-	// Returns: SUM(CASE ... END) AS total_cost
-	return "SUM(" + costExpr(sqlDialect) + ") AS total_cost"
-}
-
+// dialect returns the current SQL dialect: "sqlite", "mysql", or "postgresql".
 func dialect() string {
 	if common.UsingSQLite {
 		return "sqlite"
 	}
+	if common.UsingPostgreSQL {
+		return "postgresql"
+	}
 	return "mysql"
+}
+
+// jsonExtractCol returns the JSON extraction expression for l.other->key.
+func jsonExtractCol(key string) string {
+	if common.UsingPostgreSQL {
+		return fmt.Sprintf("(l.other::json->>'%s')", key)
+	}
+	return fmt.Sprintf("json_extract(l.other, '$."+key+"')")
+}
+
+// castToInt returns the appropriate integer cast expression.
+func castToInt(expr string) string {
+	d := dialect()
+	if d == "postgresql" {
+		return expr + "::int"
+	}
+	if d == "sqlite" {
+		return fmt.Sprintf("CAST(%s AS INTEGER)", expr)
+	}
+	return fmt.Sprintf("CAST(%s AS SIGNED)", expr)
+}
+
+// castToFloat returns the appropriate real/decimal cast expression.
+func castToFloat(expr string) string {
+	d := dialect()
+	if d == "postgresql" {
+		return expr + "::numeric"
+	}
+	if d == "sqlite" {
+		return fmt.Sprintf("CAST(%s AS REAL)", expr)
+	}
+	return fmt.Sprintf("CAST(%s AS DECIMAL(20,10))", expr)
+}
+
+// costExpr returns the CASE expression for computing total_cost from Other JSON.
+func costExpr() string {
+	costType := jsonExtractCol("supplier_cost_type")
+	costVal := jsonExtractCol("supplier_cost")
+	tokens := "(l.prompt_tokens + l.completion_tokens)"
+	ratio := fmt.Sprintf("%s * %s / 1000000.0", castToFloat(costVal), tokens)
+	fixed := castToFloat(costVal)
+
+	if common.UsingSQLite {
+		return fmt.Sprintf(`
+			CASE %s
+				WHEN 'ratio' THEN %s
+				ELSE %s
+			END`, costType, ratio, fixed)
+	}
+	if common.UsingPostgreSQL {
+		return fmt.Sprintf(`
+			CASE %s
+				WHEN 'ratio' THEN %s
+				ELSE %s
+			END`, costType, ratio, fixed)
+	}
+	return fmt.Sprintf(`
+		CASE CAST(%s AS CHAR)
+			WHEN 'ratio' THEN %s
+			ELSE %s
+		END`, costType, ratio, fixed)
+}
+
+func sumCostExpr() string {
+	return fmt.Sprintf("SUM(%s) AS total_cost", costExpr())
+}
+
+// supplierSheetIdCol returns the supplier_sheet_id column expression (as int).
+func supplierSheetIdCol() string {
+	return castToInt(jsonExtractCol("supplier_sheet_id"))
+}
+
+// supplierCostNotNullFilter returns the IS NOT NULL filter for supplier_cost.
+func supplierCostNotNullFilter() string {
+	if common.UsingSQLite {
+		return fmt.Sprintf("%s IS NOT NULL AND %s > 0", castToFloat(jsonExtractCol("supplier_cost")), castToFloat(jsonExtractCol("supplier_cost")))
+	}
+	if common.UsingPostgreSQL {
+		return fmt.Sprintf("%s IS NOT NULL AND %s > 0", jsonExtractCol("supplier_cost"), castToFloat(jsonExtractCol("supplier_cost")))
+	}
+	return fmt.Sprintf("json_extract(l.other, '$.supplier_cost') IS NOT NULL AND %s > 0", castToFloat(jsonExtractCol("supplier_cost")))
 }
 
 // ============================================================================
@@ -198,48 +254,31 @@ func dialect() string {
 // ============================================================================
 
 type SupplierStatsOverviewResult struct {
-	TotalCharge      float64 `json:"total_charge"`
-	TotalCost       float64 `json:"total_cost"`
-	GrossProfit     float64 `json:"gross_profit"`
-	ProfitMargin    float64 `json:"profit_margin"`
-	RequestCount    int64   `json:"request_count"`
-	SupplierCount    int     `json:"supplier_count"`
-	ChannelCount    int     `json:"channel_count"`
+	TotalCharge   float64 `json:"total_charge"`
+	TotalCost     float64 `json:"total_cost"`
+	GrossProfit   float64 `json:"gross_profit"`
+	ProfitMargin  float64 `json:"profit_margin"`
+	RequestCount  int64   `json:"request_count"`
+	SupplierCount int     `json:"supplier_count"`
+	ChannelCount  int     `json:"channel_count"`
 }
 
 func GetSupplierStatsOverview(filter SupplierStatsFilter) (*SupplierStatsOverviewResult, error) {
 	startTs, endTs := buildTimeRange(filter.StartTimestamp, filter.EndTimestamp)
-	d := dialect()
-	cost := sumCostExpr(d)
+	cost := sumCostExpr()
+	supplierCostFilter := supplierCostNotNullFilter()
 
-	var sqlStr string
-	if d == "sqlite" {
-		sqlStr = fmt.Sprintf(`
-			SELECT
-				SUM(l.quota) AS total_charge,
-				%s,
-				COUNT(*) AS request_count
-			FROM logs l
-			WHERE l.type = ?
-				AND l.created_at >= ?
-				AND l.created_at <= ?
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) > 0
-		`, cost)
-	} else {
-		sqlStr = fmt.Sprintf(`
-			SELECT
-				SUM(l.quota) AS total_charge,
-				%s,
-				COUNT(*) AS request_count
-			FROM logs l
-			WHERE l.type = ?
-				AND l.created_at >= ?
-				AND l.created_at <= ?
-				AND json_extract(l.other, '$.supplier_cost') IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10)) > 0
-		`, cost)
-	}
+	sqlStr := fmt.Sprintf(`
+		SELECT
+			SUM(l.quota) AS total_charge,
+			%s,
+			COUNT(*) AS request_count
+		FROM logs l
+		WHERE l.type = ?
+			AND l.created_at >= ?
+			AND l.created_at <= ?
+			AND %s
+	`, cost, supplierCostFilter)
 
 	var row struct {
 		TotalCharge  float64
@@ -251,10 +290,35 @@ func GetSupplierStatsOverview(filter SupplierStatsFilter) (*SupplierStatsOvervie
 	}
 
 	var supplierCount, channelCount int64
-	if err := model.DB.Model(&model.Supplier{}).Where("status = ?", model.SupplierStatusEnabled).Count(&supplierCount).Error; err != nil {
+	ssidCol := supplierSheetIdCol()
+
+	// Count distinct suppliers that have at least one log entry with valid
+	// supplier cost in the time range. This counts only suppliers that were
+	// actually used, matching the same time filter as the other metrics.
+	supplierCountSQL := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT ss.supplier_id) AS cnt
+		FROM logs l
+		JOIN supplier_pricing_sheets ss ON ss.id = %s
+		WHERE l.type = ?
+			AND l.created_at >= ?
+			AND l.created_at <= ?
+			AND %s
+	`, ssidCol, supplierCostFilter)
+	if err := model.LOG_DB.Raw(supplierCountSQL, model.LogTypeConsume, startTs, endTs).Scan(&supplierCount).Error; err != nil {
 		return nil, fmt.Errorf("failed to count suppliers: %w", err)
 	}
-	if err := model.DB.Model(&model.Channel{}).Where("status = ?", common.ChannelStatusEnabled).Count(&channelCount).Error; err != nil {
+
+	// Count distinct channel IDs that have at least one log entry with valid
+	// supplier cost in the time range.
+	channelCountSQL := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT l.channel_id) AS cnt
+		FROM logs l
+		WHERE l.type = ?
+			AND l.created_at >= ?
+			AND l.created_at <= ?
+			AND %s
+	`, supplierCostFilter)
+	if err := model.LOG_DB.Raw(channelCountSQL, model.LogTypeConsume, startTs, endTs).Scan(&channelCount).Error; err != nil {
 		return nil, fmt.Errorf("failed to count channels: %w", err)
 	}
 
@@ -277,11 +341,11 @@ func GetSupplierStatsOverview(filter SupplierStatsFilter) (*SupplierStatsOvervie
 type SupplierStatsBySupplierItem struct {
 	SupplierId   int     `json:"supplier_id"`
 	SupplierName string  `json:"supplier_name"`
-	TotalCharge float64 `json:"total_charge"`
-	TotalCost   float64 `json:"total_cost"`
-	GrossProfit float64 `json:"gross_profit"`
+	TotalCharge  float64 `json:"total_charge"`
+	TotalCost    float64 `json:"total_cost"`
+	GrossProfit  float64 `json:"gross_profit"`
 	ProfitMargin float64 `json:"profit_margin"`
-	RequestCount int64  `json:"request_count"`
+	RequestCount int64   `json:"request_count"`
 }
 
 type SupplierStatsBySupplierResult struct {
@@ -293,49 +357,30 @@ type SupplierStatsBySupplierResult struct {
 
 func GetSupplierStatsBySupplier(filter SupplierStatsFilter) (*SupplierStatsBySupplierResult, error) {
 	startTs, endTs := buildTimeRange(filter.StartTimestamp, filter.EndTimestamp)
-	d := dialect()
-	cost := sumCostExpr(d)
+	cost := sumCostExpr()
+	supplierCostFilter := supplierCostNotNullFilter()
+	ssidCol := supplierSheetIdCol()
 
-	var sqlStr string
-	if d == "sqlite" {
-		sqlStr = fmt.Sprintf(`
-			SELECT
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS INTEGER) AS supplier_sheet_id,
-				SUM(l.quota) AS total_charge,
-				%s,
-				COUNT(*) AS request_count
-			FROM logs l
-			WHERE l.type = ?
-				AND l.created_at >= ?
-				AND l.created_at <= ?
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) > 0
-			GROUP BY supplier_sheet_id
-			ORDER BY total_charge DESC
-		`, cost)
-	} else {
-		sqlStr = fmt.Sprintf(`
-			SELECT
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS SIGNED) AS supplier_sheet_id,
-				SUM(l.quota) AS total_charge,
-				%s,
-				COUNT(*) AS request_count
-			FROM logs l
-			WHERE l.type = ?
-				AND l.created_at >= ?
-				AND l.created_at <= ?
-				AND json_extract(l.other, '$.supplier_cost') IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10)) > 0
-			GROUP BY supplier_sheet_id
-			ORDER BY total_charge DESC
-		`, cost)
-	}
+	sqlStr := fmt.Sprintf(`
+		SELECT
+			%s AS supplier_sheet_id,
+			SUM(l.quota) AS total_charge,
+			%s,
+			COUNT(*) AS request_count
+		FROM logs l
+		WHERE l.type = ?
+			AND l.created_at >= ?
+			AND l.created_at <= ?
+			AND %s
+		GROUP BY supplier_sheet_id
+		ORDER BY total_charge DESC
+	`, ssidCol, cost, supplierCostFilter)
 
 	var rows []struct {
 		SupplierSheetId *int
-		TotalCharge   float64
-		TotalCost     float64
-		RequestCount  int64
+		TotalCharge     float64
+		TotalCost       float64
+		RequestCount    int64
 	}
 	if err := model.LOG_DB.Raw(sqlStr, model.LogTypeConsume, startTs, endTs).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("failed to query supplier stats by supplier: %w", err)
@@ -401,69 +446,49 @@ type SupplierStatsByChannelItem struct {
 	SupplierId   int     `json:"supplier_id"`
 	SupplierName string  `json:"supplier_name"`
 	ChannelId    int     `json:"channel_id"`
-	ChannelName string  `json:"channel_name"`
-	TotalCharge float64 `json:"total_charge"`
-	TotalCost   float64 `json:"total_cost"`
-	GrossProfit float64 `json:"gross_profit"`
+	ChannelName  string  `json:"channel_name"`
+	TotalCharge  float64 `json:"total_charge"`
+	TotalCost    float64 `json:"total_cost"`
+	GrossProfit  float64 `json:"gross_profit"`
 	ProfitMargin float64 `json:"profit_margin"`
-	RequestCount int64  `json:"request_count"`
+	RequestCount int64   `json:"request_count"`
 }
 
 type SupplierStatsByChannelResult struct {
 	Items       []SupplierStatsByChannelItem `json:"items"`
-	TotalCharge float64                    `json:"total_charge"`
-	TotalCost   float64                    `json:"total_cost"`
-	TotalProfit float64                    `json:"total_profit"`
+	TotalCharge float64                     `json:"total_charge"`
+	TotalCost   float64                     `json:"total_cost"`
+	TotalProfit float64                     `json:"total_profit"`
 }
 
 func GetSupplierStatsByChannel(filter SupplierStatsFilter) (*SupplierStatsByChannelResult, error) {
 	startTs, endTs := buildTimeRange(filter.StartTimestamp, filter.EndTimestamp)
-	d := dialect()
-	cost := sumCostExpr(d)
+	cost := sumCostExpr()
+	supplierCostFilter := supplierCostNotNullFilter()
+	ssidCol := supplierSheetIdCol()
 
-	var sqlStr string
-	if d == "sqlite" {
-		sqlStr = fmt.Sprintf(`
-			SELECT
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS INTEGER) AS supplier_sheet_id,
-				l.channel_id,
-				SUM(l.quota) AS total_charge,
-				%s,
-				COUNT(*) AS request_count
-			FROM logs l
-			WHERE l.type = ?
-				AND l.created_at >= ?
-				AND l.created_at <= ?
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) > 0
-			GROUP BY supplier_sheet_id, l.channel_id
-			ORDER BY total_charge DESC
-		`, cost)
-	} else {
-		sqlStr = fmt.Sprintf(`
-			SELECT
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS SIGNED) AS supplier_sheet_id,
-				l.channel_id,
-				SUM(l.quota) AS total_charge,
-				%s,
-				COUNT(*) AS request_count
-			FROM logs l
-			WHERE l.type = ?
-				AND l.created_at >= ?
-				AND l.created_at <= ?
-				AND json_extract(l.other, '$.supplier_cost') IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10)) > 0
-			GROUP BY supplier_sheet_id, l.channel_id
-			ORDER BY total_charge DESC
-		`, cost)
-	}
+	sqlStr := fmt.Sprintf(`
+		SELECT
+			%s AS supplier_sheet_id,
+			l.channel_id,
+			SUM(l.quota) AS total_charge,
+			%s,
+			COUNT(*) AS request_count
+		FROM logs l
+		WHERE l.type = ?
+			AND l.created_at >= ?
+			AND l.created_at <= ?
+			AND %s
+		GROUP BY supplier_sheet_id, l.channel_id
+		ORDER BY total_charge DESC
+	`, ssidCol, cost, supplierCostFilter)
 
 	var rows []struct {
 		SupplierSheetId *int
-		ChannelId     int
-		TotalCharge   float64
-		TotalCost     float64
-		RequestCount  int64
+		ChannelId       int
+		TotalCharge     float64
+		TotalCost       float64
+		RequestCount    int64
 	}
 	if err := model.LOG_DB.Raw(sqlStr, model.LogTypeConsume, startTs, endTs).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("failed to query supplier stats by channel: %w", err)
@@ -503,7 +528,7 @@ func GetSupplierStatsByChannel(filter SupplierStatsFilter) (*SupplierStatsByChan
 			ChannelName:  channelNames[r.ChannelId],
 			TotalCharge:  r.TotalCharge,
 			TotalCost:    r.TotalCost,
-			GrossProfit: gp,
+			GrossProfit:  gp,
 			ProfitMargin: pm,
 			RequestCount: r.RequestCount,
 		})
@@ -530,74 +555,91 @@ type SupplierStatsByModelItem struct {
 	ChannelName  string  `json:"channel_name"`
 	ModelName    string  `json:"model_name"`
 	Date         string  `json:"date"`
-	TotalCharge float64 `json:"total_charge"`
-	TotalCost   float64 `json:"total_cost"`
-	GrossProfit float64 `json:"gross_profit"`
+	TotalCharge  float64 `json:"total_charge"`
+	TotalCost    float64 `json:"total_cost"`
+	GrossProfit  float64 `json:"gross_profit"`
 	ProfitMargin float64 `json:"profit_margin"`
-	RequestCount int64  `json:"request_count"`
+	RequestCount int64   `json:"request_count"`
 }
 
 type SupplierStatsByModelResult struct {
 	Items       []SupplierStatsByModelItem `json:"items"`
-	TotalCharge float64                  `json:"total_charge"`
-	TotalCost   float64                  `json:"total_cost"`
-	TotalProfit float64                  `json:"total_profit"`
+	TotalCharge float64                   `json:"total_charge"`
+	TotalCost   float64                   `json:"total_cost"`
+	TotalProfit float64                   `json:"total_profit"`
 }
 
 func GetSupplierStatsByModel(filter SupplierStatsFilter) (*SupplierStatsByModelResult, error) {
 	startTs, endTs := buildTimeRange(filter.StartTimestamp, filter.EndTimestamp)
-	d := dialect()
-	cost := sumCostExpr(d)
+	cost := sumCostExpr()
+	supplierCostFilter := supplierCostNotNullFilter()
+	ssidCol := supplierSheetIdCol()
 
 	var sqlStr string
-	if d == "sqlite" {
+	if common.UsingSQLite {
 		sqlStr = fmt.Sprintf(`
 			SELECT
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS INTEGER) AS supplier_sheet_id,
+				%s AS supplier_sheet_id,
 				l.channel_id,
 				l.model_name,
 				DATE(l.created_at, 'unixepoch') AS date,
 				SUM(l.quota) AS total_charge,
-				%s AS total_cost,
+				%s,
 				COUNT(*) AS request_count
 			FROM logs l
 			WHERE l.type = ?
 				AND l.created_at >= ?
 				AND l.created_at <= ?
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) > 0
+				AND %s
 			GROUP BY supplier_sheet_id, l.channel_id, l.model_name, date
 			ORDER BY date DESC, total_charge DESC
-		`, cost)
+		`, ssidCol, cost, supplierCostFilter)
+	} else if common.UsingPostgreSQL {
+		sqlStr = fmt.Sprintf(`
+			SELECT
+				%s AS supplier_sheet_id,
+				l.channel_id,
+				l.model_name,
+				DATE(TO_TIMESTAMP(l.created_at)) AS date,
+				SUM(l.quota) AS total_charge,
+				%s,
+				COUNT(*) AS request_count
+			FROM logs l
+			WHERE l.type = ?
+				AND l.created_at >= ?
+				AND l.created_at <= ?
+				AND %s
+			GROUP BY supplier_sheet_id, l.channel_id, l.model_name, date
+			ORDER BY date DESC, total_charge DESC
+		`, ssidCol, cost, supplierCostFilter)
 	} else {
 		sqlStr = fmt.Sprintf(`
 			SELECT
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS SIGNED) AS supplier_sheet_id,
+				%s AS supplier_sheet_id,
 				l.channel_id,
 				l.model_name,
 				DATE(FROM_UNIXTIME(l.created_at)) AS date,
 				SUM(l.quota) AS total_charge,
-				%s AS total_cost,
+				%s,
 				COUNT(*) AS request_count
 			FROM logs l
 			WHERE l.type = ?
 				AND l.created_at >= ?
 				AND l.created_at <= ?
-				AND json_extract(l.other, '$.supplier_cost') IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10)) > 0
+				AND %s
 			GROUP BY supplier_sheet_id, l.channel_id, l.model_name, date
 			ORDER BY date DESC, total_charge DESC
-		`, cost)
+		`, ssidCol, cost, supplierCostFilter)
 	}
 
 	var rows []struct {
 		SupplierSheetId *int
-		ChannelId     int
-		ModelName     string
-		Date          string
-		TotalCharge   float64
-		TotalCost     float64
-		RequestCount  int64
+		ChannelId       int
+		ModelName       string
+		Date            string
+		TotalCharge     float64
+		TotalCost       float64
+		RequestCount    int64
 	}
 	if err := model.LOG_DB.Raw(sqlStr, model.LogTypeConsume, startTs, endTs).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("failed to query supplier stats by model: %w", err)
@@ -632,16 +674,16 @@ func GetSupplierStatsByModel(filter SupplierStatsFilter) (*SupplierStatsByModelR
 		}
 		items = append(items, SupplierStatsByModelItem{
 			SupplierId:   sid,
-			SupplierName: sname,
-			ChannelId:    r.ChannelId,
-			ChannelName:  channelNames[r.ChannelId],
-			ModelName:    r.ModelName,
-			Date:         r.Date,
-			TotalCharge:  r.TotalCharge,
-			TotalCost:    r.TotalCost,
-			GrossProfit: gp,
-			ProfitMargin: pm,
-			RequestCount: r.RequestCount,
+			SupplierName:  sname,
+			ChannelId:     r.ChannelId,
+			ChannelName:   channelNames[r.ChannelId],
+			ModelName:     r.ModelName,
+			Date:          r.Date,
+			TotalCharge:   r.TotalCharge,
+			TotalCost:     r.TotalCost,
+			GrossProfit:   gp,
+			ProfitMargin:  pm,
+			RequestCount:  r.RequestCount,
 		})
 		totalCharge += r.TotalCharge
 		totalCost += r.TotalCost
@@ -660,17 +702,17 @@ func GetSupplierStatsByModel(filter SupplierStatsFilter) (*SupplierStatsByModelR
 // ============================================================================
 
 type SupplierStatItem struct {
-	ChannelId     int     `json:"channel_id"`
-	ChannelName  string  `json:"channel_name"`
-	ModelName    string  `json:"model_name"`
-	TotalCharge  float64 `json:"total_charge"`
-	TotalCost    float64 `json:"total_cost"`
-	GrossProfit  float64 `json:"gross_profit"`
-	ProfitMargin float64 `json:"profit_margin"`
-	RequestCount int64   `json:"request_count"`
-	Date         string  `json:"date"`
-	SupplierName string  `json:"supplier_name"`
-	SupplierSheet string `json:"supplier_sheet"`
+	ChannelId      int     `json:"channel_id"`
+	ChannelName    string  `json:"channel_name"`
+	ModelName      string  `json:"model_name"`
+	TotalCharge    float64 `json:"total_charge"`
+	TotalCost      float64 `json:"total_cost"`
+	GrossProfit    float64 `json:"gross_profit"`
+	ProfitMargin   float64 `json:"profit_margin"`
+	RequestCount   int64   `json:"request_count"`
+	Date           string  `json:"date"`
+	SupplierName   string  `json:"supplier_name"`
+	SupplierSheet  string  `json:"supplier_sheet"`
 }
 
 type SupplierStatsResult struct {
@@ -681,48 +723,68 @@ type SupplierStatsResult struct {
 }
 
 func getSupplierStatSQL() string {
-	d := dialect()
-	cost := sumCostExpr(d)
-	if d == "sqlite" {
+	cost := sumCostExpr()
+	supplierCostFilter := supplierCostNotNullFilter()
+	ssidCol := supplierSheetIdCol()
+
+	if common.UsingSQLite {
 		return fmt.Sprintf(`
 			SELECT
 				l.channel_id,
 				l.model_name,
 				DATE(l.created_at, 'unixepoch') AS date,
-				CAST(json_extract(l.other, '$.supplier_sheet_id') AS INTEGER) AS supplier_sheet_id,
+				%s AS supplier_sheet_id,
 				CAST(json_extract(l.other, '$.supplier_sheet_name') AS TEXT) AS supplier_sheet,
 				SUM(l.quota) AS total_charge,
-				%s AS total_cost,
+				%s,
 				COUNT(*) AS request_count
 			FROM logs l
 			WHERE l.type = ?
 				AND l.created_at >= ?
 				AND l.created_at <= ?
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) IS NOT NULL
-				AND CAST(json_extract(l.other, '$.supplier_cost') AS REAL) > 0
+				AND %s
 			GROUP BY l.channel_id, l.model_name, date, supplier_sheet_id, supplier_sheet
 			ORDER BY date DESC, total_charge DESC
-		`, cost)
+		`, ssidCol, cost, supplierCostFilter)
+	}
+	if common.UsingPostgreSQL {
+		return fmt.Sprintf(`
+			SELECT
+				l.channel_id,
+				l.model_name,
+				DATE(TO_TIMESTAMP(l.created_at)) AS date,
+				%s AS supplier_sheet_id,
+				(l.other::json->>'supplier_sheet_name') AS supplier_sheet,
+				SUM(l.quota) AS total_charge,
+				%s,
+				COUNT(*) AS request_count
+			FROM logs l
+			WHERE l.type = ?
+				AND l.created_at >= ?
+				AND l.created_at <= ?
+				AND %s
+			GROUP BY l.channel_id, l.model_name, date, supplier_sheet_id, supplier_sheet
+			ORDER BY date DESC, total_charge DESC
+		`, ssidCol, cost, supplierCostFilter)
 	}
 	return fmt.Sprintf(`
 		SELECT
 			l.channel_id,
 			l.model_name,
 			DATE(FROM_UNIXTIME(l.created_at)) AS date,
-			CAST(json_extract(l.other, '$.supplier_sheet_id') AS SIGNED) AS supplier_sheet_id,
+			%s AS supplier_sheet_id,
 			CAST(json_extract(l.other, '$.supplier_sheet_name') AS CHAR) AS supplier_sheet,
 			SUM(l.quota) AS total_charge,
-			%s AS total_cost,
+			%s,
 			COUNT(*) AS request_count
 		FROM logs l
 		WHERE l.type = ?
 			AND l.created_at >= ?
 			AND l.created_at <= ?
-			AND json_extract(l.other, '$.supplier_cost') IS NOT NULL
-			AND CAST(json_extract(l.other, '$.supplier_cost') AS DECIMAL(20,10)) > 0
+			AND %s
 		GROUP BY l.channel_id, l.model_name, date, supplier_sheet_id, supplier_sheet
 		ORDER BY date DESC, total_charge DESC
-	`, cost)
+	`, ssidCol, cost, supplierCostFilter)
 }
 
 func GetSupplierStats(filter SupplierStatsFilter) (*SupplierStatsResult, error) {
@@ -730,14 +792,14 @@ func GetSupplierStats(filter SupplierStatsFilter) (*SupplierStatsResult, error) 
 	sqlStr := getSupplierStatSQL()
 
 	var rows []struct {
-		ChannelId        int
-		ModelName        string
-		Date             string
-		SupplierSheetId  *int
-		SupplierSheet    *string
-		TotalCharge      float64
-		TotalCost        float64
-		RequestCount     int64
+		ChannelId       int
+		ModelName       string
+		Date            string
+		SupplierSheetId *int
+		SupplierSheet   *string
+		TotalCharge     float64
+		TotalCost       float64
+		RequestCount    int64
 	}
 	if err := model.LOG_DB.Raw(sqlStr, model.LogTypeConsume, startTs, endTs).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("failed to query supplier stats: %w", err)
