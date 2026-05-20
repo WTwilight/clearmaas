@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFormContext } from 'react-hook-form';
 import { Link2, Unlink } from 'lucide-react';
+import { api as axiosApi } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -14,27 +13,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Combobox } from '@/components/ui/combobox';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
-import { updateSupplierPricingSheet } from '../api';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  getSupplierPricingSheetChannels,
+  bindSupplierPricingSheetChannels,
+  unbindSupplierPricingSheetChannel,
+} from '../api';
 import { useSupplierPricing } from './supplier-pricing-provider';
-import { z } from 'zod';
-import { api as axiosApi } from '@/lib/api';
-
-const bindFormSchema = z.object({
-  channel_id: z.string().min(1, 'Please select a channel'),
-});
-
-type BindFormValues = z.infer<typeof bindFormSchema>;
 
 interface ChannelInfo {
   id: number;
@@ -46,17 +33,13 @@ interface ChannelInfo {
 export function SheetBindDialog() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { sheetBindDialog, closeSheetBindDialog } = useSupplierPricing();
-
+  const { sheetBindDialog, closeSheetBindDialog, triggerSheetRefresh } = useSupplierPricing();
   const sheet = sheetBindDialog.sheet;
-  const currentChannelId = sheet?.channel_id ?? 0;
 
-  const form = useForm<BindFormValues>({
-    resolver: zodResolver(bindFormSchema),
-    defaultValues: {
-      channel_id: '',
-    },
-  });
+  const [selectedChannelIds, setSelectedChannelIds] = useState<Set<number>>(new Set());
+  const [submittingChannelIds, setSubmittingChannelIds] = useState<Set<number>>(new Set());
+  const [isBinding, setIsBinding] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   const { data: allChannels, isLoading: isLoadingChannels } = useQuery({
     queryKey: ['channels', 'all'],
@@ -70,258 +53,248 @@ export function SheetBindDialog() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const currentChannel =
-    currentChannelId > 0
-      ? allChannels?.find((ch) => ch.id === currentChannelId)
-      : null;
+  const { data: boundChannelIds, isLoading: isLoadingBound } = useQuery({
+    queryKey: ['supplier-pricing-sheet-channels', sheet?.id],
+    queryFn: async () => {
+      if (!sheet?.supplier_id || !sheet?.id) return [];
+      return await getSupplierPricingSheetChannels(sheet.supplier_id, sheet.id);
+    },
+    enabled: sheetBindDialog.open && !!sheet?.supplier_id && !!sheet?.id,
+    staleTime: 30 * 1000,
+  });
 
-  const channelOptions =
-    (allChannels ?? []).map((ch) => ({
-      value: String(ch.id),
-      label: `${ch.name} (${ch.type})`,
-    })) ?? [];
+  useEffect(() => {
+    if (!initialized && boundChannelIds !== undefined) {
+      setSelectedChannelIds(new Set(boundChannelIds));
+      setInitialized(true);
+    }
+  }, [boundChannelIds, initialized]);
 
-  const handleClose = (open: boolean) => {
+  const handleOpenChange = (open: boolean) => {
     if (!open) {
-      closeSheetBindDialog();
-      form.reset();
+      setChannelBindingOpen();
+      setSelectedChannelIds(new Set());
+      setInitialized(false);
     }
   };
 
-  return (
-    <Dialog open={sheetBindDialog.open} onOpenChange={handleClose}>
-      <DialogContent className='max-w-lg'>
-        <DialogHeader>
-          <DialogTitle>{t('Bind Channel')}</DialogTitle>
-          <DialogDescription>
-            {sheet?.name
-              ? `${t('Bind channel for sheet')}: ${sheet.name}`
-              : t('Bind a channel to this pricing sheet.')}
-          </DialogDescription>
-        </DialogHeader>
+  const setChannelBindingOpen = () => {
+    closeSheetBindDialog();
+  };
 
-        <Form {...form}>
-          <form className='space-y-4'>
-            <CurrentBinding
-              currentChannel={currentChannel}
-              currentChannelId={currentChannelId}
-            />
+  const toggleChannel = (channelId: number) => {
+    const next = new Set(selectedChannelIds);
+    if (next.has(channelId)) {
+      next.delete(channelId);
+    } else {
+      next.add(channelId);
+    }
+    setSelectedChannelIds(next);
+  };
 
-            <Separator />
-
-            <BindNewChannel
-              channelOptions={channelOptions}
-              isLoadingChannels={isLoadingChannels}
-              sheet={sheet}
-              currentChannelId={currentChannelId}
-            />
-
-            <DialogFooter className='gap-2 sm:gap-0'>
-              <Button variant='outline' type='button' onClick={() => handleClose(false)}>
-                {t('Cancel')}
-              </Button>
-              <BindSubmitButton
-                sheet={sheet}
-                currentChannelId={currentChannelId}
-                queryClient={queryClient}
-                closeSheetBindDialog={closeSheetBindDialog}
-              />
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-type ChannelInfo2 = {
-  id: number;
-  name: string;
-  type: number;
-  status: number;
-};
-
-type Sheet = {
-  id: number;
-  supplier_id: number;
-  channel_id: number;
-  name: string;
-  status: number;
-  start_time: number;
-  end_time: number;
-};
-
-function CurrentBinding({
-  currentChannel,
-  currentChannelId,
-}: {
-  currentChannel: ChannelInfo2 | null | undefined;
-  currentChannelId: number;
-}) {
-  const { t } = useTranslation();
-  const { sheetBindDialog, closeSheetBindDialog } = useSupplierPricing();
-  const [isUnbinding, setIsUnbinding] = useState(false);
-  const queryClient = useQueryClient();
-  const sheet = sheetBindDialog.sheet;
-  const isUniversal = currentChannelId === 0;
-
-  const handleUnbind = async () => {
-    if (!sheet) return;
-    setIsUnbinding(true);
+  const handleUnbind = async (channelId: number) => {
+    if (!sheet?.supplier_id || !sheet?.id) return;
+    setSubmittingChannelIds((s) => new Set([...s, channelId]));
     try {
-      await updateSupplierPricingSheet(sheet.supplier_id, sheet.id, {
-        name: sheet.name,
-        status: sheet.status,
-        channel_id: 0,
-        start_time: sheet.start_time,
-        end_time: sheet.end_time,
-      });
+      await unbindSupplierPricingSheetChannel(sheet.supplier_id, sheet.id, channelId);
       toast.success(t('Channel unbound successfully'));
-      queryClient.invalidateQueries({ queryKey: ['supplier-pricing-sheets'] });
-      queryClient.invalidateQueries({ queryKey: ['supplier-pricing-sheets-all'] });
-      closeSheetBindDialog();
+      const next = new Set(selectedChannelIds);
+      next.delete(channelId);
+      setSelectedChannelIds(next);
+      await queryClient.invalidateQueries({
+        queryKey: ['supplier-pricing-sheet-channels', sheet.id],
+      });
+      triggerSheetRefresh();
     } catch (err) {
       toast.error((err as Error).message || t('Failed to unbind channel'));
     } finally {
-      setIsUnbinding(false);
-    }
-  };
-
-  return (
-    <div>
-      <div className='mb-2 text-sm font-medium'>{t('Current Binding')}</div>
-      <div className='flex items-center justify-between rounded-md border border-border bg-muted/50 px-3 py-2'>
-        <div className='flex items-center gap-2'>
-          <Link2 className='h-4 w-4 text-muted-foreground' />
-          {currentChannel ? (
-            <span className='text-sm'>
-              <span className='font-medium'>{currentChannel.name}</span>
-              <span className='ml-1 text-muted-foreground'>
-                (ID: {currentChannel.id}, Type: {currentChannel.type})
-              </span>
-            </span>
-          ) : (
-            <span className='text-sm text-muted-foreground'>
-              {t('Universal — no channel bound')}
-            </span>
-          )}
-        </div>
-        {!isUniversal && (
-          <Button
-            variant='ghost'
-            size='sm'
-            className='text-destructive hover:text-destructive'
-            onClick={handleUnbind}
-            disabled={isUnbinding}
-            type='button'
-          >
-            <Unlink className='mr-1 h-3.5 w-3.5' />
-            {isUnbinding ? t('Unbinding...') : t('Unbind')}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BindNewChannel({
-  channelOptions,
-  isLoadingChannels,
-}: {
-  channelOptions: Array<{ value: string; label: string }>;
-  isLoadingChannels: boolean;
-}) {
-  const { t } = useTranslation();
-  const { control } = useFormContext<BindFormValues>();
-
-  return (
-    <div>
-      <div className='mb-2 text-sm font-medium'>{t('Bind New Channel')}</div>
-      <FormField
-        control={control}
-        name='channel_id'
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t('Channel')}</FormLabel>
-            <FormControl>
-              {isLoadingChannels ? (
-                <Skeleton className='h-10 w-full' />
-              ) : (
-                <Combobox
-                  options={channelOptions}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  placeholder={t('Select a channel...')}
-                  searchPlaceholder={t('Search channels...')}
-                  emptyText={t('No channel found')}
-                  customDisplayValue={
-                    channelOptions.find((o) => o.value === field.value)?.label ?? ''
-                  }
-                />
-              )}
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-    </div>
-  );
-}
-
-type QueryClient = ReturnType<typeof useQueryClient>;
-
-function BindSubmitButton({
-  sheet,
-  currentChannelId,
-  queryClient,
-  closeSheetBindDialog,
-}: {
-  sheet: Sheet | undefined;
-  currentChannelId: number;
-  queryClient: QueryClient;
-  closeSheetBindDialog: () => void;
-}) {
-  const { t } = useTranslation();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { handleSubmit, watch, formState } = useFormContext<BindFormValues>();
-
-  const channelId = watch('channel_id');
-
-  const onSubmit = async (values: BindFormValues) => {
-    if (!sheet) return;
-    const newChannelId = parseInt(values.channel_id);
-    if (newChannelId === currentChannelId) {
-      closeSheetBindDialog();
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await updateSupplierPricingSheet(sheet.supplier_id, sheet.id, {
-        name: sheet.name,
-        status: sheet.status,
-        channel_id: newChannelId,
-        start_time: sheet.start_time,
-        end_time: sheet.end_time,
+      setSubmittingChannelIds((s) => {
+        const next = new Set(s);
+        next.delete(channelId);
+        return next;
       });
-      toast.success(t('Channel bound successfully'));
-      queryClient.invalidateQueries({ queryKey: ['supplier-pricing-sheets'] });
-      queryClient.invalidateQueries({ queryKey: ['supplier-pricing-sheets-all'] });
-      closeSheetBindDialog();
-    } catch (err) {
-      toast.error((err as Error).message || t('Failed to bind channel'));
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
+  const handleSubmit = async () => {
+    if (!sheet?.supplier_id || !sheet?.id) return;
+    setIsBinding(true);
+    try {
+      await bindSupplierPricingSheetChannels(
+        sheet.supplier_id,
+        sheet.id,
+        Array.from(selectedChannelIds)
+      );
+      toast.success(t('Channels bound successfully'));
+      await queryClient.invalidateQueries({
+        queryKey: ['supplier-pricing-sheet-channels', sheet.id],
+      });
+      triggerSheetRefresh();
+      handleOpenChange(false);
+    } catch (err) {
+      toast.error((err as Error).message || t('Failed to bind channels'));
+    } finally {
+      setIsBinding(false);
+    }
+  };
+
+  const isLoading = isLoadingChannels || isLoadingBound;
+
+  const noChanges =
+    selectedChannelIds.size === (boundChannelIds?.length ?? 0) &&
+    [...selectedChannelIds].every((id) => (boundChannelIds ?? []).includes(id));
+
   return (
-    <Button
-      onClick={handleSubmit(onSubmit)}
-      disabled={isSubmitting || !channelId}
-      type='button'
-    >
-      {isSubmitting ? t('Binding...') : t('Bind')}
-    </Button>
+    <Dialog open={sheetBindDialog.open} onOpenChange={handleOpenChange}>
+      <DialogContent className='max-w-lg flex flex-col max-h-[85vh]'>
+        <DialogHeader>
+          <DialogTitle>{t('Bind Channels')}</DialogTitle>
+          <DialogDescription>
+            {sheet?.name
+              ? `${t('Bind channels for sheet')}: ${sheet.name}`
+              : t('Manage channel bindings for this pricing sheet.')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className='space-y-4 flex-1 overflow-y-auto'>
+          <div className='space-y-2'>
+            <div className='flex items-center gap-2'>
+              <h4 className='text-sm font-medium'>{t('Bound Channels')}</h4>
+              {isLoadingBound ? (
+                <Skeleton className='h-4 w-16' />
+              ) : (
+                <span className='text-muted-foreground text-xs'>
+                  ({boundChannelIds?.length || 0})
+                </span>
+              )}
+            </div>
+
+            {isLoadingBound ? (
+              <div className='space-y-2'>
+                <Skeleton className='h-10 w-full' />
+                <Skeleton className='h-10 w-full' />
+              </div>
+            ) : boundChannelIds && boundChannelIds.length > 0 ? (
+              <ScrollArea className='max-h-[200px] rounded-md border'>
+                <div className='space-y-1 p-2'>
+                  {boundChannelIds.map((channelId) => {
+                    const ch = allChannels?.find((c) => c.id === channelId);
+                    const isUnbinding = submittingChannelIds.has(channelId);
+                    return (
+                      <div
+                        key={channelId}
+                        className='flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2'
+                      >
+                        <div className='flex items-center gap-2'>
+                          <Link2 className='h-4 w-4 text-muted-foreground' />
+                          <span className='text-sm'>
+                            {ch ? (
+                              <>
+                                <span className='font-medium'>{ch.name}</span>
+                                <span className='ml-1 text-muted-foreground'>
+                                  (ID: {ch.id}, Type: {ch.type})
+                                </span>
+                              </>
+                            ) : (
+                              <span className='text-muted-foreground'>
+                                Channel #{channelId}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <Button
+                          size='sm'
+                          variant='ghost'
+                          className='text-destructive hover:text-destructive'
+                          onClick={() => handleUnbind(channelId)}
+                          disabled={isUnbinding}
+                          type='button'
+                        >
+                          <Unlink className='mr-1 h-3.5 w-3.5' />
+                          {isUnbinding ? t('Unbinding...') : t('Unbind')}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className='rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground'>
+                {t('No channels bound to this pricing sheet yet.')}
+              </div>
+            )}
+          </div>
+
+          <div className='relative'>
+            <div className='absolute inset-0 flex items-center'>
+              <span className='w-full border-t' />
+            </div>
+            <div className='relative flex justify-center text-xs uppercase'>
+              <span className='bg-background px-2 text-muted-foreground'>
+                {t('Select Channels')}
+              </span>
+            </div>
+          </div>
+
+          <div className='space-y-2'>
+            <div className='text-sm font-medium'>
+              {t('Available Channels')}
+              {isLoadingChannels && (
+                <span className='ml-2 text-muted-foreground'>
+                  ({t('Loading...')})
+                </span>
+              )}
+            </div>
+
+            {isLoadingChannels ? (
+              <div className='space-y-2'>
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className='h-10 w-full' />
+                ))}
+              </div>
+            ) : (
+              <ScrollArea className='max-h-[300px] rounded-md border'>
+                <div className='space-y-1 p-2'>
+                  {(allChannels ?? []).map((ch) => (
+                    <label
+                      key={ch.id}
+                      className='flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/50'
+                    >
+                      <Checkbox
+                        checked={selectedChannelIds.has(ch.id)}
+                        onCheckedChange={() => toggleChannel(ch.id)}
+                      />
+                      <span className='text-sm'>
+                        <span className='font-medium'>{ch.name}</span>
+                        <span className='ml-1 text-muted-foreground'>
+                          (ID: {ch.id}, Type: {ch.type})
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                  {allChannels?.length === 0 && (
+                    <div className='p-4 text-center text-sm text-muted-foreground'>
+                      {t('No channels available.')}
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant='outline' onClick={() => handleOpenChange(false)}>
+            {t('Cancel')}
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isBinding || isLoading || noChanges}
+          >
+            {isBinding ? t('Binding...') : t('Bind Channels')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
