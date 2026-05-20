@@ -163,8 +163,8 @@ type SupplierPricingSheetWithSupplier struct {
 	SupplierPricingSheet
 	SupplierName string   `json:"supplier_name"`
 	ChannelName  string   `json:"channel_name"`
-	ChannelIds   []int    `json:"channel_ids"`
-	ChannelNames []string `json:"channel_names"`
+	ChannelIds   []int    `json:"channel_ids" gorm:"-"`
+	ChannelNames []string `json:"channel_names" gorm:"-"`
 }
 
 // PopulateChannelBindings populates ChannelIds and ChannelNames for a list of sheets.
