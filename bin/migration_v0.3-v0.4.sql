@@ -1,5 +1,5 @@
-INSERT INTO abilities (`group`, model, channel_id, enabled)
-SELECT c.`group`, m.model, c.id, 1
+INSERT INTO abilities ("group", model, channel_id, enabled)
+SELECT c."group", m.model, c.id, 1
 FROM channels c
 CROSS JOIN (
     SELECT 'gpt-3.5-turbo' AS model UNION ALL
@@ -11,7 +11,7 @@ WHERE c.status = 1
   AND NOT EXISTS (
     SELECT 1
     FROM abilities a
-    WHERE a.`group` = c.`group`
+    WHERE a."group" = c."group"
       AND a.model = m.model
       AND a.channel_id = c.id
 );
