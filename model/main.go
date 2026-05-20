@@ -308,6 +308,9 @@ func migrateDB() error {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
 			return err
 		}
+		if err := ensureSupplierPricingSheetChannelsTableSQLite(); err != nil {
+			return err
+		}
 	} else {
 		if err := DB.AutoMigrate(&SubscriptionPlan{}); err != nil {
 			return err
@@ -380,6 +383,9 @@ func migrateDBFast() error {
 	}
 	if common.UsingSQLite {
 		if err := ensureSubscriptionPlanTableSQLite(); err != nil {
+			return err
+		}
+		if err := ensureSupplierPricingSheetChannelsTableSQLite(); err != nil {
 			return err
 		}
 	} else {
@@ -473,6 +479,26 @@ PRIMARY KEY (` + "`id`" + `)
 		}
 	}
 	return nil
+}
+
+// ensureSupplierPricingSheetChannelsTableSQLite creates the supplier_pricing_sheet_channels table
+// for SQLite (where GORM AutoMigrate cannot handle the foreign-key constraints).
+func ensureSupplierPricingSheetChannelsTableSQLite() error {
+	if !common.UsingSQLite {
+		return nil
+	}
+	tableName := "supplier_pricing_sheet_channels"
+	if DB.Migrator().HasTable(tableName) {
+		return nil
+	}
+	createSQL := `CREATE TABLE ` + "`" + tableName + "`" + ` (
+` + "`id`" + ` integer PRIMARY KEY AUTOINCREMENT,
+` + "`pricing_sheet_id`" + ` integer NOT NULL,
+` + "`channel_id`" + ` integer NOT NULL,
+` + "`created_at`" + ` bigint NOT NULL DEFAULT 0,
+UNIQUE (` + "`pricing_sheet_id`" + `, ` + "`channel_id`" + `)
+)`
+	return DB.Exec(createSQL).Error
 }
 
 // migrateTokenModelLimitsToText migrates model_limits column from varchar(1024) to text
