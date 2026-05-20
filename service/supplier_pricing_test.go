@@ -45,9 +45,9 @@ func TestGetChannelActivePricingSheet_ChannelIdMatch(t *testing.T) {
 	s := seedSupplierForPricing(t, "测试供应商", model.SupplierStatusEnabled)
 	now := time.Now().Unix()
 
-	// Channel-specific sheet
 	sheet := seedSupplierPricingSheet(t, s.Id, 100, "渠道100报价单", model.SupplierPricingSheetStatusActive,
 		now-86400, now+86400)
+	seedSupplierPricingSheetChannel(t, sheet.Id, 100)
 
 	result, err := GetChannelActivePricingSheet(100, s.Id)
 	require.NoError(t, err)
@@ -61,9 +61,11 @@ func TestGetChannelActivePricingSheet_SupplierFallback(t *testing.T) {
 	s := seedSupplierForPricing(t, "测试供应商", model.SupplierStatusEnabled)
 	now := time.Now().Unix()
 
-	// Universal sheet (channel_id = 0)
+	// Universal sheet (channel_id = 0) with NO channel binding
+	// This sheet has no binding at all, so it will be matched by NOT EXISTS fallback
 	sheet := seedSupplierPricingSheet(t, s.Id, 0, "通用报价单", model.SupplierPricingSheetStatusActive,
 		now-86400, now+86400)
+	// Intentionally NOT calling seedSupplierPricingSheetChannel here
 
 	// Query channel 200, no sheet exists for it, should fall back to universal
 	result, err := GetChannelActivePricingSheet(200, s.Id)
@@ -151,6 +153,7 @@ func TestGetChannelActivePricingSheetByChannelId_Found(t *testing.T) {
 
 	sheet := seedSupplierPricingSheet(t, s.Id, 100, "渠道100报价单", model.SupplierPricingSheetStatusActive,
 		now-86400, now+86400)
+	seedSupplierPricingSheetChannel(t, sheet.Id, 100)
 
 	result, err := GetChannelActivePricingSheetByChannelId(100)
 	require.NoError(t, err)
@@ -163,12 +166,13 @@ func TestGetChannelActivePricingSheetByChannelId_ChannelIdPriority(t *testing.T)
 	s := seedSupplierForPricing(t, "测试供应商", model.SupplierStatusEnabled)
 	now := time.Now().Unix()
 
-	// Universal sheet (channel_id = 0)
+	// Universal sheet (channel_id = 0) — no channel binding
 	_ = seedSupplierPricingSheet(t, s.Id, 0, "通用报价单", model.SupplierPricingSheetStatusActive,
 		now-86400, now+86400)
-	// Channel-specific sheet
+	// Channel-specific sheet — HAS channel binding
 	channelSheet := seedSupplierPricingSheet(t, s.Id, 100, "渠道100报价单", model.SupplierPricingSheetStatusActive,
 		now-86400, now+86400)
+	seedSupplierPricingSheetChannel(t, channelSheet.Id, 100)
 
 	// Channel 100 should match the channel-specific sheet, not the universal one
 	result, err := GetChannelActivePricingSheetByChannelId(100)
@@ -329,6 +333,7 @@ func TestGetChannelActivePricingSheetForBilling_Found(t *testing.T) {
 
 	sheet := seedSupplierPricingSheet(t, s.Id, 100, "渠道100报价单", model.SupplierPricingSheetStatusActive,
 		now-86400, now+86400)
+	seedSupplierPricingSheetChannel(t, sheet.Id, 100)
 
 	sheetId, found := GetChannelActivePricingSheetForBilling(100)
 	assert.True(t, found)
@@ -420,11 +425,27 @@ func seedSupplierPricingItem(t *testing.T, sheetId int, models []string, discoun
 	return item
 }
 
+func seedSupplierPricingSheetChannel(t *testing.T, sheetId int, channelId int) {
+	t.Helper()
+	binding := &model.SupplierPricingSheetChannel{
+		PricingSheetId: sheetId,
+		ChannelId:      channelId,
+	}
+	require.NoError(t, model.DB.Create(binding).Error)
+}
+
 func truncateSupplierPricing(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
+		model.DB.Exec("DELETE FROM supplier_pricing_sheet_channels")
 		model.DB.Exec("DELETE FROM supplier_pricing_items")
 		model.DB.Exec("DELETE FROM supplier_pricing_sheets")
 		model.DB.Exec("DELETE FROM suppliers")
+		// Also clean up tables created by other test files in the same shared DB
+		model.DB.Exec("DELETE FROM enterprise_pricing_sheet_channels")
+		model.DB.Exec("DELETE FROM enterprise_pricing_items")
+		model.DB.Exec("DELETE FROM enterprise_pricing_sheets")
+		model.DB.Exec("DELETE FROM enterprise_user_bindings")
+		model.DB.Exec("DELETE FROM enterprises")
 	})
 }

@@ -43,7 +43,10 @@ export function SheetRowActions({ row }: SheetRowActionsProps) {
       id: sheet.id,
       supplier_id: sheet.supplier_id,
       name: sheet.name,
+      status: sheet.status,
       channel_id: sheet.channel_id,
+      start_time: sheet.start_time,
+      end_time: sheet.end_time,
     })
   }
 

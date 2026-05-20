@@ -47,7 +47,7 @@ import {
 import type { SupplierPricingSheet } from '../types';
 import { useSupplierPricing } from './supplier-pricing-provider';
 import { z } from 'zod';
-import { formatTimestamp } from '@/lib/format';
+import { formatTimestamp, formatTimestampForInput, parseTimestampFromInput } from '@/lib/format';
 
 const sheetFormSchema = z.object({
   supplier_id: z.number().optional(),
@@ -63,8 +63,8 @@ const DEFAULT_VALUES: SheetFormValues = {
   supplier_id: undefined,
   name: '',
   status: SHEET_STATUS.ACTIVE,
-  start_time: undefined,
-  end_time: undefined,
+  start_time: Math.floor(Date.now() / 1000),
+  end_time: 0,
 };
 
 type SheetDrawerProps = {
@@ -309,18 +309,20 @@ export function SheetDrawer({
                   <FormItem>
                     <FormLabel>{t('Status')}</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(parseInt(value ?? '0'))}
+                      onValueChange={(value) => field.onChange(parseInt(value))}
                       value={String(field.value)}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={t('Select status')} />
+                          <SelectValue>
+                            {getSheetStatusOptions(t).find((o) => o.value === String(field.value))?.label ?? '-'}
+                          </SelectValue>
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
                           {getSheetStatusOptions(t).map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
+                            <SelectItem key={opt.value} value={String(opt.value)}>
                               {opt.label}
                             </SelectItem>
                           ))}
@@ -341,20 +343,9 @@ export function SheetDrawer({
                     <FormControl>
                       <Input
                         type='datetime-local'
-                        value={
-                          field.value
-                            ? new Date(field.value * 1000)
-                                .toISOString()
-                                .slice(0, 16)
-                            : ''
-                        }
+                        value={formatTimestampForInput(field.value ?? 0)}
                         onChange={(e) => {
-                          const date = e.target.value;
-                          field.onChange(
-                            date
-                              ? Math.floor(new Date(date).getTime() / 1000)
-                              : undefined
-                          );
+                          field.onChange(parseTimestampFromInput(e.target.value) || undefined);
                         }}
                       />
                     </FormControl>
@@ -372,20 +363,9 @@ export function SheetDrawer({
                     <FormControl>
                       <Input
                         type='datetime-local'
-                        value={
-                          field.value
-                            ? new Date(field.value * 1000)
-                                .toISOString()
-                                .slice(0, 16)
-                            : ''
-                        }
+                        value={formatTimestampForInput(field.value ?? 0)}
                         onChange={(e) => {
-                          const date = e.target.value;
-                          field.onChange(
-                            date
-                              ? Math.floor(new Date(date).getTime() / 1000)
-                              : undefined
-                          );
+                          field.onChange(parseTimestampFromInput(e.target.value) || undefined);
                         }}
                       />
                     </FormControl>

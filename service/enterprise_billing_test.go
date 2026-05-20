@@ -86,6 +86,13 @@ func TestEnterpriseBilling_UserWithPricingSheet(t *testing.T) {
 	}
 	require.NoError(t, model.DB.Create(pricingItem).Error)
 
+	enterpriseSheetChannel := &model.EnterprisePricingSheetChannel{
+		PricingSheetId: sheet.Id,
+		ChannelId:      testChannelID,
+		CreatedAt:      now,
+	}
+	require.NoError(t, model.DB.Create(enterpriseSheetChannel).Error)
+
 	user := &model.User{
 		Id:       testUserID,
 		Username: "enterprise_user",
@@ -465,8 +472,9 @@ func TestEnterpriseBilling_PerCall_UserWithPricingSheet(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID = 4001
-		modelName  = "midjourney"
+		testUserID    = 4001
+		testChannelID = 4001
+		modelName     = "midjourney"
 		// common.QuotaPerUnit = 500_000.0
 		// quota = 0.02 * 500_000.0 * 0.5(enterprise ratio) = 5000
 		enterpriseRatio = 0.5
@@ -510,6 +518,13 @@ func TestEnterpriseBilling_PerCall_UserWithPricingSheet(t *testing.T) {
 	}
 	require.NoError(t, model.DB.Create(pricingItem).Error)
 
+	enterpriseSheetChannel := &model.EnterprisePricingSheetChannel{
+		PricingSheetId: sheet.Id,
+		ChannelId:      testChannelID,
+		CreatedAt:      now,
+	}
+	require.NoError(t, model.DB.Create(enterpriseSheetChannel).Error)
+
 	user := &model.User{
 		Id:       testUserID,
 		Username: "percall_user",
@@ -534,7 +549,7 @@ func TestEnterpriseBilling_PerCall_UserWithPricingSheet(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName:  modelName,
 		TokenId:         0,
@@ -604,9 +619,10 @@ func TestEnterpriseBilling_PerCall_UserWithoutPricingSheet(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID = 5001
-		modelName  = "midjourney"
-		groupRatio = 1.5
+		testUserID     = 5001
+		testChannelID  = 5001
+		modelName      = "midjourney"
+		groupRatio     = 1.5
 		// common.QuotaPerUnit = 500_000.0
 		// quota = 0.02 * 500_000.0 * 1.5 = 15000
 	)
@@ -639,7 +655,7 @@ func TestEnterpriseBilling_PerCall_UserWithoutPricingSheet(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName:  modelName,
 		TokenId:         0,
@@ -705,9 +721,10 @@ func TestEnterpriseBilling_PerCall_ModelNotInSheet_FallsBackToGroup(t *testing.T
 	resetRatioSetting()
 
 	const (
-		testUserID = 6001
-		modelName  = "midjourney"
-		groupRatio = 1.5
+		testUserID     = 6001
+		testChannelID  = 6001
+		modelName      = "midjourney"
+		groupRatio     = 1.5
 	)
 
 	// Inject ratios
@@ -768,7 +785,7 @@ func TestEnterpriseBilling_PerCall_ModelNotInSheet_FallsBackToGroup(t *testing.T
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName:  modelName,
 		TokenId:         0,
@@ -819,11 +836,12 @@ func TestEnterpriseBilling_PerCallSheet_FixedPricePerCall(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID = 7001
-		modelName  = "midjourney"
+		testUserID     = 7001
+		testChannelID  = 7001
+		modelName      = "midjourney"
 		// common.QuotaPerUnit = 500_000.0
 		// quota = 0.05 * 500_000.0 * 1.0(default group) = 25000
-		perCallPrice = 0.05 // $0.05 per call
+		perCallPrice   = 0.05 // $0.05 per call
 	)
 
 	// -------------------------------------------------------------------------
@@ -888,7 +906,7 @@ func TestEnterpriseBilling_PerCallSheet_FixedPricePerCall(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName: modelName,
 		TokenId:         0,
@@ -969,10 +987,11 @@ func TestEnterpriseBilling_PerCallSheet_WithGroupRatioOverride(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID   = 8001
-		modelName    = "midjourney"
-		perCallPrice = 0.05 // $0.05 per call
-		groupRatio   = 0.8  // group ratio should be ignored for per_call
+		testUserID     = 8001
+		testChannelID  = 8001
+		modelName      = "midjourney"
+		perCallPrice   = 0.05 // $0.05 per call
+		groupRatio     = 0.8  // group ratio should be ignored for per_call
 	)
 
 	// Inject model ratio
@@ -1033,7 +1052,7 @@ func TestEnterpriseBilling_PerCallSheet_WithGroupRatioOverride(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName: modelName,
 		TokenId:         0,
@@ -1078,10 +1097,11 @@ func TestEnterpriseBilling_PerCall_NoSheet_FallsBackToModelPrice(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID  = 9001
-		modelName   = "midjourney"
-		modelPrice  = 0.02 // $0.02 per call from model config
-		groupRatio  = 1.5
+		testUserID     = 9001
+		testChannelID  = 9001
+		modelName      = "midjourney"
+		modelPrice     = 0.02 // $0.02 per call from model config
+		groupRatio     = 1.5
 		// quota = modelPrice(0.02) * QuotaPerUnit(500000.0) * groupRatio(1.5) = 15000
 	)
 
@@ -1113,7 +1133,7 @@ func TestEnterpriseBilling_PerCall_NoSheet_FallsBackToModelPrice(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName: modelName,
 		TokenId:         0,
@@ -1198,11 +1218,12 @@ func TestEnterpriseBilling_RatioDiscountType_NotPerCall(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID  = 10001
-		modelName   = "midjourney"
-		modelPrice  = 0.02 // $0.02 per call from model config
-		ratioValue = 0.5  // 50% of base price
-		groupRatio = 1.5
+		testUserID     = 10001
+		testChannelID  = 10001
+		modelName      = "midjourney"
+		modelPrice     = 0.02 // $0.02 per call from model config
+		ratioValue     = 0.5  // 50% of base price
+		groupRatio     = 1.5
 		// quota = modelPrice(0.02) * QuotaPerUnit(500000.0) * ratioValue(0.5) = 5000
 		// (groupRatio is ignored when enterprise sheet ratio overrides it)
 	)
@@ -1271,7 +1292,7 @@ func TestEnterpriseBilling_RatioDiscountType_NotPerCall(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName: modelName,
 		TokenId:         0,
@@ -1329,11 +1350,12 @@ func TestEnterpriseBilling_FixedPrice_WithSheet(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID    = 11001
-		modelName     = "midjourney"
-		modelPrice    = 0.02 // $0.02 per call from model config
-		fixedPrice   = 0.5  // GroupRatio 被覆盖为 0.5
-		groupRatio   = 1.5   // original group ratio (should be overridden)
+		testUserID     = 11001
+		testChannelID  = 11001
+		modelName      = "midjourney"
+		modelPrice     = 0.02 // $0.02 per call from model config
+		fixedPrice     = 0.5  // GroupRatio 被覆盖为 0.5
+		groupRatio     = 1.5   // original group ratio (should be overridden)
 		// quota = modelPrice(0.02) * QuotaPerUnit(500000.0) * fixedPrice(0.5) = 5000
 	)
 
@@ -1392,7 +1414,7 @@ func TestEnterpriseBilling_FixedPrice_WithSheet(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName: modelName,
 		TokenId:         0,
@@ -1460,10 +1482,11 @@ func TestEnterpriseBilling_FixedPrice_NoSheet_FallsBackToGroup(t *testing.T) {
 	resetRatioSetting()
 
 	const (
-		testUserID  = 12001
-		modelName   = "midjourney"
-		modelPrice  = 0.02 // $0.02 per call from model config
-		groupRatio = 1.5
+		testUserID     = 12001
+		testChannelID  = 12001
+		modelName      = "midjourney"
+		modelPrice     = 0.02 // $0.02 per call from model config
+		groupRatio     = 1.5
 		// quota = modelPrice(0.02) * QuotaPerUnit(500000.0) * groupRatio(1.5) = 15000
 	)
 
@@ -1486,7 +1509,7 @@ func TestEnterpriseBilling_FixedPrice_NoSheet_FallsBackToGroup(t *testing.T) {
 
 	info := &relaycommon.RelayInfo{
 		UserId:          testUserID,
-		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: 1},
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: testChannelID},
 		UsingGroup:      "default",
 		OriginModelName: modelName,
 		TokenId:         0,

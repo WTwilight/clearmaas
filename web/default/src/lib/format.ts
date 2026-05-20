@@ -190,7 +190,7 @@ export function formatUseTime(seconds: number): string {
  * Format timestamp to date input value (YYYY-MM-DDTHH:mm)
  */
 export function formatTimestampForInput(timestamp: number): string {
-  if (timestamp === -1) {
+  if (timestamp === -1 || !isFinite(timestamp) || timestamp > 1e14) {
     return ''
   }
   return dayjs(timestamp * 1000).format('YYYY-MM-DDTHH:mm')
@@ -201,7 +201,7 @@ export function formatTimestampForInput(timestamp: number): string {
  */
 export function parseTimestampFromInput(value: string): number {
   if (!value) {
-    return -1
+    return 0
   }
   const date = new Date(value)
   return Math.floor(date.getTime() / 1000)

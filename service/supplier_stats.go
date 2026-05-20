@@ -173,7 +173,7 @@ func jsonExtractCol(key string) string {
 	if common.UsingPostgreSQL {
 		return fmt.Sprintf("(l.other::json->>'%s')", key)
 	}
-	return fmt.Sprintf("json_extract(l.other, '$."+key+"')")
+	return fmt.Sprintf("json_extract(l.other, '$.%s')", key)
 }
 
 // castToInt returns the appropriate integer cast expression.

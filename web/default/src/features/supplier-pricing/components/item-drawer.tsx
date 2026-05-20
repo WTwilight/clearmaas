@@ -41,6 +41,7 @@ import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   DISCOUNT_TYPE,
+  DISCOUNT_TYPE_OPTIONS,
   DISCOUNT_TYPE_LABELS,
   getVendorTypeOptions,
   getModelsByVendor,
@@ -308,16 +309,14 @@ export function ItemDrawer({
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={t('Select type')} />
+                          <SelectValue>
+                            {DISCOUNT_TYPE_OPTIONS.find((o) => o.value === field.value)?.label ?? '-'}
+                          </SelectValue>
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent alignItemWithTrigger={false}>
                         <SelectGroup>
-                          {[
-                            { value: 'ratio', label: t('Ratio') },
-                            { value: 'fixed_price', label: t('Fixed Price') },
-                            { value: 'per_call', label: t('Per Call') },
-                          ].map((opt) => (
+                          {DISCOUNT_TYPE_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>

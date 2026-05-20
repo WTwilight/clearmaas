@@ -33,7 +33,10 @@ interface SheetBindDialogState {
     id: number;
     supplier_id: number;
     name: string;
+    status: number;
     channel_id: number;
+    start_time: number;
+    end_time: number;
   };
 }
 

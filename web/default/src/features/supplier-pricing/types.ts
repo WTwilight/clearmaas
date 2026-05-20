@@ -14,6 +14,9 @@ export interface SupplierPricingSheet {
   supplier_id: number;
   supplier_name?: string;
   channel_id: number;
+  channel_name?: string;
+  channel_ids?: number[];
+  channel_names?: string[];
   name: string;
   status: number;
   start_time: number;

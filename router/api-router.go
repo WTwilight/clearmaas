@@ -371,6 +371,10 @@ func SetApiRouter(router *gin.Engine) {
 			supplierRoute.GET("/:id/pricing-sheet/:sheetId/items", controller.ListSupplierPricingItems)
 			supplierRoute.PUT("/:id/pricing-sheet/:sheetId/items/:itemId", controller.UpdateSupplierPricingItem)
 			supplierRoute.DELETE("/:id/pricing-sheet/:sheetId/items/:itemId", controller.DeleteSupplierPricingItem)
+			// Supplier pricing sheet channels (multi-channel binding)
+			supplierRoute.GET("/:id/pricing-sheet/:sheetId/channels", controller.ListSupplierPricingSheetChannels)
+			supplierRoute.POST("/:id/pricing-sheet/:sheetId/channels", controller.BindSupplierPricingSheetChannels)
+			supplierRoute.DELETE("/:id/pricing-sheet/:sheetId/channels/:channelId", controller.UnbindSupplierPricingSheetChannel)
 		}
 		// Global supplier pricing sheets listing
 		apiRouter.GET("/supplier-pricing-sheets", middleware.AdminAuth(), controller.ListAllSupplierPricingSheets)

@@ -48,9 +48,11 @@ func TestMain(m *testing.M) {
 		&model.EnterprisePricingSheet{},
 		&model.EnterprisePricingItem{},
 		&model.EnterpriseUserBinding{},
+		&model.EnterprisePricingSheetChannel{},
 		&model.Supplier{},
 		&model.SupplierPricingSheet{},
 		&model.SupplierPricingItem{},
+		&model.SupplierPricingSheetChannel{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -73,9 +75,16 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM top_ups")
 		model.DB.Exec("DELETE FROM user_subscriptions")
 		model.DB.Exec("DELETE FROM enterprise_pricing_items")
+		model.DB.Exec("DELETE FROM enterprise_pricing_sheet_channels")
 		model.DB.Exec("DELETE FROM enterprise_pricing_sheets")
 		model.DB.Exec("DELETE FROM enterprise_user_bindings")
 		model.DB.Exec("DELETE FROM enterprises")
+		model.DB.Exec("DELETE FROM supplier_pricing_items")
+		model.DB.Exec("DELETE FROM supplier_pricing_sheet_channels")
+		model.DB.Exec("DELETE FROM supplier_pricing_sheets")
+		model.DB.Exec("DELETE FROM suppliers")
+		// Reset AUTOINCREMENT counters so IDs don't grow unbounded across tests
+		model.DB.Exec("DELETE FROM sqlite_sequence WHERE name IN ('tasks','users','tokens','logs','channels','top_ups','user_subscriptions','enterprise_pricing_items','enterprise_pricing_sheet_channels','enterprise_pricing_sheets','enterprise_user_bindings','enterprises','supplier_pricing_items','supplier_pricing_sheet_channels','supplier_pricing_sheets','suppliers')")
 	})
 }
 

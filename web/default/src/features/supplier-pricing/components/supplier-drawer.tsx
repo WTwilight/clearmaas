@@ -36,7 +36,8 @@ import {
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   SUPPLIER_STATUS,
-  getSupplierStatusOptions,
+  SHEET_STATUS_OPTIONS,
+  getSheetStatusOptions,
 } from '../constants';
 import type { Supplier } from '../types';
 import { useSupplierPricing } from './supplier-pricing-provider';
@@ -173,20 +174,20 @@ export function SupplierDrawer({
                 <FormItem>
                   <FormLabel>{t('Status')}</FormLabel>
                   <Select
-                    onValueChange={(value) =>
-                      field.onChange(parseInt(value ?? '0'))
-                    }
+                    onValueChange={(value) => field.onChange(parseInt(value))}
                     value={String(field.value)}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={t('Select status')} />
+                        <SelectValue>
+                          {SHEET_STATUS_OPTIONS.find((o) => o.value === field.value)?.label ?? '-'}
+                        </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent alignItemWithTrigger={false}>
                       <SelectGroup>
-                        {getSupplierStatusOptions(t).map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
+                        {SHEET_STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={String(opt.value)}>
                             {opt.label}
                           </SelectItem>
                         ))}

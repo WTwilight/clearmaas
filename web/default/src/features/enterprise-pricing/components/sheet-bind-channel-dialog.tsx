@@ -147,7 +147,7 @@ export function SheetBindChannelDialog() {
       open={channelBindingOpen === 'bindChannels'}
       onOpenChange={handleOpenChange}
     >
-      <DialogContent className='max-w-lg'>
+      <DialogContent className='max-w-lg flex flex-col max-h-[85vh]'>
         <DialogHeader>
           <DialogTitle>{t('Bind Channels')}</DialogTitle>
           <DialogDescription>
@@ -157,7 +157,7 @@ export function SheetBindChannelDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className='space-y-4'>
+        <div className='space-y-4 flex-1 overflow-y-auto'>
           {/* Current bindings section */}
           <div className='space-y-2'>
             <div className='flex items-center gap-2'>

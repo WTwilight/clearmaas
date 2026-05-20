@@ -33,13 +33,24 @@ export function useSheetColumns(showSupplier = false): ColumnDef<SupplierPricing
     {
       accessorKey: 'channel_id',
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title={t('Channel')} />
+        <DataTableColumnHeader column={column} title={t('Channels')} />
       ),
       cell: ({ row }) => {
-        const id = row.original.channel_id
-        return id > 0 ? <span className='text-sm'>{id}</span> : <span className='text-muted-foreground text-sm'>-</span>
+        const channelNames = row.original.channel_names
+        if (!channelNames || channelNames.length === 0) {
+          return <span className='text-muted-foreground text-sm'>-</span>
+        }
+        return (
+          <div className='flex flex-wrap gap-1'>
+            {channelNames.map((name, i) => (
+              <span key={i} className='inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-medium'>
+                {name}
+              </span>
+            ))}
+          </div>
+        )
       },
-      meta: { label: t('Channel'), mobileHidden: true },
+      meta: { label: t('Channels'), mobileHidden: true },
     },
     {
       accessorKey: 'status',
