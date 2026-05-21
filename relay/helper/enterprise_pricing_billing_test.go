@@ -49,7 +49,6 @@ func TestMain(m *testing.M) {
 		&model.EnterprisePricingSheet{},
 		&model.EnterprisePricingItem{},
 		&model.EnterpriseUserBinding{},
-		&model.EnterprisePricingSheetChannel{},
 		&model.User{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
@@ -114,11 +113,6 @@ func seedBillingTestData(db *gorm.DB) {
 	}
 	db.Create(item2)
 
-	// Bind channel 101 to sheet2 so Layer 2 check passes for userId=2 tests
-	ch2 := &model.EnterprisePricingSheetChannel{PricingSheetId: sheet2.Id, ChannelId: 101}
-	ch2.CreatedAt = now
-	db.Create(ch2)
-
 	// --- User 3: bound to enterprise with sheet that has gpt-4o at 0.5 ---
 	e3 := &model.Enterprise{Name: "Corp3", Status: model.EnterpriseStatusEnabled}
 	e3.CreatedAt = now
@@ -152,11 +146,6 @@ func seedBillingTestData(db *gorm.DB) {
 		DiscountValue: 0.5,
 	}
 	db.Create(item3)
-
-	// Bind channel 100 to sheet3 so Layer 2 channel binding check passes
-	ch3 := &model.EnterprisePricingSheetChannel{PricingSheetId: sheet3.Id, ChannelId: 100}
-	ch3.CreatedAt = now
-	db.Create(ch3)
 
 	// Set up config so ratio_setting works in tests
 	_ = config.GlobalConfig.LoadFromDB(map[string]string{
@@ -231,7 +220,6 @@ func TestHandleEnterprisePricingSheet_SheetHasNoModelDiscount(t *testing.T) {
 		UserId:       2,
 		UsingGroup:   "default",
 		OriginModelName: "gpt-4o", // not in sheet
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 101},
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -258,7 +246,6 @@ func TestHandleEnterprisePricingSheet_ModelDiscountOverrides(t *testing.T) {
 		UserId:       3,
 		UsingGroup:   "default",
 		OriginModelName: "gpt-4o",
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 100},
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -287,7 +274,6 @@ func TestHandleEnterprisePricingSheet_GroupGroupRatioAlsoOverridden(t *testing.T
 		UserId:       3,
 		UsingGroup:   "default",
 		OriginModelName: "gpt-4o",
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 100},
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -313,7 +299,6 @@ func TestHandleEnterprisePricingSheet_UnknownModelNotInSheet(t *testing.T) {
 		UserId:       3,
 		UsingGroup:   "default",
 		OriginModelName: "completely-unknown-model-xyz",
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 100},
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -338,7 +323,6 @@ func TestHandleEnterprisePricingSheet_ModelMatchCaseSensitive(t *testing.T) {
 		UserId:       3,
 		UsingGroup:   "default",
 		OriginModelName: "GPT-4O", // uppercase — should NOT match
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 100},
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -365,7 +349,6 @@ func TestEnterprisePricingSheet_TraceFields(t *testing.T) {
 		UserId:       3,
 		UsingGroup:   "default",
 		OriginModelName: "gpt-4o",
-		ChannelMeta: &relaycommon.ChannelMeta{ChannelId: 100},
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -399,8 +382,6 @@ func TestModelPriceHelper_UsesEnterprisePricing(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	c.Set("group", "default")
-	c.Set("channel_id", 100) // bind to channel 100 which is bound to sheet3
-
 	info := &relaycommon.RelayInfo{
 		UserId:       3,
 		UsingGroup:   "default",
@@ -431,8 +412,6 @@ func TestModelPriceHelper_EnterprisePricingPreConsumeQuota(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	c.Set("group", "default")
-	c.Set("channel_id", 100) // bind to channel 100 which is bound to sheet3
-
 	info := &relaycommon.RelayInfo{
 		UserId:       3,
 		UsingGroup:   "default",
@@ -459,43 +438,38 @@ func TestHandleEnterprisePricingSheet_FallbackChain(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name      string
-		userId    int
-		model     string
-		channelId int
-		wantRatio float64
+		name       string
+		userId     int
+		model      string
+		wantRatio  float64
 		wantSource string
 	}{
 		{
-			name:      "user in enterprise with discount",
-			userId:    3,
-			model:     "gpt-4o",
-			channelId: 100,
-			wantRatio: 0.5,
+			name:       "user in enterprise with discount",
+			userId:     3,
+			model:      "gpt-4o",
+			wantRatio:  0.5,
 			wantSource: "enterprise_pricing_sheet",
 		},
 		{
-			name:      "user in enterprise but model not in sheet",
-			userId:    2,
-			model:     "gpt-4o", // sheet has only gpt-4o-mini
-			channelId: 101,
-			wantRatio: 1.5,      // falls back to group ratio
+			name:       "user in enterprise but model not in sheet",
+			userId:     2,
+			model:      "gpt-4o", // sheet has only gpt-4o-mini
+			wantRatio:  1.5,      // falls back to group ratio
 			wantSource: "group_ratio",
 		},
 		{
-			name:      "user not in enterprise",
-			userId:    1,
-			model:     "gpt-4o",
-			channelId: 0,
-			wantRatio: 1.5,
+			name:       "user not in enterprise",
+			userId:     1,
+			model:      "gpt-4o",
+			wantRatio:  1.5,
 			wantSource: "group_ratio",
 		},
 		{
-			name:      "user not in enterprise unknown model",
-			userId:    99999,
-			model:     "unknown",
-			channelId: 0,
-			wantRatio: 1.5,
+			name:       "user not in enterprise unknown model",
+			userId:     99999,
+			model:      "unknown",
+			wantRatio:  1.5,
 			wantSource: "group_ratio",
 		},
 	}
@@ -507,9 +481,6 @@ func TestHandleEnterprisePricingSheet_FallbackChain(t *testing.T) {
 				UserId:         tt.userId,
 				UsingGroup:     "default",
 				OriginModelName: tt.model,
-			}
-			if tt.channelId > 0 {
-				info.ChannelMeta = &relaycommon.ChannelMeta{ChannelId: tt.channelId}
 			}
 			baseRatioInfo := types.GroupRatioInfo{
 				GroupRatio:        1.5,

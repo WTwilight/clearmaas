@@ -75,9 +75,10 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 }
 
 // HandleEnterprisePricingSheet checks if the user is bound to an enterprise with an active pricing sheet
-// and overrides the group ratio if a model discount is found and the current channel is bound to the sheet.
-// Layer 2: only applies enterprise pricing when the channel bound to the sheet matches the current channel.
-// Otherwise falls through to default group/group-group ratio logic.
+// and overrides the group ratio if a model discount is found.
+// Channel binding is not required for enterprise pricing to apply — it is a routing constraint
+// (which channels can use this sheet), not a billing condition.
+// If the model is not in the sheet, the system falls back to group ratio.
 func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
 	sheet, err := getUserActivePricingSheetForBilling(relayInfo.UserId)
 	if err != nil || sheet == nil {
@@ -86,16 +87,6 @@ func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.Relay
 		return baseRatioInfo
 	}
 	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: userId=%d, found enterprise sheet id=%d name=%s", relayInfo.UserId, sheet.Id, sheet.Name))
-
-	// Layer 2: check if the current channel is bound to this enterprise pricing sheet
-	channelId := getChannelIdFromRelayInfo(relayInfo)
-	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: channelId=%d, checking channel binding for sheetId=%d", channelId, sheet.Id))
-	if !isChannelBoundToEnterpriseSheet(sheet.Id, channelId) {
-		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: channelId=%d NOT bound to enterprise sheet id=%d — falling back to group ratio", channelId, sheet.Id))
-		baseRatioInfo.RatioSource = "group_ratio"
-		return baseRatioInfo
-	}
-	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: channelId=%d IS bound to enterprise sheet id=%d", channelId, sheet.Id))
 
 	pricingItem := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
 	if pricingItem.Found && pricingItem.Item != nil {
@@ -116,13 +107,8 @@ func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.Relay
 		return baseRatioInfo
 	}
 
-	var itemFound string
-	if pricingItem.Found {
-		itemFound = "matched"
-	} else {
-		itemFound = "NOT found"
-	}
-	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: model=%s %s in enterprise sheet id=%d — falling back to group ratio", relayInfo.OriginModelName, itemFound, sheet.Id))
+	// Model not found in this enterprise pricing sheet — fall back to group ratio
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: model=%s NOT found in enterprise sheet id=%d — falling back to group ratio", relayInfo.OriginModelName, sheet.Id))
 	baseRatioInfo.RatioSource = "group_ratio"
 	return baseRatioInfo
 }
@@ -138,32 +124,6 @@ func getUserActivePricingSheetForBilling(userId int) (*model.EnterprisePricingSh
 		return nil, nil
 	}
 	return model.GetFirstActivePricingSheetByEnterpriseId(enterpriseId)
-}
-
-// getChannelIdFromRelayInfo extracts the current channel ID from relayInfo.
-func getChannelIdFromRelayInfo(relayInfo *relaycommon.RelayInfo) int {
-	if relayInfo.ChannelMeta != nil {
-		return relayInfo.ChannelMeta.ChannelId
-	}
-	return 0
-}
-
-// isChannelBoundToEnterpriseSheet checks whether the given channelId is bound to
-// the given enterprise pricing sheet. Returns true if bound; false otherwise.
-func isChannelBoundToEnterpriseSheet(sheetId int, channelId int) bool {
-	if channelId <= 0 || sheetId <= 0 {
-		return false
-	}
-	ids, err := model.GetChannelIdsBySheetId(sheetId)
-	if err != nil || len(ids) == 0 {
-		return false
-	}
-	for _, id := range ids {
-		if id == channelId {
-			return true
-		}
-	}
-	return false
 }
 
 // PricingItemResult holds the resolved discount from a pricing sheet.
