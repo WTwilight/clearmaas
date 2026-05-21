@@ -81,29 +81,32 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
 	sheet, err := getUserActivePricingSheetForBilling(relayInfo.UserId)
 	if err != nil || sheet == nil {
+		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: userId=%d, no active enterprise sheet found (user not in enterprise or enterprise disabled)", relayInfo.UserId))
 		baseRatioInfo.RatioSource = "group_ratio"
 		return baseRatioInfo
 	}
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: userId=%d, found enterprise sheet id=%d name=%s", relayInfo.UserId, sheet.Id, sheet.Name))
 
 	// Layer 2: check if the current channel is bound to this enterprise pricing sheet
 	channelId := getChannelIdFromRelayInfo(relayInfo)
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: channelId=%d, checking channel binding for sheetId=%d", channelId, sheet.Id))
 	if !isChannelBoundToEnterpriseSheet(sheet.Id, channelId) {
-		// channel not bound to this enterprise pricing sheet — skip enterprise pricing
+		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: channelId=%d NOT bound to enterprise sheet id=%d — falling back to group ratio", channelId, sheet.Id))
 		baseRatioInfo.RatioSource = "group_ratio"
 		return baseRatioInfo
 	}
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: channelId=%d IS bound to enterprise sheet id=%d", channelId, sheet.Id))
 
 	pricingItem := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
 	if pricingItem.Found && pricingItem.Item != nil {
+		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: model=%s matched in sheet id=%d, discountType=%s discountValue=%.4f", relayInfo.OriginModelName, sheet.Id, pricingItem.Item.DiscountType, pricingItem.Item.DiscountValue))
 		if pricingItem.Item.DiscountType == model.DiscountTypePerCall {
-			// per_call: store absolute price, do not override GroupRatio
 			baseRatioInfo.PerCallPriceSheet = pricingItem.Item.DiscountValue
 			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
 			baseRatioInfo.EnterpriseSheetId = sheet.Id
 			baseRatioInfo.EnterpriseSheetName = sheet.Name
 			logger.LogDebug(ctx, fmt.Sprintf("enterprise pricing sheet applied (per_call): sheet=%s price=%.4f", sheet.Name, pricingItem.Item.DiscountValue))
 		} else {
-			// ratio / fixed_price: override GroupRatio with DiscountValue
 			baseRatioInfo.GroupRatio = pricingItem.Item.DiscountValue
 			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
 			baseRatioInfo.EnterpriseSheetId = sheet.Id
@@ -113,7 +116,13 @@ func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.Relay
 		return baseRatioInfo
 	}
 
-	// model not found in this enterprise pricing sheet — fall back to group ratio
+	var itemFound string
+	if pricingItem.Found {
+		itemFound = "matched"
+	} else {
+		itemFound = "NOT found"
+	}
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: model=%s %s in enterprise sheet id=%d — falling back to group ratio", relayInfo.OriginModelName, itemFound, sheet.Id))
 	baseRatioInfo.RatioSource = "group_ratio"
 	return baseRatioInfo
 }
@@ -481,19 +490,25 @@ func HandleSupplierPricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayIn
 		channelId = relayInfo.ChannelMeta.ChannelId
 	}
 
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleSupplierPricingSheet: channelId=%d model=%s userId=%d", channelId, relayInfo.OriginModelName, relayInfo.UserId))
 	if channelId <= 0 {
+		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleSupplierPricingSheet: channelId=%d <= 0, skipping supplier pricing", channelId))
 		return baseInfo
 	}
 
 	sheetId, found := getSupplierActivePricingSheetForBilling(channelId)
 	if !found {
+		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleSupplierPricingSheet: no active supplier sheet found for channelId=%d", channelId))
 		return baseInfo
 	}
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleSupplierPricingSheet: found supplier sheet id=%d for channelId=%d", sheetId, channelId))
 
 	cost, costFound := getSupplierModelCostForBilling(sheetId, relayInfo.OriginModelName)
 	if !costFound {
+		logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleSupplierPricingSheet: model=%s NOT found in supplier sheet id=%d", relayInfo.OriginModelName, sheetId))
 		return baseInfo
 	}
+	logger.LogDebug(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleSupplierPricingSheet: model=%s matched in supplier sheet id=%d, cost=%.6f", relayInfo.OriginModelName, sheetId, cost))
 
 	discountType := getSupplierModelCostTypeForBilling(sheetId, relayInfo.OriginModelName)
 	sheet := getSupplierPricingSheetById(sheetId)
