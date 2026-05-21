@@ -760,7 +760,7 @@ func TestSupplierPricingItem_GetBySheetIdAndModel(t *testing.T) {
 
 	item := &SupplierPricingItem{
 		PricingSheetId: sheet.Id,
-		Model:          "gpt-4o",
+		Models:         []string{"gpt-4o"},
 		DiscountType:   DiscountTypeRatio,
 		DiscountValue:  0.6,
 	}
@@ -813,18 +813,18 @@ func TestSupplierPricingItem_UniqueModelPerSheet(t *testing.T) {
 
 	item1 := &SupplierPricingItem{
 		PricingSheetId: sheet.Id,
-		Models:           "gpt-4o",
-		DiscountType:     DiscountTypeRatio,
-		DiscountValue:    0.7,
+		Models:         []string{"gpt-4o"},
+		DiscountType:   DiscountTypeRatio,
+		DiscountValue:  0.7,
 	}
 	require.NoError(t, DB.Create(item1).Error)
 
 	// Duplicate model in same sheet should fail
 	item2 := &SupplierPricingItem{
 		PricingSheetId: sheet.Id,
-		Models:           "gpt-4o", // same model
-		DiscountType:     DiscountTypeRatio,
-		DiscountValue:    0.5,
+		Models:         []string{"gpt-4o"}, // same model
+		DiscountType:  DiscountTypeRatio,
+		DiscountValue: 0.5,
 	}
 	assert.Error(t, DB.Create(item2).Error)
 }
@@ -870,15 +870,15 @@ func TestSupplierPricingItem_DifferentSheetsSameModel(t *testing.T) {
 	// Same model in different sheets should be allowed
 	item1 := &SupplierPricingItem{
 		PricingSheetId: sheet1.Id,
-		Models:           "gpt-4o",
-		DiscountType:     DiscountTypeRatio,
-		DiscountValue:    0.7,
+		Models:         []string{"gpt-4o"},
+		DiscountType:   DiscountTypeRatio,
+		DiscountValue:  0.7,
 	}
 	require.NoError(t, DB.Create(item1).Error)
 
 	item2 := &SupplierPricingItem{
 		PricingSheetId: sheet2.Id,
-		Model:          "gpt-4o",
+		Models:         []string{"gpt-4o"},
 		DiscountType:   DiscountTypeRatio,
 		DiscountValue:  0.6,
 	}
@@ -945,9 +945,9 @@ func seedPricingSheet(supplierId int, channelId int, name string, status int, st
 func seedPricingItem(sheetId int, model string, discountType string, discountValue float64) (*SupplierPricingItem, error) {
 	item := &SupplierPricingItem{
 		PricingSheetId: sheetId,
-		Models:           model,
-		DiscountType:     discountType,
-		DiscountValue:    discountValue,
+		Models:         []string{model},
+		DiscountType:   discountType,
+		DiscountValue:  discountValue,
 	}
 	if err := DB.Create(item).Error; err != nil {
 		return nil, err
