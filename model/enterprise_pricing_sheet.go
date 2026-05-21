@@ -48,7 +48,7 @@ func (e *EnterprisePricingSheet) Delete() error {
 // GetPricingSheetById retrieves a pricing sheet by ID.
 func GetPricingSheetById(id int) (*EnterprisePricingSheet, error) {
 	var sheet EnterprisePricingSheet
-	err := DB.First(&sheet, id).Error
+	err := DB.Take(&sheet, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

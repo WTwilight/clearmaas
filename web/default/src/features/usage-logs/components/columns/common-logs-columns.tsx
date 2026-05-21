@@ -21,7 +21,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { CircleAlert, Sparkles, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getUserAvatarFallback, getUserAvatarStyle } from '@/lib/avatar'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatBillingCurrencyFromUSD, getCurrencyDisplay } from '@/lib/currency'
 import {
   formatUseTime,
   formatLogQuota,
@@ -69,6 +69,45 @@ function formatRatioCompact(ratio: number | undefined): string {
   return ratio % 1 === 0
     ? String(ratio)
     : ratio.toFixed(4).replace(/\.?0+$/, '')
+}
+
+/**
+ * Compute supplier cost amount from log other data.
+ *
+ * Cost = original_price × supplier_cost (ratio type)
+ * Cost = supplier_cost × QuotaPerUnit (fixed_price / per_call type, USD → quota units)
+ *
+ * When original_price is missing (model_price=-1 or old logs), it is derived from:
+ *   original_price = quota × group_ratio
+ *
+ * Result is in quota units, same as log.quota.
+ */
+function computeSupplierCostAmount(
+  other: LogOtherData | null,
+  quota: number
+): number | null {
+  if (!other) return null
+  const supplierCost = other.supplier_cost
+  if (supplierCost == null || supplierCost <= 0) return null
+
+  const costType = other.supplier_cost_type
+  if (costType === 'ratio') {
+    // original_price may be missing in old logs or when model_price=-1.
+    // Derive it: original_price = quota / group_ratio  →  but we store quota as
+    // quota = original_price × group_ratio, so: original_price = quota × group_ratio
+    const originalPrice =
+      other.original_price ?? (other.group_ratio ? quota * other.group_ratio : null)
+    if (originalPrice == null || originalPrice <= 0) return null
+    return originalPrice * supplierCost
+  }
+  if (costType === 'fixed_price') {
+    return supplierCost
+  }
+  if (costType === 'per_call') {
+    const { config } = getCurrencyDisplay()
+    return supplierCost * config.quotaPerUnit
+  }
+  return null
 }
 
 function getGroupRatioText(other: LogOtherData | null): string | null {
@@ -454,15 +493,17 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           const log = row.original
           if (!isDisplayableLogType(log.type)) return null
           const other = parseLogOther(log.other)
-          const supplierCost = other?.supplier_cost
-          if (supplierCost == null || supplierCost <= 0) return null
+          const supplierCostAmount = computeSupplierCostAmount(other, log.quota)
+          if (supplierCostAmount == null || supplierCostAmount <= 0) return null
+          const { config } = getCurrencyDisplay()
+          const supplierCostUSD = supplierCostAmount / config.quotaPerUnit
           return (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger
                   render={
                     <span className='inline-flex cursor-help items-center gap-1 font-mono text-xs tabular-nums text-muted-foreground'>
-                      {formatBillingCurrencyFromUSD(supplierCost)}
+                      {formatBillingCurrencyFromUSD(supplierCostUSD)}
                     </span>
                   }
                 >
@@ -471,7 +512,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 <TooltipContent>
                   <div className='space-y-0.5 text-xs'>
                     <p>
-                      {t('Supplier Cost')}: {formatBillingCurrencyFromUSD(supplierCost)}
+                      {t('Supplier Cost')}: {formatBillingCurrencyFromUSD(supplierCostUSD)}
                     </p>
                     {other?.supplier_sheet_name && (
                       <p className='text-muted-foreground'>
@@ -500,16 +541,18 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           const log = row.original
           if (!isDisplayableLogType(log.type)) return null
           const other = parseLogOther(log.other)
-          const supplierCost = other?.supplier_cost
-          if (supplierCost == null || supplierCost <= 0) return null
+          const supplierCostAmount = computeSupplierCostAmount(other, log.quota)
+          if (supplierCostAmount == null || supplierCostAmount <= 0) return null
           const quota = row.getValue('quota') as number
-          const profit = quota - supplierCost
+          const profit = quota - supplierCostAmount
+          const { config } = getCurrencyDisplay()
+          const profitUSD = profit / config.quotaPerUnit
           return (
             <span
               className={`font-mono text-xs tabular-nums ${
                 profit >= 0 ? 'text-success' : 'text-destructive'
               }`}>
-              {formatBillingCurrencyFromUSD(profit)}
+              {formatBillingCurrencyFromUSD(profitUSD)}
             </span>
           )
         },

@@ -57,7 +57,7 @@ func (s *SupplierPricingSheet) Delete() error {
 // Returns nil, nil if not found.
 func GetSupplierPricingSheetById(id int) (*SupplierPricingSheet, error) {
 	var sheet SupplierPricingSheet
-	err := DB.First(&sheet, id).Error
+	err := DB.Take(&sheet, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

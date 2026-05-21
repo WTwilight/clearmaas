@@ -201,32 +201,56 @@ func castToFloat(expr string) string {
 }
 
 // costExpr returns the CASE expression for computing total_cost from Other JSON.
+//
+// Cost calculation by type:
+//   - ratio:       original_price × supplier_cost  (supplier_cost is a multiplier, result already in quota units)
+//   - fixed_price: supplier_cost  (already in quota units)
+//   - per_call:    supplier_cost × QuotaPerUnit  (supplier_cost is in USD, convert to quota units)
 func costExpr() string {
 	costType := jsonExtractCol("supplier_cost_type")
 	costVal := jsonExtractCol("supplier_cost")
-	tokens := "(l.prompt_tokens + l.completion_tokens)"
-	ratio := fmt.Sprintf("%s * %s / 1000000.0", castToFloat(costVal), tokens)
-	fixed := castToFloat(costVal)
+	originalPrice := jsonExtractCol("original_price")
+	groupRatio := jsonExtractCol("group_ratio")
+	quotaPerUnit := "500000.0" // QuotaPerUnit constant in Go side
+
+	ratioExpr := fmt.Sprintf(
+		"%s * %s",
+		// Fallback: original_price may be missing when model_price=-1 or in old logs.
+		// We derive it as: quota × group_ratio (because quota = original_price × group_ratio).
+		fmt.Sprintf("COALESCE(%s, %s * %s)",
+			castToFloat(originalPrice),
+			castToFloat("l.quota"),
+			castToFloat(groupRatio)),
+		castToFloat(costVal),
+	)
+	fixedExpr := castToFloat(costVal)
+	perCallExpr := fmt.Sprintf("%s * %s", castToFloat(costVal), quotaPerUnit)
 
 	if common.UsingSQLite {
 		return fmt.Sprintf(`
 			CASE %s
-				WHEN 'ratio' THEN %s
+				WHEN 'ratio'       THEN %s
+				WHEN 'fixed_price' THEN %s
+				WHEN 'per_call'    THEN %s
 				ELSE %s
-			END`, costType, ratio, fixed)
+			END`, costType, ratioExpr, fixedExpr, perCallExpr, fixedExpr)
 	}
 	if common.UsingPostgreSQL {
 		return fmt.Sprintf(`
 			CASE %s
-				WHEN 'ratio' THEN %s
+				WHEN 'ratio'       THEN %s
+				WHEN 'fixed_price' THEN %s
+				WHEN 'per_call'    THEN %s
 				ELSE %s
-			END`, costType, ratio, fixed)
+			END`, costType, ratioExpr, fixedExpr, perCallExpr, fixedExpr)
 	}
 	return fmt.Sprintf(`
 		CASE CAST(%s AS CHAR)
-			WHEN 'ratio' THEN %s
+			WHEN 'ratio'       THEN %s
+			WHEN 'fixed_price' THEN %s
+			WHEN 'per_call'    THEN %s
 			ELSE %s
-		END`, costType, ratio, fixed)
+		END`, costType, ratioExpr, fixedExpr, perCallExpr, fixedExpr)
 }
 
 func sumCostExpr() string {

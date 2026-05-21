@@ -264,6 +264,7 @@ func updateConfigFromMap(config interface{}, configMap map[string]string) error 
 		case reflect.Slice, reflect.Struct:
 			err := json.Unmarshal([]byte(strValue), field.Addr().Interface())
 			if err != nil {
+				// 配置值不是合法JSON，静默跳过（常见于旧数据迁移场景）
 				continue
 			}
 		}

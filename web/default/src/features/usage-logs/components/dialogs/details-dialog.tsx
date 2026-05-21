@@ -31,7 +31,7 @@ import {
   Info,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import { formatBillingCurrencyFromUSD, getCurrencyDisplay } from '@/lib/currency'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -328,12 +328,29 @@ function BillingBreakdown(props: {
 
   // Supplier cost fields - admin only
   if (isAdmin && other.supplier_cost != null && other.supplier_cost > 0) {
+    const { config } = getCurrencyDisplay()
+    let supplierCostAmount: number
+    if (other.supplier_cost_type === 'ratio') {
+      const originalPrice =
+        other.original_price ??
+        (other.group_ratio ? log.quota * other.group_ratio : null)
+      supplierCostAmount = originalPrice != null && originalPrice > 0
+        ? originalPrice * other.supplier_cost
+        : 0
+    } else if (other.supplier_cost_type === 'fixed_price') {
+      supplierCostAmount = other.supplier_cost
+    } else {
+      // per_call or unknown: supplier_cost is in USD, convert to quota units
+      supplierCostAmount = other.supplier_cost * config.quotaPerUnit
+    }
+    const supplierCostUSD = supplierCostAmount / config.quotaPerUnit
+    const profit = log.quota - supplierCostAmount
+    const profitUSD = profit / config.quotaPerUnit
     rows.push({
       label: t('Supplier Cost'),
-      value: formatBillingCurrencyFromUSD(other.supplier_cost),
+      value: formatBillingCurrencyFromUSD(supplierCostUSD),
     })
-    const profit = log.quota - other.supplier_cost
-    const profitStr = formatBillingCurrencyFromUSD(Math.abs(profit))
+    const profitStr = formatBillingCurrencyFromUSD(Math.abs(profitUSD))
     rows.push({
       label: t('Gross Profit'),
       value: profit >= 0 ? `+${profitStr}` : `-${profitStr}`,

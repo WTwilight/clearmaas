@@ -31,7 +31,7 @@ func (e *EnterpriseUserBinding) Delete() error {
 // GetUserBinding retrieves a binding by user ID.
 func GetUserBinding(userId int) (*EnterpriseUserBinding, error) {
 	var binding EnterpriseUserBinding
-	err := DB.Where("user_id = ?", userId).First(&binding).Error
+	err := DB.Where("user_id = ?", userId).Take(&binding).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

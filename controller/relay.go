@@ -150,6 +150,11 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	relayInfo.SetEstimatePromptTokens(tokens)
 
+	// InitChannelMeta must be called before ModelPriceHelper / HandleSupplierPricingSheet,
+	// so that relayInfo.ChannelMeta.ChannelId is available for supplier pricing sheet lookup.
+	// Other relay handlers (TextHelper, etc.) also call InitChannelMeta for consistency.
+	relayInfo.InitChannelMeta(c)
+
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
 		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))

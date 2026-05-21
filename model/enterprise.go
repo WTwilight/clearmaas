@@ -46,7 +46,7 @@ func (e *Enterprise) Delete() error {
 // GetEnterpriseById retrieves an enterprise by ID.
 func GetEnterpriseById(id int) (*Enterprise, error) {
 	var e Enterprise
-	err := DB.First(&e, id).Error
+	err := DB.Take(&e, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

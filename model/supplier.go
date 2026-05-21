@@ -42,7 +42,7 @@ func (s *Supplier) Update() error {
 // Returns nil, nil if the supplier does not exist.
 func GetSupplierById(id int) (*Supplier, error) {
 	var s Supplier
-	err := DB.First(&s, id).Error
+	err := DB.Take(&s, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

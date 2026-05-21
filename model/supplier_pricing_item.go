@@ -40,7 +40,7 @@ func (s *SupplierPricingItem) Delete() error {
 // Returns nil, nil if not found.
 func GetSupplierPricingItemById(id int) (*SupplierPricingItem, error) {
 	var item SupplierPricingItem
-	err := DB.First(&item, id).Error
+	err := DB.Take(&item, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

@@ -71,7 +71,7 @@ func (e *EnterprisePricingItem) Delete() error {
 // GetPricingItemById retrieves a pricing item by ID.
 func GetPricingItemById(id int) (*EnterprisePricingItem, error) {
 	var item EnterprisePricingItem
-	err := DB.First(&item, id).Error
+	err := DB.Take(&item, id).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

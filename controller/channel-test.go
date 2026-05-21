@@ -546,6 +546,13 @@ func buildTestLogOther(c *gin.Context, info *relaycommon.RelayInfo, priceData ty
 	if tieredResult != nil {
 		service.InjectTieredBillingInfo(other, info, tieredResult)
 	}
+	// original_price for non-tiered ratio billing (ModelPrice * QuotaPerUnit)
+	if priceData.ModelPrice > 0 {
+		other["original_price"] = int64(priceData.ModelPrice * common.QuotaPerUnit)
+	}
+	// discount_ratio: tiered billing sets it in InjectTieredBillingInfo;
+	// for ratio billing use the effective group ratio.
+	other["discount_ratio"] = priceData.GroupRatioInfo.GroupRatio
 	return other
 }
 
