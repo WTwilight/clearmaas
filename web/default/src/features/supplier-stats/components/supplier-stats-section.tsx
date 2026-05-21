@@ -254,16 +254,17 @@ function ChartPanel({ chartData, isLoading, themeReady }: ChartPanelProps) {
 // ============================================================================
 
 function formatQuota(value: number): string {
-  const abs = Math.abs(value)
+  const { config } = getCurrencyDisplay()
+  const usd = value / config.quotaPerUnit
   const symbol = '$'
 
-  if (abs >= 1_000_000) {
-    return `${symbol}${(value / 1_000_000).toFixed(2)}M`
+  if (Math.abs(usd) >= 1_000_000) {
+    return `${symbol}${(usd / 1_000_000).toFixed(2)}M`
   }
-  if (abs >= 1_000) {
-    return `${symbol}${(value / 1_000).toFixed(2)}K`
+  if (Math.abs(usd) >= 1_000) {
+    return `${symbol}${(usd / 1_000).toFixed(2)}K`
   }
-  return `${symbol}${value.toFixed(2)}`
+  return `${symbol}${usd.toFixed(2)}`
 }
 
 export function SupplierStatsSection() {
