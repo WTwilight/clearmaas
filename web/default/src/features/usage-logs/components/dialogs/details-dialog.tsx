@@ -329,19 +329,20 @@ function BillingBreakdown(props: {
   // Supplier cost fields - admin only
   if (isAdmin && other.supplier_cost != null && other.supplier_cost > 0) {
     const { config } = getCurrencyDisplay()
+    const groupRatio = other.group_ratio ?? 1
     let supplierCostAmount: number
     if (other.supplier_cost_type === 'ratio') {
       const originalPrice =
         other.original_price ??
-        (other.group_ratio ? log.quota * other.group_ratio : null)
+        (groupRatio !== 0 ? log.quota / groupRatio : null)
       supplierCostAmount = originalPrice != null && originalPrice > 0
-        ? originalPrice * other.supplier_cost
+        ? originalPrice * other.supplier_cost * groupRatio
         : 0
     } else if (other.supplier_cost_type === 'fixed_price') {
-      supplierCostAmount = other.supplier_cost
+      supplierCostAmount = other.supplier_cost * groupRatio
     } else {
       // per_call or unknown: supplier_cost is in USD, convert to quota units
-      supplierCostAmount = other.supplier_cost * config.quotaPerUnit
+      supplierCostAmount = other.supplier_cost * config.quotaPerUnit * groupRatio
     }
     const supplierCostUSD = supplierCostAmount / config.quotaPerUnit
     const profit = log.quota - supplierCostAmount

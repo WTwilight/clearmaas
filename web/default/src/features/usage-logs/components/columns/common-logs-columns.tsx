@@ -74,11 +74,15 @@ function formatRatioCompact(ratio: number | undefined): string {
 /**
  * Compute supplier cost amount from log other data.
  *
- * Cost = original_price × supplier_cost (ratio type)
- * Cost = supplier_cost × QuotaPerUnit (fixed_price / per_call type, USD → quota units)
+ * All types apply group_ratio because the customer is charged quota = original_price × group_ratio,
+ * and the supplier cost must be scaled by the same group_ratio for consistent profit calculation.
+ *
+ * Cost = original_price × supplier_cost × group_ratio  (ratio type)
+ * Cost = supplier_cost × group_ratio                  (fixed_price type, USD → quota units)
+ * Cost = supplier_cost × QuotaPerUnit × group_ratio   (per_call type, USD → quota units)
  *
  * When original_price is missing (model_price=-1 or old logs), it is derived from:
- *   original_price = quota × group_ratio
+ *   original_price = quota / group_ratio
  *
  * Result is in quota units, same as log.quota.
  */
@@ -90,22 +94,24 @@ function computeSupplierCostAmount(
   const supplierCost = other.supplier_cost
   if (supplierCost == null || supplierCost <= 0) return null
 
+  const groupRatio = other.group_ratio ?? 1
+  if (groupRatio <= 0) return null
+
   const costType = other.supplier_cost_type
   if (costType === 'ratio') {
     // original_price may be missing in old logs or when model_price=-1.
-    // Derive it: original_price = quota / group_ratio  →  but we store quota as
-    // quota = original_price × group_ratio, so: original_price = quota × group_ratio
+    // Derive it: quota = original_price × group_ratio → original_price = quota / group_ratio
     const originalPrice =
-      other.original_price ?? (other.group_ratio ? quota * other.group_ratio : null)
+      other.original_price ?? (groupRatio !== 0 ? quota / groupRatio : null)
     if (originalPrice == null || originalPrice <= 0) return null
-    return originalPrice * supplierCost
+    return originalPrice * supplierCost * groupRatio
   }
   if (costType === 'fixed_price') {
-    return supplierCost
+    return supplierCost * groupRatio
   }
   if (costType === 'per_call') {
     const { config } = getCurrencyDisplay()
-    return supplierCost * config.quotaPerUnit
+    return supplierCost * config.quotaPerUnit * groupRatio
   }
   return null
 }

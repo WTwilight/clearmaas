@@ -203,9 +203,16 @@ func castToFloat(expr string) string {
 // costExpr returns the CASE expression for computing total_cost from Other JSON.
 //
 // Cost calculation by type:
-//   - ratio:       original_price × supplier_cost  (supplier_cost is a multiplier, result already in quota units)
-//   - fixed_price: supplier_cost  (already in quota units)
-//   - per_call:    supplier_cost × QuotaPerUnit  (supplier_cost is in USD, convert to quota units)
+//   - ratio:       original_price × supplier_cost × group_ratio
+//     (supplier_cost is a multiplier, result in quota units)
+//   - fixed_price: supplier_cost × group_ratio
+//     (supplier_cost is in USD, convert to quota units, then scale by group_ratio)
+//   - per_call:    supplier_cost × QuotaPerUnit × group_ratio
+//     (supplier_cost is in USD per call, convert to quota units, then scale by group_ratio)
+//
+// group_ratio is applied to all types because:
+//   - The customer's quota charge = original_price × group_ratio
+//   - The supplier cost must also be scaled by group_ratio for consistency
 func costExpr() string {
 	costType := jsonExtractCol("supplier_cost_type")
 	costVal := jsonExtractCol("supplier_cost")
@@ -214,17 +221,18 @@ func costExpr() string {
 	quotaPerUnit := "500000.0" // QuotaPerUnit constant in Go side
 
 	ratioExpr := fmt.Sprintf(
-		"%s * %s",
+		"%s * %s * %s",
 		// Fallback: original_price may be missing when model_price=-1 or in old logs.
-		// We derive it as: quota × group_ratio (because quota = original_price × group_ratio).
-		fmt.Sprintf("COALESCE(%s, %s * %s)",
+		// We derive it as: quota / group_ratio (because quota = original_price × group_ratio).
+		fmt.Sprintf("COALESCE(%s, %s / %s)",
 			castToFloat(originalPrice),
 			castToFloat("l.quota"),
 			castToFloat(groupRatio)),
 		castToFloat(costVal),
+		castToFloat(groupRatio),
 	)
-	fixedExpr := castToFloat(costVal)
-	perCallExpr := fmt.Sprintf("%s * %s", castToFloat(costVal), quotaPerUnit)
+	fixedExpr := fmt.Sprintf("%s * %s", castToFloat(costVal), castToFloat(groupRatio))
+	perCallExpr := fmt.Sprintf("%s * %s * %s", castToFloat(costVal), quotaPerUnit, castToFloat(groupRatio))
 
 	if common.UsingSQLite {
 		return fmt.Sprintf(`

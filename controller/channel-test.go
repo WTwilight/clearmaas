@@ -483,7 +483,7 @@ func testChannel(channel *model.Channel, testModel string, endpointType string, 
 	tok := time.Now()
 	milliseconds := tok.Sub(tik).Milliseconds()
 	consumedTime := float64(milliseconds) / 1000.0
-	other := buildTestLogOther(c, info, priceData, usage, tieredResult)
+	other := buildTestLogOther(c, info, priceData, usage, tieredResult, quota)
 	model.RecordConsumeLog(c, 1, model.RecordConsumeLogParams{
 		ChannelId:        channel.Id,
 		PromptTokens:     usage.PromptTokens,
@@ -540,19 +540,21 @@ func settleTestQuota(info *relaycommon.RelayInfo, priceData types.PriceData, usa
 	return int(priceData.ModelPrice * common.QuotaPerUnit), nil
 }
 
-func buildTestLogOther(c *gin.Context, info *relaycommon.RelayInfo, priceData types.PriceData, usage *dto.Usage, tieredResult *billingexpr.TieredResult) map[string]interface{} {
+func buildTestLogOther(c *gin.Context, info *relaycommon.RelayInfo, priceData types.PriceData, usage *dto.Usage, tieredResult *billingexpr.TieredResult, quota int) map[string]interface{} {
 	other := service.GenerateTextOtherInfo(c, info, priceData.ModelRatio, priceData.GroupRatioInfo.GroupRatio, priceData.CompletionRatio,
 		usage.PromptTokensDetails.CachedTokens, priceData.CacheRatio, priceData.ModelPrice, priceData.GroupRatioInfo.GroupSpecialRatio)
 	if tieredResult != nil {
 		service.InjectTieredBillingInfo(other, info, tieredResult)
 	}
-	// original_price for non-tiered ratio billing (ModelPrice * QuotaPerUnit)
-	if priceData.ModelPrice > 0 {
-		other["original_price"] = int64(priceData.ModelPrice * common.QuotaPerUnit)
+	// original_price = quota / group_ratio (官网原价 = 实际消费额 / 折扣比例)
+	// Works for both usePrice=true (ModelPrice>0) and ratio billing (usePrice=false, ModelPrice=-1).
+	groupRatio := priceData.GroupRatioInfo.GroupRatio
+	if quota > 0 && groupRatio > 0 {
+		other["original_price"] = int64(float64(quota) / groupRatio)
 	}
 	// discount_ratio: tiered billing sets it in InjectTieredBillingInfo;
 	// for ratio billing use the effective group ratio.
-	other["discount_ratio"] = priceData.GroupRatioInfo.GroupRatio
+	other["discount_ratio"] = groupRatio
 	return other
 }
 
