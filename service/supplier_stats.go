@@ -203,16 +203,14 @@ func castToFloat(expr string) string {
 // costExpr returns the CASE expression for computing total_cost from Other JSON.
 //
 // Cost calculation by type:
-//   - ratio:       original_price × supplier_cost × group_ratio
-//     (supplier_cost is a multiplier, result in quota units)
-//   - fixed_price: supplier_cost × group_ratio
-//     (supplier_cost is in USD, convert to quota units, then scale by group_ratio)
-//   - per_call:    supplier_cost × QuotaPerUnit × group_ratio
-//     (supplier_cost is in USD per call, convert to quota units, then scale by group_ratio)
+//   - ratio:       original_price × supplier_cost
+//     (original_price is in quota units; when missing, derived from quota/group_ratio)
 //
-// group_ratio is applied to all types because:
-//   - The customer's quota charge = original_price × group_ratio
-//   - The supplier cost must also be scaled by group_ratio for consistency
+//   - fixed_price: supplier_cost × group_ratio × QuotaPerUnit
+//     (supplier_cost is in USD per quota unit, convert to quota, then scale)
+//
+//   - per_call:    supplier_cost × QuotaPerUnit × group_ratio
+//     (supplier_cost is in USD per call, convert to quota, then scale)
 func costExpr() string {
 	costType := jsonExtractCol("supplier_cost_type")
 	costVal := jsonExtractCol("supplier_cost")
@@ -220,18 +218,22 @@ func costExpr() string {
 	groupRatio := jsonExtractCol("group_ratio")
 	quotaPerUnit := "500000.0" // QuotaPerUnit constant in Go side
 
+	// ratio: cost = original_price × supplier_cost
+	//   original_price is in quota units (set in log_info_generate.go as quota/group_ratio).
+	//   When original_price is missing (model_price=-1 or old logs), derive from:
+	//     quota = original_price × group_ratio → original_price = quota / group_ratio
 	ratioExpr := fmt.Sprintf(
-		"%s * %s * %s",
-		// Fallback: original_price may be missing when model_price=-1 or in old logs.
-		// We derive it as: quota / group_ratio (because quota = original_price × group_ratio).
+		"%s * %s",
+		// Fallback: if original_price is missing, derive it from quota.
 		fmt.Sprintf("COALESCE(%s, %s / %s)",
 			castToFloat(originalPrice),
 			castToFloat("l.quota"),
 			castToFloat(groupRatio)),
 		castToFloat(costVal),
-		castToFloat(groupRatio),
 	)
-	fixedExpr := fmt.Sprintf("%s * %s", castToFloat(costVal), castToFloat(groupRatio))
+	// fixed_price: supplier_cost is in USD per quota unit (e.g. 0.001 = $1 per 1M tokens)
+	fixedExpr := fmt.Sprintf("%s * %s * %s", castToFloat(costVal), castToFloat(groupRatio), quotaPerUnit)
+	// per_call: supplier_cost is in USD per call
 	perCallExpr := fmt.Sprintf("%s * %s * %s", castToFloat(costVal), quotaPerUnit, castToFloat(groupRatio))
 
 	if common.UsingSQLite {

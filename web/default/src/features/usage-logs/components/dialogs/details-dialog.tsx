@@ -336,7 +336,7 @@ function BillingBreakdown(props: {
         other.original_price ??
         (groupRatio !== 0 ? log.quota / groupRatio : null)
       supplierCostAmount = originalPrice != null && originalPrice > 0
-        ? originalPrice * other.supplier_cost * groupRatio
+        ? originalPrice * other.supplier_cost
         : 0
     } else if (other.supplier_cost_type === 'fixed_price') {
       supplierCostAmount = other.supplier_cost * groupRatio

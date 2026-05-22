@@ -77,12 +77,12 @@ function formatRatioCompact(ratio: number | undefined): string {
  * All types apply group_ratio because the customer is charged quota = original_price × group_ratio,
  * and the supplier cost must be scaled by the same group_ratio for consistent profit calculation.
  *
- * Cost = original_price × supplier_cost × group_ratio  (ratio type)
- * Cost = supplier_cost × group_ratio                  (fixed_price type, USD → quota units)
- * Cost = supplier_cost × QuotaPerUnit × group_ratio   (per_call type, USD → quota units)
+ * Cost = original_price × supplier_cost            (ratio type)
+ * Cost = supplier_cost × group_ratio × QuotaPerUnit   (fixed_price type, USD → quota units)
+ * Cost = supplier_cost × QuotaPerUnit × group_ratio  (per_call type, USD → quota units)
  *
  * When original_price is missing (model_price=-1 or old logs), it is derived from:
- *   original_price = quota / group_ratio
+ *   quota = original_price × group_ratio → original_price = quota / group_ratio
  *
  * Result is in quota units, same as log.quota.
  */
@@ -104,7 +104,8 @@ function computeSupplierCostAmount(
     const originalPrice =
       other.original_price ?? (groupRatio !== 0 ? quota / groupRatio : null)
     if (originalPrice == null || originalPrice <= 0) return null
-    return originalPrice * supplierCost * groupRatio
+    // cost = original_price × supplier_cost
+    return originalPrice * supplierCost
   }
   if (costType === 'fixed_price') {
     return supplierCost * groupRatio

@@ -95,6 +95,12 @@ func GetUserLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Strip supplier cost fields from Other for non-system-admin users.
+	if !isSystemAdmin(c) {
+		for _, log := range logs {
+			filterSupplierCostFieldsFromOther(log)
+		}
+	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
@@ -133,6 +139,12 @@ func GetLogByKey(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+	// Strip supplier cost fields from Other for non-system-admin users.
+	if !isSystemAdmin(c) {
+		for _, log := range logs {
+			filterSupplierCostFieldsFromOther(log)
+		}
 	}
 	c.JSON(200, gin.H{
 		"success": true,

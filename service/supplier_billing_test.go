@@ -957,8 +957,8 @@ func TestThreeLayerBilling_SupplierStatsAggregation(t *testing.T) {
 		"total_charge should be greater than 0")
 	assert.Greater(t, overview.TotalCost, float64(0),
 		"total_cost should be greater than 0")
-	assert.Greater(t, overview.GrossProfit, float64(0),
-		"gross_profit should be greater than 0 (enterprise ratio 0.5 > supplier costs)")
+	assert.Less(t, overview.GrossProfit, float64(0),
+		"gross_profit should be < 0: supplier_cost > group_ratio means platform loses money (cost=OP/gr > OP*gr=quota)")
 
 	// supplier_count should be 2 (both suppliers used)
 	assert.Equal(t, 2, overview.SupplierCount,
@@ -982,20 +982,20 @@ func TestThreeLayerBilling_SupplierStatsAggregation(t *testing.T) {
 		supplierStats[item.SupplierName] = item
 	}
 
-	// SupplierA: cost=0.9, should have lower profit margin
+	// SupplierA: cost=0.9, group_ratio=0.5 → cost=OP/0.5×0.9=1.8×OP > quota=OP×0.5, profit<0
 	if itemA, ok := supplierStats["SupplierA"]; ok {
 		assert.Greater(t, itemA.TotalCharge, float64(0))
 		assert.Greater(t, itemA.TotalCost, float64(0))
-		assert.Greater(t, itemA.GrossProfit, float64(0),
-			"SupplierA gross_profit should be > 0 (enterprise ratio 0.5 > cost 0.9)")
+		assert.Less(t, itemA.GrossProfit, float64(0),
+			"SupplierA: cost(0.9)>group_ratio(0.5) → platform loses money")
 	}
 
-	// SupplierB: cost=0.6, should have higher profit margin than SupplierA
+	// SupplierB: cost=0.6, group_ratio=0.5 → cost=OP/0.5×0.6=1.2×OP > quota=OP×0.5, profit<0
 	if itemB, ok := supplierStats["SupplierB"]; ok {
 		assert.Greater(t, itemB.TotalCharge, float64(0))
 		assert.Greater(t, itemB.TotalCost, float64(0))
-		assert.Greater(t, itemB.GrossProfit, float64(0),
-			"SupplierB gross_profit should be > 0")
+		assert.Less(t, itemB.GrossProfit, float64(0),
+			"SupplierB: cost(0.6)>group_ratio(0.5) → platform loses money")
 	}
 
 	// -------------------------------------------------------------------------
