@@ -36,6 +36,7 @@ import {
 } from '../api'
 import { StatCard } from '@/features/dashboard/components/ui/stat-card'
 import { processSupplierChartData } from '../lib/charts'
+import { getCurrencyDisplay } from '@/lib/currency'
 import type {
   SupplierStatsOverviewResult,
   SupplierStatsBySupplierItem,
