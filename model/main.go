@@ -270,6 +270,11 @@ func migrateDB() error {
 		return err
 	}
 
+	// Use idempotent migration strategy for PostgreSQL to handle existing tables
+	if common.UsingPostgreSQL {
+		return migrateDBPostgresIdempotent()
+	}
+
 	err := DB.AutoMigrate(
 		&Channel{},
 		&Token{},
@@ -316,6 +321,64 @@ func migrateDB() error {
 			return err
 		}
 	}
+	return nil
+}
+
+// migrateDBPostgresIdempotent provides idempotent migration for PostgreSQL
+// It safely handles the case where tables already exist by using raw SQL with IF NOT EXISTS
+func migrateDBPostgresIdempotent() error {
+	// For PostgreSQL, use CREATE TABLE IF NOT EXISTS pattern for tables that might already exist
+	// Then use AutoMigrate to sync columns (AutoMigrate won't recreate existing tables)
+	enterpriseTables := []string{
+		`CREATE TABLE IF NOT EXISTS "enterprises" ("id" bigserial,"name" text,"status" bigint,"remark" text,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+		`CREATE TABLE IF NOT EXISTS "enterprise_pricing_sheets" ("id" bigserial,"name" text,"enterprise_id" bigint,"status" bigint,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+		`CREATE TABLE IF NOT EXISTS "enterprise_pricing_items" ("id" bigserial,"pricing_sheet_id" bigint,"model" text,"input_price" decimal(10,6) DEFAULT 0,"output_price" decimal(10,6) DEFAULT 0,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+		`CREATE TABLE IF NOT EXISTS "enterprise_user_bindings" ("id" bigserial,"enterprise_id" bigint,"user_id" bigint,"role" bigint DEFAULT 0,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+	}
+
+	for _, sql := range enterpriseTables {
+		if err := DB.Exec(sql).Error; err != nil {
+			return fmt.Errorf("failed to create enterprise table: %v", err)
+		}
+	}
+
+	// Run AutoMigrate for all other models and to sync columns for existing tables
+	// AutoMigrate in PostgreSQL won't recreate existing tables, just adds missing columns
+	allModels := []interface{}{
+		&Channel{},
+		&Token{},
+		&User{},
+		&PasskeyCredential{},
+		&Option{},
+		&Redemption{},
+		&Ability{},
+		&Log{},
+		&Midjourney{},
+		&TopUp{},
+		&QuotaData{},
+		&Task{},
+		&Model{},
+		&Vendor{},
+		&PrefillGroup{},
+		&Setup{},
+		&TwoFA{},
+		&TwoFABackupCode{},
+		&Checkin{},
+		&SubscriptionOrder{},
+		&UserSubscription{},
+		&SubscriptionPreConsumeRecord{},
+		&CustomOAuthProvider{},
+		&UserOAuthBinding{},
+		&PerfMetric{},
+		&SubscriptionPlan{},
+	}
+
+	for _, model := range allModels {
+		if err := DB.AutoMigrate(model); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
