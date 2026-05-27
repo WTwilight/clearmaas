@@ -38,6 +38,8 @@ type DynamicPriceOptions = {
   groupRatioMultiplier?: number
 }
 
+type DynamicPriceOptionsWithoutModel = Omit<DynamicPriceOptions, 'model'>
+
 export type DynamicPriceEntry = {
   key: string
   field: string
@@ -92,16 +94,6 @@ export function getDynamicDisplayGroupRatio(model: PricingModel): number {
   }
 
   return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
-}
-
-function applyRechargeRate(
-  price: number,
-  showWithRecharge: boolean,
-  priceRate: number,
-  usdExchangeRate: number
-): number {
-  if (!showWithRecharge) return price
-  return (price * priceRate) / usdExchangeRate
 }
 
 export function formatDynamicUnitPrice(
@@ -164,12 +156,12 @@ export function getDynamicPriceEntries(
     let originalPriceInUSD = calculateTokenPrice(options.model, type, 1)
     originalPriceInUSD = applyRechargeRate(
       originalPriceInUSD,
-      options.showWithRecharge ?? false,
+      options.showRechargePrice ?? false,
       priceRate,
       usdExchangeRate
     )
     const originalPrice = originalPriceInUSD / TOKEN_UNIT_DIVISORS[options.tokenUnit]
-    const originalFormatted = formatCurrencyFromUSD(originalPrice, {
+    const originalFormatted = formatBillingCurrencyFromUSD(originalPrice, {
       digitsLarge: 4,
       digitsSmall: 6,
       abbreviate: false,
@@ -198,7 +190,7 @@ export function getDynamicPriceEntries(
 
 export function getDynamicPricingSummary(
   model: PricingModel,
-  options: DynamicPriceOptions
+  options: DynamicPriceOptionsWithoutModel
 ): DynamicPricingSummary | null {
   if (!isDynamicPricingModel(model)) return null
 
