@@ -30,6 +30,7 @@ import {
 import { calculateTokenPrice, applyRechargeRate } from './price'
 
 type DynamicPriceOptions = {
+  model: PricingModel
   tokenUnit: TokenUnit
   showRechargePrice?: boolean
   priceRate?: number
@@ -149,20 +150,25 @@ export function getDynamicPriceEntries(
 ): DynamicPriceEntry[] {
   if (!tier) return []
 
+  const { priceRate = 1, usdExchangeRate = 1 } = options
+  const priceType = (field: string) => field.replace('Price', '').toLowerCase() as PriceType
+
   return BILLING_PRICING_VARS.flatMap((variable) => {
     if (!variable.field) return []
-        const value = Number(tier[variable.field])
-        if (!Number.isFinite(value) || value <= 0) return []
+    const value = Number(tier[variable.field])
+    if (!Number.isFinite(value) || value <= 0) return []
+
+    const type = priceType(variable.field)
 
     // Calculate original price (without discount)
-    let originalPriceInUSD = calculateTokenPrice(model, type, 1)
+    let originalPriceInUSD = calculateTokenPrice(options.model, type, 1)
     originalPriceInUSD = applyRechargeRate(
       originalPriceInUSD,
-      showWithRecharge,
+      options.showWithRecharge ?? false,
       priceRate,
       usdExchangeRate
     )
-    const originalPrice = originalPriceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
+    const originalPrice = originalPriceInUSD / TOKEN_UNIT_DIVISORS[options.tokenUnit]
     const originalFormatted = formatCurrencyFromUSD(originalPrice, {
       digitsLarge: 4,
       digitsSmall: 6,
@@ -179,7 +185,7 @@ export function getDynamicPriceEntries(
         formatted: formatDynamicUnitPrice(value, options),
         originalFormatted,
         variable,
-        priceType: (variable.field.replace('Price', '').toLowerCase()) as PriceType,
+        priceType: type,
       },
     ]
   }).sort((a, b) => {
@@ -198,7 +204,7 @@ export function getDynamicPricingSummary(
 
   const tiers = getDynamicPricingTiers(model)
   const tier = tiers[0] || null
-  const entries = getDynamicPriceEntries(tier, options)
+  const entries = getDynamicPriceEntries(tier, { ...options, model })
   const rawExpression = model.billing_expr || ''
 
   return {
