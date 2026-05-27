@@ -482,6 +482,7 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
       },
       size: 150,
       enableSorting: false,
+      enableHiding: false,
     },
 
     // Quota Types column

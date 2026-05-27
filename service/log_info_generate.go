@@ -339,9 +339,8 @@ func InjectTieredBillingInfo(other map[string]interface{}, relayInfo *relaycommo
 	other["expr_b64"] = base64.StdEncoding.EncodeToString([]byte(snap.ExprString))
 	if result != nil {
 		other["matched_tier"] = result.MatchedTier
-		// original_price for tiered billing (before group_ratio discount), discount_ratio = 1.0
 		other["original_price"] = int64(result.ActualQuotaBeforeGroup)
-		other["discount_ratio"] = 1.0
+		other["discount_ratio"] = snap.GroupRatio
 	}
 	// Supplier cost is already injected by GenerateTextOtherInfo -> appendSupplierCostInfo.
 }

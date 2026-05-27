@@ -64,6 +64,18 @@ func GetPricing(c *gin.Context) {
 		}
 	}
 
+	if exists {
+		sheet, err := service.GetUserActivePricingSheet(userId.(int))
+		if err == nil && sheet != nil {
+			for i := range pricing {
+				ratio, found := service.GetModelDiscount(sheet.Id, pricing[i].ModelName)
+				if found {
+					pricing[i].DiscountRatio = ratio
+				}
+			}
+		}
+	}
+
 	c.JSON(200, gin.H{
 		"success":            true,
 		"data":               pricing,
