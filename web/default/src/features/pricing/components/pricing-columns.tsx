@@ -26,7 +26,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { DataTableColumnHeader } from '@/components/data-table/column-header'
-import { GroupBadge } from '@/components/group-badge'
 import { DEFAULT_TOKEN_UNIT, QUOTA_TYPE_VALUES } from '../constants'
 import {
   getDynamicDisplayGroupRatio,
@@ -37,6 +36,10 @@ import { isTokenBasedModel } from '../lib/model-helpers'
 import {
   formatPrice,
   formatRequestPrice,
+  formatBasePrice,
+  formatBaseRequestPrice,
+  getEffectiveRatio,
+  formatDiscountRatio,
   stripTrailingZeros,
 } from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
@@ -72,27 +75,6 @@ function renderLimitedTags(
   )
 }
 
-function renderLimitedGroupBadges(
-  groups: string[],
-  maxDisplay: number = 2
-): React.ReactNode {
-  if (groups.length === 0)
-    return <span className='text-muted-foreground/50 text-xs'>—</span>
-
-  const displayed = groups.slice(0, maxDisplay)
-  const remaining = groups.length - maxDisplay
-
-  return (
-    <div className='flex max-w-full items-center gap-1 overflow-hidden'>
-      {displayed.map((group) => (
-        <GroupBadge key={group} group={group} size='sm' />
-      ))}
-      {remaining > 0 && (
-        <span className='text-muted-foreground/50 text-xs'>+{remaining}</span>
-      )}
-    </div>
-  )
-}
 
 export function usePricingColumns(
   options: PricingColumnsOptions = {}
@@ -217,6 +199,9 @@ export function usePricingColumns(
         }
 
         const isTokenBased = isTokenBasedModel(model)
+        const ratio = getEffectiveRatio(model)
+        const formattedRatio = formatDiscountRatio(ratio)
+        const hasDiscount = formattedRatio !== ''
 
         if (isTokenBased) {
           const inputPrice = stripTrailingZeros(
@@ -239,6 +224,55 @@ export function usePricingColumns(
               usdExchangeRate
             )
           )
+
+          if (hasDiscount) {
+            const baseInputPrice = stripTrailingZeros(
+              formatBasePrice(
+                model,
+                'input',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate
+              )
+            )
+            const baseOutputPrice = stripTrailingZeros(
+              formatBasePrice(
+                model,
+                'output',
+                tokenUnit,
+                showRechargePrice,
+                priceRate,
+                usdExchangeRate
+              )
+            )
+
+            return (
+              <div className='min-w-[200px]'>
+                <div className='mb-1 flex items-center gap-1'>
+                  <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
+                    {formattedRatio}
+                  </span>
+                </div>
+                <span className='font-mono text-sm tabular-nums'>
+                  <span className='text-muted-foreground/40 line-through'>
+                    {baseInputPrice}
+                  </span>
+                  <span className='text-muted-foreground/40 mx-0.5'>/</span>
+                  <span className='text-muted-foreground/40 line-through'>
+                    {baseOutputPrice}
+                  </span>
+                  <span className='mx-1 text-foreground'>→</span>
+                  <span className='font-bold text-foreground'>{inputPrice}</span>
+                  <span className='text-muted-foreground/40 mx-0.5'>/</span>
+                  <span className='font-bold text-foreground'>{outputPrice}</span>
+                </span>
+                <div className='text-muted-foreground/50 text-[10px]'>
+                  / {tokenUnitLabel} tokens
+                </div>
+              </div>
+            )
+          }
 
           return (
             <div className='min-w-[160px]'>
@@ -263,6 +297,37 @@ export function usePricingColumns(
           )
         )
 
+        if (hasDiscount) {
+          const basePrice = stripTrailingZeros(
+            formatBaseRequestPrice(
+              model,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
+            )
+          )
+
+          return (
+            <div className='min-w-[140px]'>
+              <div className='mb-1 flex items-center gap-1'>
+                <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
+                  {formattedRatio}
+                </span>
+              </div>
+              <span className='font-mono text-sm tabular-nums'>
+                <span className='text-muted-foreground/40 line-through'>
+                  {basePrice}
+                </span>
+                <span className='mx-1 text-foreground'>→</span>
+                <span className='font-bold text-foreground'>{price}</span>
+              </span>
+              <div className='text-muted-foreground/50 text-[10px]'>
+                / {t('request')}
+              </div>
+            </div>
+          )
+        }
+
         return (
           <div className='min-w-[100px]'>
             <span className='font-mono text-sm tabular-nums'>{price}</span>
@@ -272,7 +337,28 @@ export function usePricingColumns(
           </div>
         )
       },
-      size: 180,
+      size: 200,
+      enableSorting: false,
+    },
+
+    // Discount Ratio column - only show when no discount (for transparent display)
+    {
+      id: 'discount_ratio',
+      meta: { label: t('Ratio') },
+      header: t('Ratio'),
+      cell: ({ row }) => {
+        const model = row.original
+        const ratio = getEffectiveRatio(model)
+        const formattedRatio = formatDiscountRatio(ratio)
+
+        // Hide this column when there's a discount (price column shows it instead)
+        if (formattedRatio) {
+          return null
+        }
+
+        return <span className='text-muted-foreground/30 text-xs'>—</span>
+      },
+      size: 70,
       enableSorting: false,
     },
 
@@ -435,38 +521,5 @@ export function usePricingColumns(
       enableSorting: false,
     },
 
-    // Enable Groups column
-    {
-      accessorKey: 'enable_groups',
-      meta: { label: t('Groups') },
-      header: t('Groups'),
-      cell: ({ row }) => {
-        const groups = row.original.enable_groups || []
-        if (groups.length === 0) {
-          return <span className='text-muted-foreground/50 text-xs'>—</span>
-        }
-
-        return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger render={<div />}>
-                {renderLimitedGroupBadges(groups, 2)}
-              </TooltipTrigger>
-              {groups.length > 2 && (
-                <TooltipContent side='top' className='max-w-[280px] p-2'>
-                  <div className='flex flex-wrap gap-1'>
-                    {groups.map((group) => (
-                      <GroupBadge key={group} group={group} size='sm' />
-                    ))}
-                  </div>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        )
-      },
-      size: 130,
-      enableSorting: false,
-    },
   ]
 }

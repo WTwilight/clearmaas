@@ -25,6 +25,53 @@ import type { PricingModel, TokenUnit, PriceType } from '../types'
 // ----------------------------------------------------------------------------
 
 /**
+ * Get the effective ratio for a model.
+ * Priority: discount_ratio (from pricing sheet) > min group ratio
+ */
+export function getEffectiveRatio(
+  model: PricingModel,
+  groupRatio?: Record<string, number>
+): number {
+  // If discount_ratio is set, use it directly
+  if (model.discount_ratio != null && model.discount_ratio > 0) {
+    return model.discount_ratio
+  }
+
+  // Otherwise, calculate min ratio from group_ratio
+  // Use provided groupRatio first, then fall back to model.group_ratio
+  const ratioMap = groupRatio ?? model.group_ratio ?? {}
+  const enableGroups = Array.isArray(model.enable_groups)
+    ? model.enable_groups
+    : []
+
+  if (enableGroups.length === 0) return 1
+
+  let minRatio = Number.POSITIVE_INFINITY
+
+  for (const group of enableGroups) {
+    const ratio = ratioMap[group]
+    if (ratio !== undefined && ratio < minRatio) {
+      minRatio = ratio
+    }
+  }
+
+  return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
+}
+
+/**
+ * Format discount ratio for display (e.g., "0.85x" or "8.5折")
+ */
+export function formatDiscountRatio(ratio: number): string {
+  if (ratio === 1) return ''
+  if (ratio < 1) {
+    // Convert to discount (e.g., 0.85 -> 8.5折)
+    return `${(ratio * 10).toFixed(1)}折`
+  }
+  // Greater than 1 (e.g., 1.5 -> 1.5x)
+  return `${ratio.toFixed(2)}x`
+}
+
+/**
  * Strip trailing zeros from formatted price string while preserving currency symbols
  */
 export function stripTrailingZeros(formatted: string): string {
@@ -53,33 +100,12 @@ export function stripTrailingZeros(formatted: string): string {
 }
 
 /**
- * Find minimum group ratio from enabled groups
- */
-function getMinGroupRatio(
-  enableGroups: string[],
-  groupRatio: Record<string, number>
-): number {
-  if (enableGroups.length === 0) return 1
-
-  let minRatio = Number.POSITIVE_INFINITY
-
-  for (const group of enableGroups) {
-    const ratio = groupRatio[group]
-    if (ratio !== undefined && ratio < minRatio) {
-      minRatio = ratio
-    }
-  }
-
-  return minRatio === Number.POSITIVE_INFINITY ? 1 : minRatio
-}
-
-/**
  * Calculate token price in USD.
  *
  * Returns NaN when the required ratio field is missing/null so callers can
  * skip rendering that price type.
  */
-function calculateTokenPrice(
+export function calculateTokenPrice(
   model: PricingModel,
   type: PriceType,
   ratio: number
@@ -147,7 +173,7 @@ function hasRatio(value: number | null | undefined): boolean {
  *    - formatCurrencyFromUSD(0.571) → 0.571 × 7 = ¥4 ✓
  *    - Normal price: ¥7, Recharge price: ¥4 (cheaper!)
  */
-function applyRechargeRate(
+export function applyRechargeRate(
   price: number,
   showWithRecharge: boolean,
   priceRate: number,
@@ -155,6 +181,37 @@ function applyRechargeRate(
 ): number {
   if (!showWithRecharge) return price
   return (price * priceRate) / usdExchangeRate
+}
+
+/**
+ * Format base token-based price without discount (original price)
+ */
+export function formatBasePrice(
+  model: PricingModel,
+  type: PriceType,
+  tokenUnit: TokenUnit,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1
+): string {
+  if (model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+    return '-'
+  }
+
+  let priceInUSD = calculateTokenPrice(model, type, 1)
+  priceInUSD = applyRechargeRate(
+    priceInUSD,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate
+  )
+
+  const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
+  return formatCurrencyFromUSD(price, {
+    digitsLarge: 4,
+    digitsSmall: 6,
+    abbreviate: false,
+  })
 }
 
 /**
@@ -172,11 +229,7 @@ export function formatPrice(
     return '-'
   }
 
-  const enableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const groupRatio = model.group_ratio || {}
-  const minRatio = getMinGroupRatio(enableGroups, groupRatio)
+  const minRatio = getEffectiveRatio(model)
 
   let priceInUSD = calculateTokenPrice(model, type, minRatio)
   priceInUSD = applyRechargeRate(
@@ -230,6 +283,69 @@ export function formatGroupPrice(
 }
 
 /**
+ * Format base price for a specific group without discount (original price)
+ */
+export function formatBaseGroupPrice(
+  model: PricingModel,
+  _group: string,
+  type: PriceType,
+  tokenUnit: TokenUnit,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1
+): string {
+  if (model.quota_type === QUOTA_TYPE_VALUES.REQUEST) {
+    return '-'
+  }
+
+  let priceInUSD = calculateTokenPrice(model, type, 1)
+
+  priceInUSD = applyRechargeRate(
+    priceInUSD,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate
+  )
+
+  const price = priceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
+  return formatCurrencyFromUSD(price, {
+    digitsLarge: 4,
+    digitsSmall: 6,
+    abbreviate: false,
+  })
+}
+
+/**
+ * Format base fixed price for pay-per-request models without discount (original price)
+ */
+export function formatBaseFixedPrice(
+  model: PricingModel,
+  _group: string,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1
+): string {
+  if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
+    return '-'
+  }
+
+  let priceInUSD = (model.model_price || 0)
+
+  priceInUSD = applyRechargeRate(
+    priceInUSD,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate
+  )
+
+  return formatCurrencyFromUSD(priceInUSD, {
+    digitsLarge: 4,
+    digitsSmall: 4,
+    abbreviate: false,
+  })
+}
+
+/**
  * Format fixed price for pay-per-request models (with specific group)
  */
 export function formatFixedPrice(
@@ -274,13 +390,38 @@ export function formatRequestPrice(
     return '-'
   }
 
-  const enableGroups = Array.isArray(model.enable_groups)
-    ? model.enable_groups
-    : []
-  const groupRatio = model.group_ratio || {}
-  const minRatio = getMinGroupRatio(enableGroups, groupRatio)
+  const minRatio = getEffectiveRatio(model)
 
   let priceInUSD = (model.model_price || 0) * minRatio
+
+  priceInUSD = applyRechargeRate(
+    priceInUSD,
+    showWithRecharge,
+    priceRate,
+    usdExchangeRate
+  )
+
+  return formatCurrencyFromUSD(priceInUSD, {
+    digitsLarge: 4,
+    digitsSmall: 4,
+    abbreviate: false,
+  })
+}
+
+/**
+ * Format base fixed price for pay-per-request models (original price without discount)
+ */
+export function formatBaseRequestPrice(
+  model: PricingModel,
+  showWithRecharge = false,
+  priceRate = 1,
+  usdExchangeRate = 1
+): string {
+  if (model.quota_type !== QUOTA_TYPE_VALUES.REQUEST) {
+    return '-'
+  }
+
+  let priceInUSD = (model.model_price || 0)
 
   priceInUSD = applyRechargeRate(
     priceInUSD,

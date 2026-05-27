@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { formatBillingCurrencyFromUSD } from '@/lib/currency'
 import { TOKEN_UNIT_DIVISORS } from '../constants'
-import type { PricingModel, TokenUnit } from '../types'
+import type { PricingModel, PriceType, TokenUnit } from '../types'
 import {
   BILLING_PRICING_VARS,
   parseTiersFromExpr,
@@ -27,6 +27,7 @@ import {
   type BillingVar,
   type ParsedTier,
 } from './billing-expr'
+import { calculateTokenPrice, applyRechargeRate } from './price'
 
 type DynamicPriceOptions = {
   tokenUnit: TokenUnit
@@ -43,7 +44,9 @@ export type DynamicPriceEntry = {
   shortLabel: string
   value: number
   formatted: string
+  originalFormatted?: string
   variable: BillingVar
+  priceType: PriceType
 }
 
 export type DynamicPricingSummary = {
@@ -64,7 +67,17 @@ export function isDynamicPricingModel(model: PricingModel): boolean {
   return model.billing_mode === 'tiered_expr' && Boolean(model.billing_expr)
 }
 
+/**
+ * Get the effective display ratio for a model.
+ * Priority: discount_ratio (from pricing sheet) > min group ratio
+ */
 export function getDynamicDisplayGroupRatio(model: PricingModel): number {
+  // If discount_ratio is set from pricing sheet, use it directly
+  if (model.discount_ratio != null && model.discount_ratio > 0) {
+    return model.discount_ratio
+  }
+
+  // Otherwise, calculate min ratio from group_ratio
   const groups = Array.isArray(model.enable_groups) ? model.enable_groups : []
   const ratios = model.group_ratio || {}
   if (groups.length === 0) return 1
@@ -138,8 +151,23 @@ export function getDynamicPriceEntries(
 
   return BILLING_PRICING_VARS.flatMap((variable) => {
     if (!variable.field) return []
-    const value = Number(tier[variable.field])
-    if (!Number.isFinite(value) || value <= 0) return []
+        const value = Number(tier[variable.field])
+        if (!Number.isFinite(value) || value <= 0) return []
+
+    // Calculate original price (without discount)
+    let originalPriceInUSD = calculateTokenPrice(model, type, 1)
+    originalPriceInUSD = applyRechargeRate(
+      originalPriceInUSD,
+      showWithRecharge,
+      priceRate,
+      usdExchangeRate
+    )
+    const originalPrice = originalPriceInUSD / TOKEN_UNIT_DIVISORS[tokenUnit]
+    const originalFormatted = formatCurrencyFromUSD(originalPrice, {
+      digitsLarge: 4,
+      digitsSmall: 6,
+      abbreviate: false,
+    })
 
     return [
       {
@@ -149,7 +177,9 @@ export function getDynamicPriceEntries(
         shortLabel: variable.shortLabel,
         value,
         formatted: formatDynamicUnitPrice(value, options),
+        originalFormatted,
         variable,
+        priceType: (variable.field.replace('Price', '').toLowerCase()) as PriceType,
       },
     ]
   }).sort((a, b) => {

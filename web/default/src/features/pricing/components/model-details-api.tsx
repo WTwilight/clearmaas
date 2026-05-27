@@ -856,11 +856,11 @@ function AuthSection() {
 
 export function ModelDetailsApi(props: {
   model: PricingModel
-  endpointMap: Record<string, { path?: string; method?: string }>
+  endpointMap?: Record<string, { path?: string; method?: string }>
 }) {
   return (
     <div className='space-y-6'>
-      <CodeSamplesSection model={props.model} endpointMap={props.endpointMap} />
+      <CodeSamplesSection model={props.model} endpointMap={props.endpointMap || {}} />
       <AuthSection />
       <SupportedParametersSection model={props.model} />
       <RateLimitsSection model={props.model} />

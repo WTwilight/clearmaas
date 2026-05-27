@@ -30,7 +30,14 @@ import {
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
 import { isTokenBasedModel } from '../lib/model-helpers'
-import { formatPrice, formatRequestPrice } from '../lib/price'
+import {
+  formatPrice,
+  formatRequestPrice,
+  formatBasePrice,
+  formatBaseRequestPrice,
+  getEffectiveRatio,
+  formatDiscountRatio,
+} from '../lib/price'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelPerfBadge, type ModelPerfBadgeData } from './model-perf-badge'
 
@@ -54,7 +61,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
   const isTokenBased = isTokenBasedModel(props.model)
   const tokenUnitLabel = tokenUnit === 'K' ? '1K' : '1M'
   const tags = parseTags(props.model.tags)
-  const groups = props.model.enable_groups || []
   const endpoints = props.model.supported_endpoint_types || []
   const vendorIcon = props.model.vendor_icon
     ? getLobeIcon(props.model.vendor_icon, 28)
@@ -74,10 +80,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       })
     : null
 
-  const primaryGroup = groups[0]
   const bottomTags = [...endpoints.slice(0, 2), ...tags.slice(0, 2)]
   const hiddenCount =
-    Math.max(groups.length - 1, 0) +
     Math.max(endpoints.length - 2, 0) +
     Math.max(tags.length - 2, 0)
 
@@ -85,6 +89,10 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     e.stopPropagation()
     copyToClipboard(props.model.model_name || '')
   }
+
+  const ratio = getEffectiveRatio(props.model)
+  const formattedRatio = formatDiscountRatio(ratio)
+  const hasDiscount = formattedRatio !== ''
 
   return (
     <div
@@ -140,36 +148,103 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 )
               ) : isTokenBased ? (
                 <>
-                  <span className='text-muted-foreground whitespace-nowrap'>
-                    {t('Input')}{' '}
-                    <span className='text-foreground font-mono font-semibold'>
-                      {formatPrice(
-                        props.model,
-                        'input',
-                        tokenUnit,
-                        showRechargePrice,
-                        priceRate,
-                        usdExchangeRate
-                      )}
+                  {hasDiscount && (
+                    <div className='col-span-2 mb-1 flex items-center gap-2 rounded bg-gradient-to-r from-amber-50 to-orange-50 px-2 py-1 dark:from-amber-900/30 dark:to-orange-900/30'>
+                      <span className='text-muted-foreground whitespace-nowrap text-xs'>
+                        {t('Input')}{' '}
+                        <span className='text-muted-foreground/50 line-through'>
+                          {formatBasePrice(
+                            props.model,
+                            'input',
+                            tokenUnit,
+                            showRechargePrice,
+                            priceRate,
+                            usdExchangeRate
+                          )}
+                        </span>
+                        /{tokenUnitLabel}
+                      </span>
+                      <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
+                        {formattedRatio}
+                      </span>
+                      <span className='text-foreground font-mono font-bold'>
+                        {formatPrice(
+                          props.model,
+                          'input',
+                          tokenUnit,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      <span className='text-muted-foreground text-xs'>/{tokenUnitLabel}</span>
+                    </div>
+                  )}
+                  {!hasDiscount && (
+                    <span className='text-muted-foreground whitespace-nowrap'>
+                      {t('Input')}{' '}
+                      <span className='text-foreground font-mono font-semibold'>
+                        {formatPrice(
+                          props.model,
+                          'input',
+                          tokenUnit,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      /{tokenUnitLabel}
                     </span>
-                    /{tokenUnitLabel}
-                  </span>
-                  <span className='text-muted-foreground whitespace-nowrap'>
-                    {t('Output')}{' '}
-                    <span className='text-foreground font-mono font-semibold'>
-                      {formatPrice(
-                        props.model,
-                        'output',
-                        tokenUnit,
-                        showRechargePrice,
-                        priceRate,
-                        usdExchangeRate
-                      )}
+                  )}
+                  {hasDiscount ? (
+                    <div className='col-span-2 flex items-center gap-2 rounded bg-gradient-to-r from-amber-50 to-orange-50 px-2 py-1 dark:from-amber-900/30 dark:to-orange-900/30'>
+                      <span className='text-muted-foreground whitespace-nowrap text-xs'>
+                        {t('Output')}{' '}
+                        <span className='text-muted-foreground/50 line-through'>
+                          {formatBasePrice(
+                            props.model,
+                            'output',
+                            tokenUnit,
+                            showRechargePrice,
+                            priceRate,
+                            usdExchangeRate
+                          )}
+                        </span>
+                        /{tokenUnitLabel}
+                      </span>
+                      <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
+                        {formattedRatio}
+                      </span>
+                      <span className='text-foreground font-mono font-bold'>
+                        {formatPrice(
+                          props.model,
+                          'output',
+                          tokenUnit,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      <span className='text-muted-foreground text-xs'>/{tokenUnitLabel}</span>
+                    </div>
+                  ) : (
+                    <span className='text-muted-foreground whitespace-nowrap'>
+                      {t('Output')}{' '}
+                      <span className='text-foreground font-mono font-semibold'>
+                        {formatPrice(
+                          props.model,
+                          'output',
+                          tokenUnit,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      /{tokenUnitLabel}
                     </span>
-                    /{tokenUnitLabel}
-                  </span>
+                  )}
                   {hasCachedPrice && (
-                    <span className='text-muted-foreground/60 whitespace-nowrap'>
+                    <span className='text-muted-foreground/60 col-span-2 whitespace-nowrap'>
                       {t('Cached')}{' '}
                       <span className='font-mono'>
                         {formatPrice(
@@ -186,15 +261,39 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 </>
               ) : (
                 <span className='text-muted-foreground whitespace-nowrap'>
-                  <span className='text-foreground font-mono font-semibold'>
-                    {formatRequestPrice(
-                      props.model,
-                      showRechargePrice,
-                      priceRate,
-                      usdExchangeRate
-                    )}
-                  </span>{' '}
-                  / {t('request')}
+                  {hasDiscount ? (
+                    <>
+                      <span className='text-muted-foreground/50 line-through'>
+                        {formatBaseRequestPrice(
+                          props.model,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      <span className='ml-1 mr-1 rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1 py-0.5 text-[10px] font-bold text-white'>
+                        {formattedRatio}
+                      </span>
+                      <span className='text-foreground font-mono font-bold'>
+                        {formatRequestPrice(
+                          props.model,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                    </>
+                  ) : (
+                    <span className='text-foreground font-mono font-semibold'>
+                      {formatRequestPrice(
+                        props.model,
+                        showRechargePrice,
+                        priceRate,
+                        usdExchangeRate
+                      )}
+                    </span>
+                  )}
+                  {' / '}{t('request')}
                 </span>
               )}
             </div>
@@ -229,11 +328,6 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
       {/* Footer: left metadata and right performance summary share row alignment */}
       <div className='mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 sm:mt-4'>
         <div className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1'>
-          {primaryGroup && (
-            <span className='text-muted-foreground text-xs font-medium'>
-              {primaryGroup} {t('Groups')}
-            </span>
-          )}
           <span className='text-muted-foreground text-xs font-medium'>
             {isTokenBased ? t('Token-based') : t('Per Request')}
           </span>
