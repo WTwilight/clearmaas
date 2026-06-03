@@ -88,8 +88,8 @@ export function transformFormDataToPayload(
       ? Math.floor(data.expired_time.getTime() / 1000)
       : -1,
     unlimited_quota: data.unlimited_quota,
-    quota_limit_daily: data.quota_limit_daily ?? 0,
-    quota_limit_monthly: data.quota_limit_monthly ?? 0,
+    quota_limit_daily: parseQuotaFromDollars(data.quota_limit_daily ?? 0),
+    quota_limit_monthly: parseQuotaFromDollars(data.quota_limit_monthly ?? 0),
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
     allow_ips: data.allow_ips || '',
@@ -112,8 +112,8 @@ export function transformApiKeyToFormDefaults(
         ? new Date(apiKey.expired_time * 1000)
         : undefined,
     unlimited_quota: apiKey.unlimited_quota,
-    quota_limit_daily: (apiKey as any).quota_limit_daily ?? 0,
-    quota_limit_monthly: (apiKey as any).quota_limit_monthly ?? 0,
+    quota_limit_daily: quotaUnitsToDollars((apiKey as any).quota_limit_daily ?? 0),
+    quota_limit_monthly: quotaUnitsToDollars((apiKey as any).quota_limit_monthly ?? 0),
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],
