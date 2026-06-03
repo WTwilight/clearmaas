@@ -53,6 +53,19 @@ func GetEnabledModels() []string {
 	return models
 }
 
+// GetEnabledModelsByChannelIds returns distinct model names supported by the given channel IDs.
+func GetEnabledModelsByChannelIds(channelIds []int) []string {
+	var models []string
+	if len(channelIds) == 0 {
+		return models
+	}
+	DB.Table("abilities").
+		Where("channel_id IN ? AND enabled = ?", channelIds, true).
+		Distinct("model").
+		Pluck("model", &models)
+	return models
+}
+
 func GetAllEnableAbilities() []Ability {
 	var abilities []Ability
 	DB.Find(&abilities, "enabled = ?", true)

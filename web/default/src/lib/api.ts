@@ -189,6 +189,87 @@ export async function getUserModels(): Promise<{
   return res.data
 }
 
+// Get user available models with pricing sheet info (for key creation/edit form)
+export async function getAvailablePricingModels(): Promise<{
+  success: boolean
+  message?: string
+  data?: Array<{
+    model: string
+    quota_type: number // 0=ratio(per 1M tokens), 1=fixed(per request)
+    input_original_price: number
+    output_original_price: number
+    discount_ratio: number
+    input_discounted_price: number
+    output_discounted_price: number
+    vendor_type: string
+    source: 'enterprise' | 'platform'
+    sheet_id: number
+    sheet_name: string
+  }>
+}> {
+  const res = await api.get('/api/pricing-sheets/available')
+  // Backend returns { models: [...] } wrapped in the standard { success, data: {...} } structure
+  const payload = res.data as { success: boolean; data: { models: Array<{
+    model: string
+    quota_type: number
+    input_original_price: number
+    output_original_price: number
+    discount_ratio: number
+    input_discounted_price: number
+    output_discounted_price: number
+    vendor_type: string
+    source: 'enterprise' | 'platform'
+    sheet_id: number
+    sheet_name: string
+  }> } }
+  return { success: payload.success, message: payload.message, data: payload.data?.models }
+}
+
+// Get token pricing model bindings
+export async function getTokenPricingModels(
+  tokenId: number
+): Promise<{
+  success: boolean
+  message?: string
+  data?: {
+    token: Record<string, unknown>
+    bindings: Array<{
+      id: number
+      token_id: number
+      model: string
+      pricing_sheet_id: number
+      sheet_name: string
+      discount_type: string
+      discount_value: number
+      created_at: number
+    }>
+  }
+}> {
+  const res = await api.get(`/api/token/${tokenId}/pricing-models`)
+  return res.data
+}
+
+// Bind pricing models to a token (idempotent overwrite)
+export async function bindTokenPricingModels(
+  tokenId: number,
+  data: {
+    model_limits_enabled: boolean
+    model_limits: string
+    bindings: Array<{ sheet_id: number; model: string }>
+  }
+): Promise<{ success: boolean; message?: string }> {
+  const res = await api.post(`/api/token/${tokenId}/pricing-models`, data)
+  return res.data
+}
+
+// Unbind all pricing models from a token
+export async function unbindTokenPricingModels(
+  tokenId: number
+): Promise<{ success: boolean; message?: string }> {
+  const res = await api.delete(`/api/token/${tokenId}/pricing-models`)
+  return res.data
+}
+
 // Get user groups with descriptions and ratios
 export async function getUserGroups(): Promise<{
   success: boolean

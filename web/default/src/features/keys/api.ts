@@ -56,7 +56,9 @@ export async function searchApiKeys(
 // Get single API key by ID
 export async function getApiKey(id: number): Promise<ApiResponse<ApiKey>> {
   const res = await api.get(`/api/token/${id}`)
-  return res.data
+  // Backend returns { success: true, data: { token: {...}, pricing_bindings: [...] } }
+  const payload = res.data as { success: boolean; message?: string; data: { token: ApiKey } }
+  return { success: payload.success, message: payload.message, data: payload.data?.token }
 }
 
 // Create a new API key
@@ -115,3 +117,11 @@ export async function fetchTokenKeysBatch(ids: number[]): Promise<{
   const res = await api.post('/api/token/batch/keys', { ids })
   return res.data
 }
+
+// ============================================================================
+// Pricing Model Binding
+// ============================================================================
+
+import { getAvailablePricingModels, getTokenPricingModels, bindTokenPricingModels, unbindTokenPricingModels } from '@/lib/api'
+
+export { getAvailablePricingModels, getTokenPricingModels, bindTokenPricingModels, unbindTokenPricingModels }

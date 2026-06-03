@@ -41,6 +41,8 @@ func setupEnterpriseControllerTestDB(t *testing.T) *gorm.DB {
 		&model.EnterprisePricingSheet{},
 		&model.EnterprisePricingItem{},
 		&model.EnterpriseUserBinding{},
+		&model.Token{},
+		&model.TokenPricingModelBinding{},
 		&model.User{},
 	))
 
@@ -147,8 +149,9 @@ func TestListEnterprise(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.True(t, resp["success"].(bool))
-	data := resp["data"].([]interface{})
-	assert.Len(t, data, 3)
+	data := resp["data"].(map[string]interface{})
+	items := data["items"].([]interface{})
+	assert.Len(t, items, 3)
 }
 
 func TestUpdateEnterprise(t *testing.T) {
@@ -547,7 +550,7 @@ func TestAddPricingItem(t *testing.T) {
 	sheet.UpdatedAt = now
 	require.NoError(t, db.Create(sheet).Error)
 
-	body := `{"model":"gpt-4o","discount_type":"ratio","discount_value":0.7,"remark":"7折"}`
+	body := `{"vendor_type":"openai","models":["gpt-4o"],"discount_type":"ratio","discount_value":0.7,"remark":"7折"}`
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/pricing-sheet/:sheetId/item", bytes.NewBufferString(body))
@@ -565,8 +568,8 @@ func TestAddPricingItem(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp["success"].(bool))
 	data := resp["data"].(map[string]interface{})
-	assert.Equal(t, "gpt-4o", data["model"])
-	assert.Equal(t, 0.7, data["discount_value"])
+	assert.Equal(t, []interface{}{"gpt-4o"}, data["models"])
+	assert.Equal(t, float64(0.7), data["discount_value"])
 }
 
 func TestAddPricingItem_DuplicateModel(t *testing.T) {

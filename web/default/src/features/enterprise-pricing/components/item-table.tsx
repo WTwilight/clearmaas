@@ -24,10 +24,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Empty, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 
 type ItemTableProps = {
-  onSheetIdChange?: (sheetId: number | null) => void
+  urlSheetId?: number
+  onSheetIdChange: (sheetId: number | null) => void
 }
 
-export function ItemTable({ onSheetIdChange }: ItemTableProps) {
+export function ItemTable({ urlSheetId, onSheetIdChange }: ItemTableProps) {
   const { t } = useTranslation()
   const columns = useItemColumns()
   const { itemRefreshTrigger, selectedEnterpriseId, setSelectedEnterpriseId } = useEnterprisePricing()
@@ -38,9 +39,9 @@ export function ItemTable({ onSheetIdChange }: ItemTableProps) {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: isMobile ? 10 : 20 })
 
-  // Notify parent of sheet changes
+  // Sync currentSheetId back to parent for URL synchronization
   useEffect(() => {
-    onSheetIdChange?.(currentSheetId)
+    onSheetIdChange(currentSheetId)
   }, [currentSheetId, onSheetIdChange])
 
   // Fetch all enterprises and all sheets, then filter to enterprises that have at least one sheet
@@ -54,12 +55,11 @@ export function ItemTable({ onSheetIdChange }: ItemTableProps) {
       const enterprises = entResult.data?.items || []
       const sheets = sheetsResult.data?.items || []
 
-      // Collect enterprise IDs that have at least one pricing sheet
       const enterpriseIdsWithSheets = new Set(sheets.map((s) => s.enterprise_id))
 
       return enterprises.filter((e) => enterpriseIdsWithSheets.has(e.id))
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   })
 
   // Fetch sheets when enterprise changes
@@ -71,22 +71,34 @@ export function ItemTable({ onSheetIdChange }: ItemTableProps) {
       return result.data?.items || []
     },
     enabled: !!selectedEnterpriseId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
   })
 
-  // Set initial enterprise
+  // Sync URL sheetId → local state when URL changes
   useEffect(() => {
-    if (!selectedEnterpriseId && enterprisesData && enterprisesData.length > 0) {
+    if (urlSheetId !== undefined) {
+      setCurrentSheetId(urlSheetId)
+    }
+  }, [urlSheetId])
+
+  // Set initial enterprise (only if no URL sheetId and no enterprise selected)
+  useEffect(() => {
+    if (!selectedEnterpriseId && enterprisesData && enterprisesData.length > 0 && !urlSheetId) {
       setSelectedEnterpriseId(enterprisesData[0].id)
     }
-  }, [enterprisesData, selectedEnterpriseId, setSelectedEnterpriseId])
+  }, [enterprisesData, selectedEnterpriseId, setSelectedEnterpriseId, urlSheetId])
 
-  // Set initial sheet
+  // Set initial sheet: prefer URL sheetId if valid, otherwise auto-select first sheet
   useEffect(() => {
     if (!currentSheetId && sheetsData && sheetsData.length > 0) {
-      setCurrentSheetId(sheetsData[0].id)
+      const hasUrlSheet = urlSheetId && sheetsData.some((s) => s.id === urlSheetId)
+      if (hasUrlSheet) {
+        setCurrentSheetId(urlSheetId)
+      } else {
+        setCurrentSheetId(sheetsData[0].id)
+      }
     }
-  }, [sheetsData, currentSheetId])
+  }, [sheetsData, currentSheetId, urlSheetId])
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['pricing-items', currentSheetId, itemRefreshTrigger],

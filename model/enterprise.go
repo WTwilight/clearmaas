@@ -7,6 +7,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// Enterprise type constants
+const (
+	EnterpriseTypePlatform  = "platform"
+	EnterpriseTypeEnterprise = "enterprise"
+)
+
 // Enterprise status constants
 const (
 	EnterpriseStatusEnabled  = 1
@@ -15,12 +21,13 @@ const (
 
 // Enterprise represents a TO B enterprise client.
 type Enterprise struct {
-	Id        int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name      string    `json:"name"`
-	Status    int       `json:"status"`
-	Remark    string    `json:"remark"`
-	CreatedAt int64     `json:"created_at"`
-	UpdatedAt int64     `json:"updated_at"`
+	Id            int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name          string `json:"name"`
+	EntType string `json:"type" gorm:"column:ent_type;default:enterprise"` // "platform" | "enterprise"
+	Status        int    `json:"status"`
+	Remark        string `json:"remark"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt      int64  `json:"updated_at"`
 }
 
 func (e *Enterprise) TableName() string {
@@ -64,16 +71,22 @@ func GetAllEnterprises() ([]*Enterprise, error) {
 }
 
 // GetEnterprises returns a paginated list of enterprises.
-func GetEnterprises(page, pageSize int) ([]*Enterprise, int64, error) {
+// When includePlatform is false, the built-in platform enterprise is excluded.
+func GetEnterprises(page, pageSize int, includePlatform bool) ([]*Enterprise, int64, error) {
 	var enterprises []*Enterprise
 	var total int64
 
-	if err := DB.Model(&Enterprise{}).Count(&total).Error; err != nil {
+	query := DB.Model(&Enterprise{})
+	if !includePlatform {
+		query = query.Where("`ent_type` != ?", EnterpriseTypePlatform)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	err := DB.Order("id desc").Offset(offset).Limit(pageSize).Find(&enterprises).Error
+	err := query.Order("id desc").Offset(offset).Limit(pageSize).Find(&enterprises).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -82,8 +95,12 @@ func GetEnterprises(page, pageSize int) ([]*Enterprise, int64, error) {
 }
 
 // DeleteEnterprise deletes an enterprise by ID.
-// Returns an error if the enterprise has associated pricing sheets.
+// Returns an error if the enterprise has associated pricing sheets
+// or if it is the built-in platform enterprise.
 func DeleteEnterprise(id int) error {
+	if IsPlatformEnterprise(id) {
+		return errors.New("platform enterprise cannot be deleted")
+	}
 	sheets, err := GetPricingSheetsByEnterpriseId(id)
 	if err != nil {
 		return err
@@ -101,4 +118,52 @@ func IsEnterpriseEnabled(id int) bool {
 		return false
 	}
 	return e.Status == EnterpriseStatusEnabled
+}
+
+// IsPlatformEnterprise reports whether the given enterprise is the built-in platform enterprise.
+// It checks the Type field.
+func IsPlatformEnterprise(enterpriseId int) bool {
+	e, err := GetEnterpriseById(enterpriseId)
+	if err != nil || e == nil {
+		return false
+	}
+	return e.EntType == EnterpriseTypePlatform
+}
+
+// IsPlatformEnterpriseByType reports whether the given enterprise is the platform enterprise by its Type field.
+func IsPlatformEnterpriseByType(e *Enterprise) bool {
+	return e != nil && e.EntType == EnterpriseTypePlatform
+}
+
+// IsPlatformEnterpriseId reports whether the given pricing sheet ID belongs to the platform enterprise.
+// Since pricing sheets are associated with enterprises, this checks the sheet's enterprise_id.
+func IsPlatformEnterpriseId(sheetId int) bool {
+	sheet, err := GetPricingSheetById(sheetId)
+	if err != nil || sheet == nil {
+		return false
+	}
+	return IsPlatformEnterprise(sheet.EnterpriseId)
+}
+
+// GetPlatformEnterpriseId returns the ID of the platform enterprise by querying type='platform'.
+// Returns 0 if no platform enterprise is found.
+func GetPlatformEnterpriseId() int {
+	e, err := GetPlatformEnterprise()
+	if err != nil || e == nil {
+		return 0
+	}
+	return e.Id
+}
+
+// GetPlatformEnterprise returns the platform enterprise record (type='platform').
+func GetPlatformEnterprise() (*Enterprise, error) {
+	var e Enterprise
+	err := DB.Where("`ent_type` = ?", EnterpriseTypePlatform).First(&e).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &e, nil
 }

@@ -270,6 +270,15 @@ func migrateDB() error {
 		return err
 	}
 
+	// Rename "type" column to "ent_type" in enterprises table for SQLite.
+	// "type" is a SQLite reserved keyword; modernc.org/sqlite (v1.40+) cannot parse
+	// DDL containing it, causing AutoMigrate to fail with "failed to look up field type".
+	if common.UsingSQLite {
+		if err := migrateEnterprisesTypeToEntType(); err != nil {
+			return err
+		}
+	}
+
 	// Use idempotent migration strategy for PostgreSQL to handle existing tables
 	if common.UsingPostgreSQL {
 		return migrateDBPostgresIdempotent()
@@ -305,6 +314,7 @@ func migrateDB() error {
 		&EnterprisePricingSheet{},
 		&EnterprisePricingItem{},
 		&EnterpriseUserBinding{},
+		&TokenPricingModelBinding{},
 	)
 	if err != nil {
 		return err
@@ -330,16 +340,27 @@ func migrateDBPostgresIdempotent() error {
 	// For PostgreSQL, use CREATE TABLE IF NOT EXISTS pattern for tables that might already exist
 	// Then use AutoMigrate to sync columns (AutoMigrate won't recreate existing tables)
 	enterpriseTables := []string{
-		`CREATE TABLE IF NOT EXISTS "enterprises" ("id" bigserial,"name" text,"status" bigint,"remark" text,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+		`CREATE TABLE IF NOT EXISTS "enterprises" ("id" bigserial,"name" text,"ent_type" text DEFAULT '' NOT NULL,"status" bigint,"remark" text,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
 		`CREATE TABLE IF NOT EXISTS "enterprise_pricing_sheets" ("id" bigserial,"name" text,"enterprise_id" bigint,"status" bigint,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
-		`CREATE TABLE IF NOT EXISTS "enterprise_pricing_items" ("id" bigserial,"pricing_sheet_id" bigint,"model" text,"input_price" decimal(10,6) DEFAULT 0,"output_price" decimal(10,6) DEFAULT 0,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+		// NOTE: enterprise_pricing_items columns (model/input_price/output_price vs vendor_type/models/discount_type/discount_value)
+		// are synced by AutoMigrate below using the EnterprisePricingItem model. The raw DDL below is kept minimal
+		// and intentionally does NOT include all columns — AutoMigrate will add missing columns to existing tables.
+		`CREATE TABLE IF NOT EXISTS "enterprise_pricing_items" ("id" bigserial,"pricing_sheet_id" bigint,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
 		`CREATE TABLE IF NOT EXISTS "enterprise_user_bindings" ("id" bigserial,"enterprise_id" bigint,"user_id" bigint,"role" bigint DEFAULT 0,"created_at" bigint,"updated_at" bigint,PRIMARY KEY ("id"))`,
+		`CREATE TABLE IF NOT EXISTS "enterprise_pricing_sheet_channels" ("id" bigserial,"pricing_sheet_id" bigint,"channel_id" bigint,"created_at" bigint,PRIMARY KEY ("id"))`,
+		`CREATE TABLE IF NOT EXISTS "token_pricing_model_bindings" ("id" bigserial,"user_id" bigint,"token_id" bigint,"pricing_sheet_id" bigint,"model" text,"created_at" bigint,PRIMARY KEY ("id"))`,
 	}
 
 	for _, sql := range enterpriseTables {
 		if err := DB.Exec(sql).Error; err != nil {
 			return fmt.Errorf("failed to create enterprise table: %v", err)
 		}
+	}
+
+	// Rename "type" column to "ent_type" in enterprises table.
+	// "type" is a reserved keyword in many SQL dialects and can cause issues.
+	if err := migrateEnterprisesTypeToEntTypePostgres(); err != nil {
+		return err
 	}
 
 	// Run AutoMigrate for all other models and to sync columns for existing tables
@@ -371,6 +392,12 @@ func migrateDBPostgresIdempotent() error {
 		&UserOAuthBinding{},
 		&PerfMetric{},
 		&SubscriptionPlan{},
+		&Enterprise{},
+		&EnterprisePricingSheet{},
+		&EnterprisePricingItem{},
+		&EnterpriseUserBinding{},
+		&EnterprisePricingSheetChannel{},
+		&TokenPricingModelBinding{},
 	}
 
 	for _, model := range allModels {
@@ -419,6 +446,8 @@ func migrateDBFast() error {
 		{&EnterprisePricingSheet{}, "EnterprisePricingSheet"},
 		{&EnterprisePricingItem{}, "EnterprisePricingItem"},
 		{&EnterpriseUserBinding{}, "EnterpriseUserBinding"},
+		{&EnterprisePricingSheetChannel{}, "EnterprisePricingSheetChannel"},
+		{&TokenPricingModelBinding{}, "TokenPricingModelBinding"},
 		// SupplierPricingSheetChannel is created via SQL migration, not GORM AutoMigrate
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
@@ -562,6 +591,79 @@ func ensureSupplierPricingSheetChannelsTableSQLite() error {
 UNIQUE (` + "`pricing_sheet_id`" + `, ` + "`channel_id`" + `)
 )`
 	return DB.Exec(createSQL).Error
+}
+
+// migrateEnterprisesTypeToEntType renames the "type" column to "ent_type" in the
+// enterprises table. This is necessary because "type" is a SQLite reserved keyword,
+// and modernc.org/sqlite v1.40+ cannot parse DDL containing it, causing AutoMigrate
+// to fail with "failed to look up field type from DDL". The migration is idempotent
+// and checks for column existence before attempting the rename.
+func migrateEnterprisesTypeToEntType() error {
+	if !DB.Migrator().HasTable("enterprises") {
+		return nil
+	}
+	// Query column names from SQLite
+	var cols []struct {
+		Name string `gorm:"column:name"`
+	}
+	if err := DB.Raw("PRAGMA table_info(`enterprises`)").Scan(&cols).Error; err != nil {
+		return fmt.Errorf("failed to read enterprises table columns: %w", err)
+	}
+	var oldColExists, newColExists bool
+	for _, c := range cols {
+		if c.Name == "type" {
+			oldColExists = true
+		}
+		if c.Name == "ent_type" {
+			newColExists = true
+		}
+	}
+	if !oldColExists {
+		return nil
+	}
+	if newColExists {
+		if err := DB.Exec("ALTER TABLE `enterprises` DROP COLUMN `type`").Error; err != nil {
+			common.SysLog("Note: could not drop old 'type' column (may already be gone): " + err.Error())
+		}
+		return nil
+	}
+	// SQLite 3.37.0+ supports ALTER TABLE RENAME COLUMN.
+	if err := DB.Exec("ALTER TABLE `enterprises` RENAME COLUMN `type` TO `ent_type`").Error; err != nil {
+		return fmt.Errorf("failed to rename 'type' to 'ent_type' in enterprises table: %w", err)
+	}
+	common.SysLog("Renamed 'type' column to 'ent_type' in enterprises table")
+	return nil
+}
+
+// migrateEnterprisesTypeToEntTypePostgres renames the "type" column to "ent_type" in the
+// enterprises table for PostgreSQL. Idempotent: checks column existence before renaming.
+func migrateEnterprisesTypeToEntTypePostgres() error {
+	// Check if old "type" column exists
+	var count int64
+	if err := DB.Raw(`SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'enterprises' AND column_name = 'type'`).Scan(&count).Error; err != nil {
+		return fmt.Errorf("failed to check for 'type' column: %w", err)
+	}
+	if count == 0 {
+		return nil // Column already renamed or never existed
+	}
+	// Check if new "ent_type" column already exists
+	if err := DB.Raw(`SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'enterprises' AND column_name = 'ent_type'`).Scan(&count).Error; err != nil {
+		return fmt.Errorf("failed to check for 'ent_type' column: %w", err)
+	}
+	if count > 0 {
+		// ent_type exists but type also exists (duplicate) — drop type
+		if err := DB.Exec(`ALTER TABLE "enterprises" DROP COLUMN "type"`).Error; err != nil {
+			return fmt.Errorf("failed to drop old 'type' column: %w", err)
+		}
+		return nil
+	}
+	if err := DB.Exec(`ALTER TABLE "enterprises" RENAME COLUMN "type" TO "ent_type"`).Error; err != nil {
+		return fmt.Errorf("failed to rename 'type' to 'ent_type' in enterprises table: %w", err)
+	}
+	common.SysLog("Renamed 'type' column to 'ent_type' in enterprises table (PostgreSQL)")
+	return nil
 }
 
 // migrateTokenModelLimitsToText migrates model_limits column from varchar(1024) to text

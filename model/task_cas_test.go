@@ -2,60 +2,15 @@ package model
 
 import (
 	"encoding/json"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
-func TestMain(m *testing.M) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		panic("failed to open test db: " + err.Error())
-	}
-	DB = db
-	LOG_DB = db
-
-	common.UsingSQLite = true
-	common.RedisEnabled = false
-	common.BatchUpdateEnabled = false
-	common.LogConsumeEnabled = true
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		panic("failed to get sql.DB: " + err.Error())
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(
-		&Task{},
-		&User{},
-		&Token{},
-		&Log{},
-		&Channel{},
-		&TopUp{},
-		&SubscriptionPlan{},
-		&SubscriptionOrder{},
-		&UserSubscription{},
-		&Enterprise{},
-		&EnterprisePricingSheet{},
-		&EnterprisePricingItem{},
-		&EnterpriseUserBinding{},
-		&Supplier{},
-		&SupplierPricingSheet{},
-		&SupplierPricingItem{},
-	); err != nil {
-		panic("failed to migrate: " + err.Error())
-	}
-
-	os.Exit(m.Run())
-}
+// NOTE: TestMain is defined in setup_test.go — all test files share the same setup.
 
 func truncateTables(t *testing.T) {
 	t.Helper()

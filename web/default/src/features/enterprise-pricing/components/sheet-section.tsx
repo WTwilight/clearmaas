@@ -6,6 +6,7 @@ import { SheetPrimaryButtons } from './sheet-primary-buttons'
 import { SheetDrawer } from './sheet-drawer'
 import { SheetDeleteDialog } from './sheet-delete-dialog'
 import { BindUserDialog } from './bind-user-dialog'
+import { SheetManageUserKeysDialog } from './sheet-manage-user-keys-dialog'
 import { useEnterprisePricing } from './enterprise-pricing-provider'
 import { Skeleton } from '@/components/ui/skeleton'
 import { getEnterprises } from '../api'
@@ -66,6 +67,7 @@ export function SheetSection({ enterpriseId: urlEnterpriseId }: SheetSectionProp
       />
       <SheetDeleteDialog />
       <BindUserDialog />
+      <SheetManageUserKeysDialog />
     </>
   )
 }

@@ -1919,9 +1919,8 @@ export function ChannelMutateDrawer({
                             {...field}
                           />
                         </FormControl>
-                        <FormDescription>
-                          <div className='flex flex-col gap-2'>
-                            <span>
+                        <div className='text-muted-foreground text-sm'>
+                          <span>
                               {isEditing ? (
                                 <>
                                   {t(
@@ -1957,7 +1956,6 @@ export function ChannelMutateDrawer({
                               </Button>
                             )}
                           </div>
-                        </FormDescription>
                         {isEditing && (
                           <div className='mt-4 space-y-3 rounded-lg border border-dashed p-4'>
                             <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>

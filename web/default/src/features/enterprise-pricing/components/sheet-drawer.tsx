@@ -96,7 +96,13 @@ export function SheetDrawer({
   }, [open, isUpdate, currentRow, form])
 
   const onSubmit = async (data: SheetFormValues) => {
-    if (!selectedEnterpriseId) return
+    const targetEnterpriseId = isUpdate && currentRow
+      ? currentRow.enterprise_id
+      : selectedEnterpriseId
+    if (!targetEnterpriseId) {
+      toast.error(t('Please select an enterprise first'))
+      return
+    }
     setIsSubmitting(true)
     try {
       const payload = {
@@ -107,8 +113,8 @@ export function SheetDrawer({
       }
 
       const result = isUpdate
-        ? await updateSheet(selectedEnterpriseId, { ...payload, id: currentRow!.id })
-        : await createSheet(selectedEnterpriseId, payload)
+        ? await updateSheet(targetEnterpriseId, { ...payload, id: currentRow!.id })
+        : await createSheet(targetEnterpriseId, payload)
 
       if (result.success) {
         toast.success(

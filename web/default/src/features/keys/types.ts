@@ -92,6 +92,41 @@ export interface ApiKeyFormData {
   allow_ips: string
   group: string
   cross_group_retry: boolean
+  select_models?: SelectModel[]
+}
+
+// ============================================================================
+// Pricing Binding Types
+// ============================================================================
+
+export interface PricingBinding {
+  id: number
+  token_id: number
+  model: string
+  pricing_sheet_id: number
+  sheet_name: string
+  discount_type: string
+  discount_value: number
+  created_at: number
+}
+
+export interface SelectModel {
+  model: string
+  pricing_sheet_id: number
+}
+
+export interface SelectablePricingModel {
+  model: string
+  quota_type: number // 0=ratio(per 1M tokens), 1=fixed(per request)
+  input_original_price: number
+  output_original_price: number
+  discount_ratio: number
+  input_discounted_price: number
+  output_discounted_price: number
+  vendor_type: string
+  source: 'enterprise' | 'platform'
+  sheet_id: number
+  sheet_name: string
 }
 
 // ============================================================================

@@ -35,7 +35,7 @@ import {
   getPricingItems,
   createPricingItem,
   updatePricingItem,
-  getEnabledModels,
+  getSheetModels,
 } from '../api'
 import {
   ERROR_MESSAGES,
@@ -92,20 +92,24 @@ export function ItemDrawer({
     defaultValues: DEFAULT_VALUES,
   })
 
-  // Fetch enabled models from the system (used for billing)
-  const { data: enabledModels } = useQuery({
-    queryKey: ['enabled-models'],
-    queryFn: getEnabledModels,
-    staleTime: 10 * 60 * 1000,
+  // Fetch models scoped to this pricing sheet's bound channels
+  const { data: sheetModelsResult } = useQuery({
+    queryKey: ['sheet-models', sheetId],
+    queryFn: () => getSheetModels(sheetId!),
+    enabled: !!sheetId,
+    staleTime: 5 * 60 * 1000,
   })
+
+  const channelCount = sheetModelsResult?.channel_count ?? 0
+  const sheetModels = sheetModelsResult?.data ?? []
 
   // Multi-select options filtered by selected vendor
   const selectedVendor = form.watch('vendor_type')
   const vendorModelOptions: Option[] = useMemo(() => {
-    if (!selectedVendor || !enabledModels) return []
-    const models = getModelsByVendor(selectedVendor as VendorType, enabledModels)
+    if (!selectedVendor || sheetModels.length === 0) return []
+    const models = getModelsByVendor(selectedVendor as VendorType, sheetModels)
     return models.map((m) => ({ value: m, label: m }))
-  }, [selectedVendor, enabledModels])
+  }, [selectedVendor, sheetModels])
 
   // Fetch sheet items for pre-fill and duplicate checking
   const { data: itemsData } = useQuery({
@@ -254,7 +258,9 @@ export function ItemDrawer({
                           selected={controllerField.value}
                           onChange={controllerField.onChange}
                           placeholder={
-                            selectedVendor
+                            channelCount === 0
+                              ? t('No channels bound to this sheet')
+                              : selectedVendor
                               ? t('Select models...')
                               : t('Select vendor type first')
                           }
@@ -263,7 +269,9 @@ export function ItemDrawer({
                     />
                   </FormControl>
                   <FormDescription>
-                    {selectedVendor
+                    {channelCount === 0
+                      ? t('Bind channels to this sheet first to enable model selection.')
+                      : selectedVendor
                       ? t('Models matching the selected vendor type.')
                       : t('Choose a vendor type above to see available models.')}
                   </FormDescription>

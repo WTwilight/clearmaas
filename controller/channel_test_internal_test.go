@@ -63,7 +63,7 @@ func TestBuildTestLogOtherInjectsTieredInfo(t *testing.T) {
 
 	other := buildTestLogOther(ctx, info, priceData, usage, &billingexpr.TieredResult{
 		MatchedTier: "base",
-	})
+	}, 0)
 
 	require.Equal(t, "tiered_expr", other["billing_mode"])
 	require.Equal(t, "base", other["matched_tier"])

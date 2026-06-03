@@ -88,6 +88,13 @@ func GetPricingItemsBySheetId(sheetId int) ([]*EnterprisePricingItem, error) {
 	return items, err
 }
 
+// GetPricingItemsBySheetIdTx returns all pricing items for a pricing sheet within a transaction.
+func GetPricingItemsBySheetIdTx(sheetId int, tx *gorm.DB) ([]*EnterprisePricingItem, error) {
+	var items []*EnterprisePricingItem
+	err := tx.Where("pricing_sheet_id = ?", sheetId).Find(&items).Error
+	return items, err
+}
+
 // GetPricingItemBySheetIdAndModelName returns the pricing item whose models JSON array contains the given model name.
 func GetPricingItemBySheetIdAndModelName(sheetId int, modelName string) (*EnterprisePricingItem, error) {
 	var items []*EnterprisePricingItem

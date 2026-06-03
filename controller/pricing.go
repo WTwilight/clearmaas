@@ -58,33 +58,62 @@ func GetPricing(c *gin.Context) {
 	usableGroup = service.GetUserUsableGroups(group)
 	pricing = filterPricingByUsableGroups(pricing, usableGroup)
 	// check groupRatio contains usableGroup
-	for group := range ratio_setting.GetGroupRatioCopy() {
-		if _, ok := usableGroup[group]; !ok {
-			delete(groupRatio, group)
+	for g := range ratio_setting.GetGroupRatioCopy() {
+		if _, ok := usableGroup[g]; !ok {
+			delete(groupRatio, g)
 		}
 	}
 
+	// Determine pricing context and ratio_source for each model
+	var ratioSource string
 	if exists {
-		sheet, err := service.GetUserActivePricingSheet(userId.(int))
+		uid := userId.(int)
+		sheet, err := service.GetUserActivePricingSheet(uid)
 		if err == nil && sheet != nil {
+			// User has an active enterprise pricing sheet
 			for i := range pricing {
 				ratio, found := service.GetModelDiscount(sheet.Id, pricing[i].ModelName)
 				if found {
 					pricing[i].DiscountRatio = ratio
+					pricing[i].RatioSource = "enterprise_pricing_sheet"
 				}
 			}
+		ratioSource = "enterprise_pricing_sheet"
+		} else {
+		// No enterprise pricing sheet → check all active platform pricing sheets
+		// When multiple sheets configure the same model, use the lowest discount_value (best discount for user).
+		platformSheets, err := model.GetAllActivePricingSheetsByEnterpriseIdByType(model.EnterpriseTypePlatform)
+		if err == nil && len(platformSheets) > 0 {
+			for _, platformSheet := range platformSheets {
+				for i := range pricing {
+					// Only set if not already set by enterprise sheet
+					if pricing[i].RatioSource == "" {
+						ratio, found := service.GetModelDiscount(platformSheet.Id, pricing[i].ModelName)
+						if found {
+							// Only update if this sheet has a better (lower) discount
+							if pricing[i].DiscountRatio == 0 || ratio < pricing[i].DiscountRatio {
+								pricing[i].DiscountRatio = ratio
+								pricing[i].RatioSource = "platform_pricing_sheet"
+							}
+						}
+					}
+				}
+			}
+			ratioSource = "platform_pricing_sheet"
 		}
+	}
 	}
 
 	c.JSON(200, gin.H{
 		"success":            true,
-		"data":               pricing,
-		"vendors":            model.GetVendors(),
-		"group_ratio":        groupRatio,
-		"usable_group":       usableGroup,
+		"data":              pricing,
+		"vendors":           model.GetVendors(),
+		"group_ratio":       groupRatio,
+		"usable_group":      usableGroup,
 		"supported_endpoint": model.GetSupportedEndpointMap(),
-		"auto_groups":        service.GetUserAutoGroup(group),
-		"pricing_version":    "a42d372ccf0b5dd13ecf71203521f9d2",
+		"auto_groups":       service.GetUserAutoGroup(group),
+		"pricing_version":   "a42d372ccf0b5dd13ecf71203521f9d2",
+		"ratio_source":      ratioSource,
 	})
 }
 

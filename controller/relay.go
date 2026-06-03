@@ -157,7 +157,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 
 	priceData, err := helper.ModelPriceHelper(c, relayInfo, tokens, meta)
 	if err != nil {
-		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
+		// If it's already a NewAPIError (e.g. ErrorCodeTokenModelLimitInconsistent with 403),
+		// pass it through directly to preserve the status code.
+		if apiErr, ok := err.(*types.NewAPIError); ok {
+			newAPIError = apiErr
+		} else {
+			newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
+		}
 		return
 	}
 
@@ -310,7 +316,17 @@ func getChannel(c *gin.Context, info *relaycommon.RelayInfo, retryParam *service
 	}
 	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(retryParam)
 
-	info.PriceData.GroupRatioInfo = helper.HandleGroupRatio(c, info)
+	groupRatioInfo, billingErr := helper.HandleGroupRatio(c, info)
+	if billingErr != nil {
+		if apiErr, ok := billingErr.(*types.NewAPIError); ok {
+			return nil, apiErr
+		}
+		return nil, types.NewErrorWithStatusCode(
+			billingErr, types.ErrorCodeModelPriceError, http.StatusInternalServerError,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+	info.PriceData.GroupRatioInfo = groupRatioInfo
 
 	if err != nil {
 		return nil, types.NewError(fmt.Errorf("获取分组 %s 下模型 %s 的可用渠道失败（retry）: %s", selectGroup, info.OriginModelName, err.Error()), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())

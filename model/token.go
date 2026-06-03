@@ -29,6 +29,17 @@ type Token struct {
 	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
+
+	// SelectModels is used to receive select_models from the API request body.
+	// It is NOT stored in the database; instead it is processed in the controller
+	// to create token_pricing_model_bindings entries.
+	SelectModels []TokenPricingModelBindingInput `json:"select_models" gorm:"-"`
+}
+
+// TokenPricingModelBindingInput represents a single model binding in the API request.
+type TokenPricingModelBindingInput struct {
+	Model      string `json:"model"`
+	PricingSheetId int `json:"pricing_sheet_id"`
 }
 
 func (token *Token) Clean() {
@@ -299,6 +310,13 @@ func (token *Token) Update() (err error) {
 	return err
 }
 
+// UpdateWithTx updates the token within an existing transaction.
+func (token *Token) UpdateWithTx(tx *gorm.DB) (err error) {
+	err = tx.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+	return err
+}
+
 func (token *Token) SelectUpdate() (err error) {
 	defer func() {
 		if shouldUpdateRedis(true, err) {
@@ -349,6 +367,16 @@ func (token *Token) GetModelLimitsMap() map[string]bool {
 	return limitsMap
 }
 
+// IsModelAllowed returns true if the given model is in the token's ModelLimits whitelist.
+// Always returns true when ModelLimitsEnabled is false.
+func (token *Token) IsModelAllowed(model string) bool {
+	if !token.ModelLimitsEnabled {
+		return true
+	}
+	limits := token.GetModelLimitsMap()
+	return limits[model]
+}
+
 func DisableModelLimits(tokenId int) error {
 	token, err := GetTokenById(tokenId)
 	if err != nil {
@@ -369,7 +397,34 @@ func DeleteTokenById(id int, userId int) (err error) {
 	if err != nil {
 		return err
 	}
-	return token.Delete()
+
+	tx := DB.Begin()
+
+	// Delete token pricing model bindings in the same transaction
+	if err := DeleteTokenPricingModelBindings(id, tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Delete the token itself
+	if err := tx.Delete(&token).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	// Invalidate Redis cache asynchronously after commit
+	gopool.Go(func() {
+		err := cacheDeleteToken(token.Key)
+		if err != nil {
+			common.SysLog("failed to delete token cache: " + err.Error())
+		}
+	})
+
+	return nil
 }
 
 func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
@@ -454,6 +509,12 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 	}
 
 	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Delete(&Token{}).Error; err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+
+	// Delete all token pricing model bindings for these tokens in the same transaction
+	if err := DeleteTokenPricingModelBindingsBatch(ids, tx); err != nil {
 		tx.Rollback()
 		return 0, err
 	}
