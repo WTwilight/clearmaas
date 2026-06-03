@@ -4105,6 +4105,8 @@
     "Token unit": "Token unit",
     "Token usage by model since launch": "Token usage by model since launch",
     "Token-based": "Token-based",
+    "Token daily quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Token daily quota exceeded: limit={{limit}} used={{used}} need={{need}}",
+    "Token monthly quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Token monthly quota exceeded: limit={{limit}} used={{used}} need={{need}}",
     "Tokenizer": "Tokenizer",
     "tokens": "tokens",
     "Tokens": "Tokens",

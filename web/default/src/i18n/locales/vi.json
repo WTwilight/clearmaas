@@ -4105,6 +4105,8 @@
     "Token unit": "Đơn vị token",
     "Token usage by model since launch": "Sử dụng token của từng mô hình kể từ khi ra mắt",
     "Token-based": "Dựa trên token",
+    "Token daily quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Đã vượt quá hạn ngạch token hàng ngày: giới hạn={{limit}} đã dùng={{used}} cần={{need}}",
+    "Token monthly quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Đã vượt quá hạn ngạch token hàng tháng: giới hạn={{limit}} đã dùng={{used}} cần={{need}}",
     "Tokenizer": "Bộ token",
     "tokens": "mã thông báo",
     "Tokens": "Mã thông báo",

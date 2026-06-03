@@ -30,6 +30,16 @@ type Token struct {
 	CrossGroupRetry    bool           `json:"cross_group_retry"` // 跨分组重试，仅auto分组有效
 	DeletedAt          gorm.DeletedAt `gorm:"index"`
 
+	// 三层配额限制 (0=不限制)
+	QuotaLimitDaily       int   `json:"quota_limit_daily" gorm:"default:0"`
+	QuotaLimitMonthly     int   `json:"quota_limit_monthly" gorm:"default:0"`
+	// 当前周期已用（系统维护）
+	QuotaUsedDaily        int   `json:"quota_used_daily" gorm:"default:0"`
+	QuotaUsedMonthly      int   `json:"quota_used_monthly" gorm:"default:0"`
+	// 上次重置时间点（Unix seconds，UTC）
+	QuotaDailyResetLast   int64 `json:"quota_daily_reset_last" gorm:"default:0"`
+	QuotaMonthlyResetLast int64 `json:"quota_monthly_reset_last" gorm:"default:0"`
+
 	// SelectModels is used to receive select_models from the API request body.
 	// It is NOT stored in the database; instead it is processed in the controller
 	// to create token_pricing_model_bindings entries.
@@ -306,14 +316,16 @@ func (token *Token) Update() (err error) {
 		}
 	}()
 	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry",
+		"quota_limit_daily", "quota_limit_monthly").Updates(token).Error
 	return err
 }
 
 // UpdateWithTx updates the token within an existing transaction.
 func (token *Token) UpdateWithTx(tx *gorm.DB) (err error) {
 	err = tx.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
-		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry").Updates(token).Error
+		"model_limits_enabled", "model_limits", "allow_ips", "group", "cross_group_retry",
+		"quota_limit_daily", "quota_limit_monthly").Updates(token).Error
 	return err
 }
 
@@ -449,9 +461,11 @@ func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
 func increaseTokenQuota(id int, quota int) (err error) {
 	err = DB.Model(&Token{}).Where("id = ?", id).Updates(
 		map[string]interface{}{
-			"remain_quota":  gorm.Expr("remain_quota + ?", quota),
-			"used_quota":    gorm.Expr("used_quota - ?", quota),
-			"accessed_time": common.GetTimestamp(),
+			"remain_quota":         gorm.Expr("remain_quota + ?", quota),
+			"used_quota":           gorm.Expr("used_quota - ?", quota),
+			"accessed_time":        common.GetTimestamp(),
+			"quota_used_daily":     gorm.Expr("quota_used_daily - ?", quota),
+			"quota_used_monthly":   gorm.Expr("quota_used_monthly - ?", quota),
 		},
 	).Error
 	return err
@@ -479,9 +493,11 @@ func DecreaseTokenQuota(id int, key string, quota int) (err error) {
 func decreaseTokenQuota(id int, quota int) (err error) {
 	err = DB.Model(&Token{}).Where("id = ?", id).Updates(
 		map[string]interface{}{
-			"remain_quota":  gorm.Expr("remain_quota - ?", quota),
-			"used_quota":    gorm.Expr("used_quota + ?", quota),
-			"accessed_time": common.GetTimestamp(),
+			"remain_quota":         gorm.Expr("remain_quota - ?", quota),
+			"used_quota":           gorm.Expr("used_quota + ?", quota),
+			"accessed_time":        common.GetTimestamp(),
+			"quota_used_daily":     gorm.Expr("quota_used_daily + ?", quota),
+			"quota_used_monthly":   gorm.Expr("quota_used_monthly + ?", quota),
 		},
 	).Error
 	return err

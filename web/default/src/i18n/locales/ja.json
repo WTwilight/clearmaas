@@ -4105,6 +4105,8 @@
     "Token unit": "トークン単位",
     "Token usage by model since launch": "リリース以降のモデル別トークン使用量",
     "Token-based": "トークンベース",
+    "Token daily quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Token の日次クォータを超過：制限={{limit}} 使用={{used}} 必要={{need}}",
+    "Token monthly quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Token の月次クォータを超過：制限={{limit}} 使用={{used}} 必要={{need}}",
     "Tokenizer": "トークナイザー",
     "tokens": "トークン",
     "Tokens": "トークン",

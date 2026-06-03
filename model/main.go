@@ -277,6 +277,9 @@ func migrateDB() error {
 		if err := migrateEnterprisesTypeToEntType(); err != nil {
 			return err
 		}
+		if err := migrateTokensPeriodQuotaColumnsSQLite(); err != nil {
+			return err
+		}
 	}
 
 	// Use idempotent migration strategy for PostgreSQL to handle existing tables
@@ -632,6 +635,49 @@ func migrateEnterprisesTypeToEntType() error {
 		return fmt.Errorf("failed to rename 'type' to 'ent_type' in enterprises table: %w", err)
 	}
 	common.SysLog("Renamed 'type' column to 'ent_type' in enterprises table")
+	return nil
+}
+
+// migrateTokensPeriodQuotaColumnsSQLite ensures the tokens table has the new period-quota
+// columns. For SQLite, we add them via raw SQL (not AutoMigrate) so that when
+// AutoMigrate later runs it sees the columns already exist and skips DDL comparison
+// (which would fail because the struct places these fields before DeletedAt while
+// raw ALTER TABLE placed them after).
+func migrateTokensPeriodQuotaColumnsSQLite() error {
+	if !DB.Migrator().HasTable("tokens") {
+		return nil
+	}
+	// Check which new columns already exist
+	var cols []struct {
+		Name string `gorm:"column:name"`
+	}
+	if err := DB.Raw("PRAGMA table_info(`tokens`)").Scan(&cols).Error; err != nil {
+		return fmt.Errorf("failed to read tokens table columns: %w", err)
+	}
+	colSet := make(map[string]bool)
+	for _, c := range cols {
+		colSet[c.Name] = true
+	}
+	newCols := map[string]string{
+		"quota_limit_daily":       "INT NOT NULL DEFAULT 0",
+		"quota_limit_monthly":     "INT NOT NULL DEFAULT 0",
+		"quota_used_daily":        "INT NOT NULL DEFAULT 0",
+		"quota_used_monthly":       "INT NOT NULL DEFAULT 0",
+		"quota_daily_reset_last":  "BIGINT NOT NULL DEFAULT 0",
+		"quota_monthly_reset_last": "BIGINT NOT NULL DEFAULT 0",
+	}
+	var added []string
+	for col, def := range newCols {
+		if !colSet[col] {
+			if err := DB.Exec(fmt.Sprintf("ALTER TABLE `tokens` ADD COLUMN `%s` %s", col, def)).Error; err != nil {
+				return fmt.Errorf("failed to add column %s: %w", col, err)
+			}
+			added = append(added, col)
+		}
+	}
+	if len(added) > 0 {
+		common.SysLog(fmt.Sprintf("Added tokens columns: %v", added))
+	}
 	return nil
 }
 

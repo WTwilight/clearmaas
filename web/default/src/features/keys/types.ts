@@ -87,6 +87,8 @@ export interface ApiKeyFormData {
   remain_quota: number
   expired_time: number
   unlimited_quota: boolean
+  quota_limit_daily: number
+  quota_limit_monthly: number
   model_limits_enabled: boolean
   model_limits: string
   allow_ips: string

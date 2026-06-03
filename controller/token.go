@@ -227,6 +227,8 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
+		QuotaLimitDaily:    token.QuotaLimitDaily,
+		QuotaLimitMonthly:  token.QuotaLimitMonthly,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
@@ -350,6 +352,8 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.QuotaLimitDaily = token.QuotaLimitDaily
+		cleanToken.QuotaLimitMonthly = token.QuotaLimitMonthly
 	}
 
 	// statusOnly does not support select_models (they are not updated by UpdateWithTx Select list).

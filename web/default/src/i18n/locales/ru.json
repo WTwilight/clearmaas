@@ -4105,6 +4105,8 @@
     "Token unit": "Единица токенов",
     "Token usage by model since launch": "Использование токенов по моделям с момента запуска",
     "Token-based": "На основе токенов",
+    "Token daily quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Дневная квота токенов превышена: лимит={{limit}} использовано={{used}} требуется={{need}}",
+    "Token monthly quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Месячная квота токенов превышена: лимит={{limit}} использовано={{used}} требуется={{need}}",
     "Tokenizer": "Токенизатор",
     "tokens": "токены",
     "Tokens": "Токены",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/http"
 	"strings"
 	"time"
 
@@ -394,9 +395,49 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 	if err != nil {
 		return err
 	}
-	if !relayInfo.TokenUnlimited && token.RemainQuota < quota {
-		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+
+	now := common.GetTimestamp()
+
+	// 新增：按需重置周期配额（只在周期边界触发写 DB）
+	if err := ResetTokenPeriodQuotaIfDue(token, now); err != nil {
+		return err
 	}
+
+	// 重新读取（重置后 used 可能为 0）
+	token, err = model.GetTokenByKey(relayInfo.TokenKey, false)
+	if err != nil {
+		return err
+	}
+
+	// 跳过检查：unlimited_quota = true 时跳过全部三层检查
+	if !relayInfo.TokenUnlimited {
+		if token.QuotaLimitDaily > 0 && token.QuotaUsedDaily+quota > token.QuotaLimitDaily {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("daily quota exceeded: limit=%d used=%d need=%d",
+					token.QuotaLimitDaily, token.QuotaUsedDaily, quota),
+				types.ErrorCodeTokenDailyQuotaExceeded,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+				types.ErrOptionWithNoRecordErrorLog(),
+			)
+		}
+		if token.QuotaLimitMonthly > 0 && token.QuotaUsedMonthly+quota > token.QuotaLimitMonthly {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("monthly quota exceeded: limit=%d used=%d need=%d",
+					token.QuotaLimitMonthly, token.QuotaUsedMonthly, quota),
+				types.ErrorCodeTokenMonthlyQuotaExceeded,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+				types.ErrOptionWithNoRecordErrorLog(),
+			)
+		}
+		// 现有总配额检查保持不变
+		if token.RemainQuota < quota {
+			return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+		}
+	}
+
+	// 扣减（remain + daily + monthly 同步更新，由 model 层改造保证）
 	err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
 	if err != nil {
 		return err
@@ -544,4 +585,39 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 			common.SysError(fmt.Sprintf("failed to send subscription quota notify to user %d: %s", relayInfo.UserId, err.Error()))
 		}
 	})
+}
+
+// ResetTokenPeriodQuotaIfDue 按需重置周期已用量
+// 每日：UTC 0 点；每月：UTC 每月 1 号 0 点
+// 只有当 reset_last < 当前周期起始时间时才写 DB（惰性重置）
+func ResetTokenPeriodQuotaIfDue(token *model.Token, now int64) error {
+	dailyStart := getDailyPeriodStart(now)
+	if token.QuotaDailyResetLast < dailyStart {
+		if err := model.DB.Model(token).Updates(map[string]interface{}{
+			"quota_used_daily":       0,
+			"quota_daily_reset_last": dailyStart,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	monthlyStart := getMonthlyPeriodStart(now)
+	if token.QuotaMonthlyResetLast < monthlyStart {
+		if err := model.DB.Model(token).Updates(map[string]interface{}{
+			"quota_used_monthly":       0,
+			"quota_monthly_reset_last": monthlyStart,
+		}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getDailyPeriodStart(now int64) int64 {
+	t := time.Unix(now, 0).UTC()
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix()
+}
+
+func getMonthlyPeriodStart(now int64) int64 {
+	t := time.Unix(now, 0).UTC()
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC).Unix()
 }

@@ -4105,6 +4105,8 @@
     "Token unit": "Unité de tokens",
     "Token usage by model since launch": "Utilisation des tokens par modèle depuis le lancement",
     "Token-based": "Basé sur les jetons",
+    "Token daily quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Quota quotidienne de tokens dépassée : limite={{limit}} utilisé={{used}} besoin={{need}}",
+    "Token monthly quota exceeded: limit={{limit}} used={{used}} need={{need}}": "Quota mensuelle de tokens dépassée : limite={{limit}} utilisé={{used}} besoin={{need}}",
     "Tokenizer": "Tokeniseur",
     "tokens": "jetons",
     "Tokens": "Jeton",
