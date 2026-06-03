@@ -25,10 +25,12 @@ import { hashStringToSeed, seededRandom } from './seed'
 //
 // The backend does not currently return `context_length`, `max_output_tokens`,
 // `knowledge_cutoff`, `release_date`, `parameter_count`, or modality/capability
-// flags for a model. Until it does, we infer reasonable values client-side
-// from the data we already have (endpoint types, ratios, tags, model name)
-// and fall back to a deterministic mock seeded from the model name so that
-// every render of the same model shows the same numbers.
+// flags for a model. Until it does, we infer values client-side using:
+//   1. KNOWN_MODEL_CONTEXT — exact model name match for ~100 well-known models
+//   2. Regex patterns — for model families and name-hint based inference
+//   3. Deterministic random bucket — only for truly unknown models
+//
+// Values seeded from the model name so every render of the same model is stable.
 //
 // When the backend starts returning these fields, callers should prefer the
 // explicit values on `model.*` and only fall back to the inferred ones.
@@ -106,6 +108,208 @@ const CONTEXT_BUCKETS = [
   8_192, 16_384, 32_768, 65_536, 128_000, 200_000, 1_000_000,
 ]
 const MAX_OUTPUT_BUCKETS = [2_048, 4_096, 8_192, 16_384, 32_768, 65_536]
+
+// Exact model name -> { context, maxOutput } mapping for known models.
+// Values are approximate; prefer backend-provided values when available.
+const KNOWN_MODEL_CONTEXT: Record<string, { context: number; maxOutput: number }> = {
+  // OpenAI
+  'gpt-4': { context: 8_192, maxOutput: 8_192 },
+  'gpt-4-0613': { context: 8_192, maxOutput: 8_192 },
+  'gpt-4-1106-preview': { context: 128_000, maxOutput: 4_096 },
+  'gpt-4-0125-preview': { context: 128_000, maxOutput: 4_096 },
+  'gpt-4-32k': { context: 32_768, maxOutput: 32_768 },
+  'gpt-4-32k-0613': { context: 32_768, maxOutput: 32_768 },
+  'gpt-4-turbo-preview': { context: 128_000, maxOutput: 4_096 },
+  'gpt-4-turbo': { context: 128_000, maxOutput: 4_096 },
+  'gpt-4-turbo-2024-04-09': { context: 128_000, maxOutput: 4_096 },
+  'gpt-4o': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4o-2024-05-13': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4o-2024-08-06': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4o-2024-11-20': { context: 128_000, maxOutput: 16_384 },
+  'chatgpt-4o-latest': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4o-mini': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4o-mini-2024-07-18': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4.5-preview': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4.5-preview-2025-02-27': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4.1': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4.1-2025-04-14': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4.1-mini': { context: 128_000, maxOutput: 16_384 },
+  'gpt-4.1-nano': { context: 128_000, maxOutput: 16_384 },
+  'o1': { context: 128_000, maxOutput: 65_536 },
+  'o1-2024-12-17': { context: 128_000, maxOutput: 65_536 },
+  'o1-preview': { context: 128_000, maxOutput: 65_536 },
+  'o1-preview-2024-09-12': { context: 128_000, maxOutput: 65_536 },
+  'o1-mini': { context: 65_536, maxOutput: 65_536 },
+  'o1-mini-2024-09-12': { context: 65_536, maxOutput: 65_536 },
+  'o1-pro': { context: 128_000, maxOutput: 65_536 },
+  'o1-pro-2025-03-19': { context: 128_000, maxOutput: 65_536 },
+  'o3-mini': { context: 128_000, maxOutput: 65_536 },
+  'o3-mini-2025-01-31': { context: 128_000, maxOutput: 65_536 },
+  'o3-mini-high': { context: 128_000, maxOutput: 65_536 },
+  'o3-mini-low': { context: 128_000, maxOutput: 65_536 },
+  'o3-mini-medium': { context: 128_000, maxOutput: 65_536 },
+  'o3': { context: 128_000, maxOutput: 65_536 },
+  'o3-2025-04-16': { context: 128_000, maxOutput: 65_536 },
+  'o3-pro': { context: 128_000, maxOutput: 65_536 },
+  'o3-pro-2025-06-10': { context: 128_000, maxOutput: 65_536 },
+  'o3-deep-research': { context: 128_000, maxOutput: 65_536 },
+  'o3-deep-research-2025-06-26': { context: 128_000, maxOutput: 65_536 },
+  'o4-mini': { context: 128_000, maxOutput: 65_536 },
+  'o4-mini-2025-04-16': { context: 128_000, maxOutput: 65_536 },
+  'o4-mini-deep-research': { context: 128_000, maxOutput: 65_536 },
+  'o4-mini-deep-research-2025-06-26': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-2025-08-07': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-chat-latest': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-mini': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-mini-2025-08-07': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-nano': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-nano-2025-08-07': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-pro': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5-pro-2025-10-06': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.1': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.1-2025-11-13': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.1-chat-latest': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.2': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.2-2025-12-11': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.2-chat-latest': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.3-chat-latest': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.4': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.4-2026-03-05': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.4-pro': { context: 128_000, maxOutput: 65_536 },
+  'gpt-5.4-pro-2026-03-05': { context: 128_000, maxOutput: 65_536 },
+  'text-embedding-ada-002': { context: 8_192, maxOutput: 0 },
+  'text-embedding-3-small': { context: 8_192, maxOutput: 0 },
+  'text-embedding-3-large': { context: 8_192, maxOutput: 0 },
+  // Claude
+  'claude-3-sonnet-20240229': { context: 200_000, maxOutput: 4_096 },
+  'claude-3-opus-20240229': { context: 200_000, maxOutput: 4_096 },
+  'claude-3-haiku-20240307': { context: 200_000, maxOutput: 4_096 },
+  'claude-3-5-haiku-20241022': { context: 200_000, maxOutput: 8_192 },
+  'claude-haiku-4-5-20251001': { context: 200_000, maxOutput: 8_192 },
+  'claude-3-5-sonnet-20240620': { context: 200_000, maxOutput: 8_192 },
+  'claude-3-5-sonnet-20241022': { context: 200_000, maxOutput: 8_192 },
+  'claude-3-7-sonnet-20250219': { context: 200_000, maxOutput: 8_192 },
+  'claude-3-7-sonnet-20250219-thinking': { context: 200_000, maxOutput: 8_192 },
+  'claude-sonnet-4-20250514': { context: 200_000, maxOutput: 16_384 },
+  'claude-sonnet-4-20250514-thinking': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-20250514': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-20250514-thinking': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-1-20250805': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-1-20250805-thinking': { context: 200_000, maxOutput: 16_384 },
+  'claude-sonnet-4-5-20250929': { context: 200_000, maxOutput: 16_384 },
+  'claude-sonnet-4-5-20250929-thinking': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-5-20251101': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-5-20251101-thinking': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-6': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-6-max': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-6-high': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-6-medium': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-6-low': { context: 200_000, maxOutput: 16_384 },
+  'claude-sonnet-4-6': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7-max': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7-xhigh': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7-high': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7-medium': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7-low': { context: 200_000, maxOutput: 16_384 },
+  'claude-opus-4-7-thinking': { context: 200_000, maxOutput: 16_384 },
+  // DeepSeek
+  'deepseek-chat': { context: 64_000, maxOutput: 8_192 },
+  'deepseek-reasoner': { context: 64_000, maxOutput: 8_192 },
+  'deepseek-v4-flash': { context: 64_000, maxOutput: 8_192 },
+  'deepseek-v4-flash-none': { context: 64_000, maxOutput: 8_192 },
+  'deepseek-v4-flash-max': { context: 64_000, maxOutput: 8_192 },
+  'deepseek-v4-pro': { context: 128_000, maxOutput: 8_192 },
+  'deepseek-v4-pro-none': { context: 128_000, maxOutput: 8_192 },
+  'deepseek-v4-pro-max': { context: 128_000, maxOutput: 8_192 },
+  // Qwen
+  'qwen-turbo': { context: 128_000, maxOutput: 8_192 },
+  'qwen-plus': { context: 128_000, maxOutput: 8_192 },
+  'qwen-max': { context: 32_768, maxOutput: 8_192 },
+  'qwen-max-longcontext': { context: 1_000_000, maxOutput: 8_192 },
+  'qwq-32b': { context: 32_768, maxOutput: 8_192 },
+  'qwen3-235b-a22b': { context: 32_768, maxOutput: 8_192 },
+  // Mistral
+  'open-mistral-7b': { context: 8_192, maxOutput: 8_192 },
+  'open-mixtral-8x7b': { context: 8_192, maxOutput: 8_192 },
+  'mistral-small-latest': { context: 32_768, maxOutput: 8_192 },
+  'mistral-medium-latest': { context: 32_768, maxOutput: 8_192 },
+  'mistral-large-latest': { context: 128_000, maxOutput: 32_768 },
+  'mistral-embed': { context: 8_192, maxOutput: 0 },
+  // Kimi / Moonshot
+  'kimi-k2.5': { context: 128_000, maxOutput: 32_768 },
+  'kimi-k2-0905-preview': { context: 128_000, maxOutput: 32_768 },
+  'kimi-k2-turbo-preview': { context: 128_000, maxOutput: 32_768 },
+  'kimi-k2-thinking': { context: 128_000, maxOutput: 32_768 },
+  'kimi-k2-thinking-turbo': { context: 128_000, maxOutput: 32_768 },
+  // MiniMax
+  'MiniMax-M2.7': { context: 32_768, maxOutput: 8_192 },
+  'MiniMax-M2.7-highspeed': { context: 32_768, maxOutput: 8_192 },
+  'MiniMax-M2.1': { context: 32_768, maxOutput: 8_192 },
+  'MiniMax-M2.1-highspeed': { context: 32_768, maxOutput: 8_192 },
+  'MiniMax-M2': { context: 32_768, maxOutput: 8_192 },
+  'MiniMax-M2.5': { context: 32_768, maxOutput: 8_192 },
+  'MiniMax-M2.5-highspeed': { context: 32_768, maxOutput: 8_192 },
+  // Cohere
+  'command-a-03-2025': { context: 128_000, maxOutput: 4_096 },
+  'command-r': { context: 4_096, maxOutput: 4_096 },
+  'command-r-plus': { context: 128_000, maxOutput: 4_096 },
+  'command-r-08-2024': { context: 128_000, maxOutput: 4_096 },
+  'command-r-plus-08-2024': { context: 128_000, maxOutput: 4_096 },
+  'command': { context: 4_096, maxOutput: 4_096 },
+  'command-light': { context: 4_096, maxOutput: 4_096 },
+  'command-light-nightly': { context: 4_096, maxOutput: 4_096 },
+  'command-nightly': { context: 4_096, maxOutput: 4_096 },
+  // xAI Grok
+  'grok-3': { context: 131_072, maxOutput: 65_536 },
+  'grok-3-mini': { context: 131_072, maxOutput: 65_536 },
+  'grok-4': { context: 131_072, maxOutput: 65_536 },
+  'grok-4-0709': { context: 131_072, maxOutput: 65_536 },
+  'grok-4-fast-reasoning': { context: 131_072, maxOutput: 65_536 },
+  'grok-4-fast-non-reasoning': { context: 131_072, maxOutput: 65_536 },
+  'grok-4-1-fast-reasoning': { context: 131_072, maxOutput: 65_536 },
+  'grok-4-1-fast-non-reasoning': { context: 131_072, maxOutput: 65_536 },
+  // Tencent Hunyuan
+  'hunyuan-lite': { context: 32_768, maxOutput: 8_192 },
+  'hunyuan-standard': { context: 32_768, maxOutput: 8_192 },
+  'hunyuan-standard-256k': { context: 262_144, maxOutput: 8_192 },
+  'hunyuan-standard-256K': { context: 262_144, maxOutput: 8_192 },
+  'hunyuan-pro': { context: 32_768, maxOutput: 8_192 },
+  // Doubao
+  'doubao-pro-128k': { context: 128_000, maxOutput: 8_192 },
+  'doubao-pro-32k': { context: 32_768, maxOutput: 8_192 },
+  'doubao-pro-4k': { context: 4_096, maxOutput: 4_096 },
+  'doubao-lite-128k': { context: 128_000, maxOutput: 8_192 },
+  'doubao-lite-32k': { context: 32_768, maxOutput: 8_192 },
+  'doubao-lite-4k': { context: 4_096, maxOutput: 4_096 },
+  'doubao-embedding': { context: 8_192, maxOutput: 0 },
+  'doubao-seed-1-6-thinking-250715': { context: 128_000, maxOutput: 8_192 },
+  // Baidu ERNIE
+  'ernie-4.0-8k': { context: 8_192, maxOutput: 8_192 },
+  'ernie-3.5-8k': { context: 8_192, maxOutput: 8_192 },
+  'ernie-3.5-4k-0205': { context: 4_096, maxOutput: 4_096 },
+  'ernie-speed-8k': { context: 8_192, maxOutput: 8_192 },
+  'ernie-speed-128k': { context: 128_000, maxOutput: 8_192 },
+  'ernie-lite-8k-0922': { context: 8_192, maxOutput: 8_192 },
+  'ernie-lite-8k-0308': { context: 8_192, maxOutput: 8_192 },
+  'ernie-tiny-8k': { context: 8_192, maxOutput: 8_192 },
+  // Zhipu GLM
+  'chatglm_turbo': { context: 8_192, maxOutput: 8_192 },
+  'chatglm_pro': { context: 32_768, maxOutput: 8_192 },
+  'chatglm_std': { context: 32_768, maxOutput: 8_192 },
+  'chatglm_lite': { context: 8_192, maxOutput: 8_192 },
+  // Gemini Gemma
+  'gemma-3-1b-it': { context: 8_192, maxOutput: 8_192 },
+  'gemma-3-4b-it': { context: 8_192, maxOutput: 8_192 },
+  'gemma-3-12b-it': { context: 32_768, maxOutput: 32_768 },
+  'gemma-3-27b-it': { context: 128_000, maxOutput: 32_768 },
+  'gemma-3n-e4b-it': { context: 8_192, maxOutput: 8_192 },
+  'gemma-3n-e2b-it': { context: 8_192, maxOutput: 8_192 },
+  // Cloudflare Llama (approximate)
+  '@cf/meta/llama-3.1-8b-instruct': { context: 128_000, maxOutput: 32_768 },
+  '@cf/meta/llama-3-8b-instruct': { context: 8_192, maxOutput: 8_192 },
+}
 
 const TAG_TO_CAPABILITY: Record<string, ModelCapability> = {
   vision: 'vision',
@@ -264,7 +468,13 @@ function inferContextAndOutputs(
     return { context: 4_096, maxOutput: 0 }
   }
 
+  // 1. Exact match on known models
+  const exact = KNOWN_MODEL_CONTEXT[name]
+  if (exact) return exact
+
   const lower = name.toLowerCase()
+
+  // 2. Regex patterns for model families (context from model name hints)
   if (lower.includes('1m') || lower.includes('-long')) {
     return { context: 1_000_000, maxOutput: 65_536 }
   }
@@ -284,7 +494,94 @@ function inferContextAndOutputs(
   if (/gpt-3\.5|claude-2/.test(lower)) {
     return { context: 16_384, maxOutput: 4_096 }
   }
+  // DeepSeek v4
+  if (/deepseek-v4/.test(lower)) {
+    return { context: 64_000, maxOutput: 8_192 }
+  }
+  // DeepSeek v2/v3
+  if (/deepseek/.test(lower)) {
+    return { context: 64_000, maxOutput: 8_192 }
+  }
+  // Qwen
+  if (/qwen|qwq/.test(lower)) {
+    if (/longcontext|-1m/.test(lower)) {
+      return { context: 1_000_000, maxOutput: 8_192 }
+    }
+    return { context: 128_000, maxOutput: 8_192 }
+  }
+  // Mistral
+  if (/mistral|mixtral|codestral|magistral|pixtral/.test(lower)) {
+    if (/large/.test(lower)) {
+      return { context: 128_000, maxOutput: 32_768 }
+    }
+    return { context: 32_768, maxOutput: 8_192 }
+  }
+  // Cohere
+  if (/command-r.*plus|r-plus/.test(lower)) {
+    return { context: 128_000, maxOutput: 4_096 }
+  }
+  // xAI Grok
+  if (/grok-?[34]/.test(lower)) {
+    return { context: 131_072, maxOutput: 65_536 }
+  }
+  // Kimi
+  if (/kimi/.test(lower)) {
+    return { context: 128_000, maxOutput: 32_768 }
+  }
+  // MiniMax
+  if (/minimax|abab/i.test(lower)) {
+    return { context: 32_768, maxOutput: 8_192 }
+  }
+  // Hunyuan
+  if (/hunyuan/.test(lower)) {
+    if (/256k/i.test(lower)) {
+      return { context: 262_144, maxOutput: 8_192 }
+    }
+    return { context: 32_768, maxOutput: 8_192 }
+  }
+  // Doubao
+  if (/doubao/.test(lower)) {
+    if (/-128k/i.test(lower)) return { context: 128_000, maxOutput: 8_192 }
+    if (/-32k/i.test(lower)) return { context: 32_768, maxOutput: 8_192 }
+    return { context: 32_768, maxOutput: 8_192 }
+  }
+  // ERNIE
+  if (/ernie/.test(lower)) {
+    if (/-128k/i.test(lower)) return { context: 128_000, maxOutput: 8_192 }
+    return { context: 8_192, maxOutput: 8_192 }
+  }
+  // GLM / Zhipu
+  if (/chatglm|glm/.test(lower)) {
+    return { context: 32_768, maxOutput: 8_192 }
+  }
+  // Gemma
+  if (/gemma-3-27b/.test(lower)) {
+    return { context: 128_000, maxOutput: 32_768 }
+  }
+  if (/gemma-3-12b/.test(lower)) {
+    return { context: 32_768, maxOutput: 32_768 }
+  }
+  if (/gemma/.test(lower)) {
+    return { context: 8_192, maxOutput: 8_192 }
+  }
+  // Llama on Cloudflare
+  if (/llama.*3\.1.*8b/.test(lower)) {
+    return { context: 128_000, maxOutput: 32_768 }
+  }
+  // GPT-4 (non-turbo)
+  if (/^gpt-4$|^gpt-4-\d{4}/.test(lower) && !/turbo|4o|4\.1|4\.5/.test(lower)) {
+    return { context: 8_192, maxOutput: 8_192 }
+  }
+  // GPT-4-turbo
+  if (/gpt-4-turbo/.test(lower)) {
+    return { context: 128_000, maxOutput: 4_096 }
+  }
+  // GPT-4-32k
+  if (/gpt-4-32k/.test(lower)) {
+    return { context: 32_768, maxOutput: 32_768 }
+  }
 
+  // 3. Fallback: random bucket (deterministic by model name)
   const context = pickFromBuckets(CONTEXT_BUCKETS, rand)
   const maxOutput = Math.min(context, pickFromBuckets(MAX_OUTPUT_BUCKETS, rand))
   return { context, maxOutput }

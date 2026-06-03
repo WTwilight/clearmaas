@@ -68,9 +68,10 @@ func GetPricing(c *gin.Context) {
 	var ratioSource string
 	if exists {
 		uid := userId.(int)
+
+		// Priority 2: User's enterprise pricing sheet
 		sheet, err := service.GetUserActivePricingSheet(uid)
 		if err == nil && sheet != nil {
-			// User has an active enterprise pricing sheet
 			for i := range pricing {
 				ratio, found := service.GetModelDiscount(sheet.Id, pricing[i].ModelName)
 				if found {
@@ -78,10 +79,11 @@ func GetPricing(c *gin.Context) {
 					pricing[i].RatioSource = "enterprise_pricing_sheet"
 				}
 			}
-		ratioSource = "enterprise_pricing_sheet"
-		} else {
-		// No enterprise pricing sheet → check all active platform pricing sheets
-		// When multiple sheets configure the same model, use the lowest discount_value (best discount for user).
+			ratioSource = "enterprise_pricing_sheet"
+		}
+
+		// Priority 3: Platform pricing sheet — fallback when enterprise sheet
+		// doesn't have this model (regardless of whether enterprise sheet exists).
 		platformSheets, err := model.GetAllActivePricingSheetsByEnterpriseIdByType(model.EnterpriseTypePlatform)
 		if err == nil && len(platformSheets) > 0 {
 			for _, platformSheet := range platformSheets {
@@ -99,9 +101,10 @@ func GetPricing(c *gin.Context) {
 					}
 				}
 			}
-			ratioSource = "platform_pricing_sheet"
+			if ratioSource == "" {
+				ratioSource = "platform_pricing_sheet"
+			}
 		}
-	}
 	}
 
 	c.JSON(200, gin.H{
