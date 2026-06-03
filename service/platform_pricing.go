@@ -23,8 +23,10 @@ type SelectableModelInfo struct {
 // GetSelectableModelsForUser returns the list of models available in the user's current effective pricing sheet
 // (used for key creation/edit form).
 // Rules:
-//   - User belongs to an enterprise with an active sheet → return models from enterprise sheet
-//   - Otherwise → return models from platform sheet (enterprise type='platform')
+//   - Models must be set in a platform pricing sheet (platform sheet is the source of truth).
+//   - Enterprise sheet has priority: if a model exists in both enterprise and platform sheets,
+//     the enterprise discount is used.
+//   - Platform sheet is the fallback when a model is not in the enterprise sheet.
 //
 // Data consistency constraint:
 // Since the model list source is consistent with the binding source, there is no risk of
@@ -32,24 +34,89 @@ type SelectableModelInfo struct {
 // That is: during auto-binding and manual binding, a Token's sheet_id can only come from
 // the user's current effective pricing sheet.
 func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
-	modelsMap := make(map[string]SelectableModelInfo)
+	// Step 1: Collect all models from all active platform pricing sheets.
+	// When the same model appears in multiple platform sheets, keep the lowest discount (best for user).
+	platformModelMap := make(map[string]platformModelEntry)
+	platformSheets, err := model.GetAllActivePricingSheetsByEnterpriseIdByType(model.EnterpriseTypePlatform)
+	if err == nil && len(platformSheets) > 0 {
+		for _, platformSheet := range platformSheets {
+			items, err := model.GetPricingItemsBySheetId(platformSheet.Id)
+			if err == nil {
+				for _, item := range items {
+					for _, modelName := range item.Models {
+						existing, exists := platformModelMap[modelName]
+						if !exists || item.DiscountValue < existing.DiscountValue {
+							platformModelMap[modelName] = platformModelEntry{
+								VendorType:    item.VendorType,
+								DiscountValue: item.DiscountValue,
+								SheetId:       platformSheet.Id,
+								SheetName:     platformSheet.Name,
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
-	// Helper: compute price fields for a single model.
-	// Uses the same calculation as model/pricing.go: ratio type uses model_ratio*2 as input unit price.
-	addModelInfo := func(modelName, vendorType, source string, sheetId int, sheetName string, discountValue float64) {
+	// If no platform pricing sheets are configured, return nothing.
+	if len(platformModelMap) == 0 {
+		return nil
+	}
+
+	// Step 2: Collect models from the user's enterprise pricing sheet (if any).
+	// Enterprise models take priority over platform models for the same model.
+	enterpriseModelMap := make(map[string]platformModelEntry)
+	enterpriseSheet, err := model.GetFirstActivePricingSheetByEnterpriseIdByType(model.EnterpriseTypePlatform)
+	enterpriseId, hasEnterprise := model.IsUserInEnterprise(userId)
+	if hasEnterprise && enterpriseId > 0 {
+		enterpriseSheet, err = model.GetFirstActivePricingSheetByEnterpriseId(enterpriseId)
+		if err == nil && enterpriseSheet != nil {
+			items, err := model.GetPricingItemsBySheetId(enterpriseSheet.Id)
+			if err == nil {
+				for _, item := range items {
+					for _, modelName := range item.Models {
+						enterpriseModelMap[modelName] = platformModelEntry{
+							VendorType:    item.VendorType,
+							DiscountValue: item.DiscountValue,
+							SheetId:       enterpriseSheet.Id,
+							SheetName:     enterpriseSheet.Name,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Step 3: Build result — platform models as base, with enterprise discount applied when available.
+	// If a model is in both maps, enterprise takes priority.
+	result := make([]SelectableModelInfo, 0, len(platformModelMap))
+	for modelName, platformEntry := range platformModelMap {
+		vendorType := platformEntry.VendorType
+		discountValue := platformEntry.DiscountValue
+		sheetId := platformEntry.SheetId
+		sheetName := platformEntry.SheetName
+		source := "platform"
+
+		if enterpriseEntry, inEnterprise := enterpriseModelMap[modelName]; inEnterprise {
+			vendorType = enterpriseEntry.VendorType
+			discountValue = enterpriseEntry.DiscountValue
+			sheetId = enterpriseEntry.SheetId
+			sheetName = enterpriseEntry.SheetName
+			source = "enterprise"
+		}
+
 		modelPrice, usePrice := ratio_setting.GetModelPrice(modelName, false)
 		var inputOriginal, outputOriginal, inputDiscounted, outputDiscounted float64
 		var quotaType int
 
 		if usePrice {
-			// Fixed price per request
 			quotaType = 1
 			inputOriginal = modelPrice
 			outputOriginal = 0
 			inputDiscounted = modelPrice * discountValue
 			outputDiscounted = 0
 		} else {
-			// Ratio type: price per 1M tokens = model_ratio * 2
 			quotaType = 0
 			modelRatio, _, _ := ratio_setting.GetModelRatio(modelName)
 			completionRatio := ratio_setting.GetCompletionRatio(modelName)
@@ -59,7 +126,7 @@ func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
 			outputDiscounted = outputOriginal * discountValue
 		}
 
-		modelsMap[modelName] = SelectableModelInfo{
+		result = append(result, SelectableModelInfo{
 			Model:                  modelName,
 			QuotaType:              quotaType,
 			InputOriginalPrice:     inputOriginal,
@@ -68,46 +135,21 @@ func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
 			InputDiscountedPrice:   inputDiscounted,
 			OutputDiscountedPrice:  outputDiscounted,
 			VendorType:             vendorType,
-			Source:                source,
-			SheetId:               sheetId,
-			SheetName:             sheetName,
-		}
+			Source:                 source,
+			SheetId:                sheetId,
+			SheetName:              sheetName,
+		})
 	}
 
-	// Priority 1: user's enterprise sheet
-	enterpriseId, found := model.IsUserInEnterprise(userId)
-	if found && enterpriseId > 0 {
-		if enterpriseSheet, err := model.GetFirstActivePricingSheetByEnterpriseId(enterpriseId); err == nil && enterpriseSheet != nil {
-			if items, err := model.GetPricingItemsBySheetId(enterpriseSheet.Id); err == nil && len(items) > 0 {
-				for _, item := range items {
-					for _, modelName := range item.Models {
-						addModelInfo(modelName, item.VendorType, "enterprise", enterpriseSheet.Id, enterpriseSheet.Name, item.DiscountValue)
-					}
-				}
-				return mapToSlice(modelsMap)
-			}
-		}
-	}
+	return result
+}
 
-	// Priority 2: platform sheet fallback — aggregate all active platform sheets
-	// When multiple sheets configure the same model, use the lowest discount_value (best discount for user).
-	platformSheets, err := model.GetAllActivePricingSheetsByEnterpriseIdByType(model.EnterpriseTypePlatform)
-	if err == nil && len(platformSheets) > 0 {
-		for _, platformSheet := range platformSheets {
-			if items, err := model.GetPricingItemsBySheetId(platformSheet.Id); err == nil {
-				for _, item := range items {
-					for _, modelName := range item.Models {
-						existing, exists := modelsMap[modelName]
-						if !exists || item.DiscountValue < existing.DiscountRatio {
-							addModelInfo(modelName, item.VendorType, "platform", platformSheet.Id, platformSheet.Name, item.DiscountValue)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return mapToSlice(modelsMap)
+// platformModelEntry holds model entry info for platform/enterprise pricing aggregation.
+type platformModelEntry struct {
+	VendorType    string
+	DiscountValue float64
+	SheetId       int
+	SheetName     string
 }
 
 func mapToSlice(m map[string]SelectableModelInfo) []SelectableModelInfo {

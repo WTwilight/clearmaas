@@ -191,6 +191,15 @@ func UpsertTokenPricingModelBinding(userId int, tokenId int, model string, prici
 	}).Error
 }
 
+// GetTokenPricingBindingModels returns all distinct model names bound to a given token.
+func GetTokenPricingBindingModels(tokenId int) ([]string, error) {
+	var models []string
+	err := DB.Model(&TokenPricingModelBinding{}).
+		Where("token_id = ?", tokenId).
+		Pluck("model", &models).Error
+	return models, err
+}
+
 // DeleteTokenPricingModelBindingsBatch hard-deletes all bindings for multiple tokens.
 // Uses Unscoped() to bypass GORM's soft-delete.
 func DeleteTokenPricingModelBindingsBatch(tokenIds []int, tx *gorm.DB) error {

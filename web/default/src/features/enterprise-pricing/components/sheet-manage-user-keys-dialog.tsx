@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Key, Unlink, Search } from 'lucide-react'
+import { Key, Unlink, Search, Bot } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { StatusBadge } from '@/components/status-badge'
 import { LongText } from '@/components/long-text'
+import { Badge } from '@/components/ui/badge'
 import { formatTimestamp } from '@/lib/format'
 import { getSheetTokenBindings, unbindTokenPricingBinding, type SheetTokenBinding } from '../api'
 import { useEnterprisePricing } from './enterprise-pricing-provider'
@@ -155,6 +156,16 @@ export function SheetManageUserKeysDialog() {
                               </LongText>
                             </span>
                           </div>
+                          {binding.models && binding.models.length > 0 && (
+                            <div className='mt-1 flex items-center gap-1.5 flex-wrap'>
+                              <Bot className='h-3 w-3 shrink-0 text-muted-foreground' />
+                              {binding.models.map((model) => (
+                                <Badge key={model} variant='outline' className='text-[10px] px-1.5 py-0 font-mono'>
+                                  {model}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Button

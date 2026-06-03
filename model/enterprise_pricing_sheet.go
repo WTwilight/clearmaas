@@ -166,6 +166,12 @@ func DeletePricingSheet(id int) error {
 	return tx.Commit().Error
 }
 
+// SheetInfo holds pricing sheet identification info used by controller/service layers.
+type SheetInfo struct {
+	SheetId   int
+	SheetName string
+}
+
 // PricingSheetWithEnterprise represents a pricing sheet with enterprise info.
 type PricingSheetWithEnterprise struct {
 	EnterprisePricingSheet
@@ -173,7 +179,7 @@ type PricingSheetWithEnterprise struct {
 }
 
 // GetPricingSheetTokenBindings returns all unique tokens that have bindings referencing this pricing sheet.
-// Returns token info joined with user info and binding timestamps.
+// Each token record includes the list of models bound via token_pricing_model_bindings.
 func GetPricingSheetTokenBindings(sheetId int) ([]*TokenBindingInfo, error) {
 	var results []*TokenBindingInfo
 	// Use GROUP BY to get one row per token, and MIN(created_at) for binding timestamp.
@@ -189,21 +195,32 @@ func GetPricingSheetTokenBindings(sheetId int) ([]*TokenBindingInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Fill in models for each token binding.
+	for _, info := range results {
+		models, err := GetTokenPricingBindingModels(info.Id)
+		if err != nil {
+			return nil, err
+		}
+		info.Models = models
+	}
+
 	return results, nil
 }
 
 // TokenBindingInfo holds token info with binding metadata for display.
 type TokenBindingInfo struct {
-	Id               int    `json:"id"`
-	UserId           int    `json:"user_id"`
-	Username         string `json:"username"`
-	Name             string `json:"name"`
-	Status           int    `json:"status"`
-	Key              string `json:"key"`
-	CreatedTime      int64  `json:"created_time"`
-	AccessedTime     int64  `json:"accessed_time"`
-	TokenGroup       string `json:"token_group"`
-	BindingCreatedAt int64  `json:"binding_created_at"`
+	Id               int      `json:"id"`
+	UserId           int      `json:"user_id"`
+	Username         string   `json:"username"`
+	Name             string   `json:"name"`
+	Status           int      `json:"status"`
+	Key              string   `json:"key"`
+	CreatedTime      int64    `json:"created_time"`
+	AccessedTime     int64    `json:"accessed_time"`
+	TokenGroup       string   `json:"token_group"`
+	BindingCreatedAt int64    `json:"binding_created_at"`
+	Models           []string `json:"models"` // models bound to this token via token_pricing_model_bindings
 }
 
 // GetAllPricingSheets returns all pricing sheets across all enterprises with pagination and optional enterprise filter.

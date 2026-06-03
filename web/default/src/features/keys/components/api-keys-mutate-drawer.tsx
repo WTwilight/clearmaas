@@ -791,7 +791,7 @@ export function ApiKeysMutateDrawer({
                     name='remain_quota_dollars'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{quotaLabel}</FormLabel>
+                        <FormLabel>{t('Totle Quota Limit')}</FormLabel>
                         <FormControl>
                           <Input
                             {...field}
@@ -820,7 +820,7 @@ export function ApiKeysMutateDrawer({
                     name='quota_limit_daily'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{quotaLabel}</FormLabel>
+                        <FormLabel>{t('Daily Quota Limit')}</FormLabel>
                         <FormControl>
                           <Input
                             {...field}
@@ -846,7 +846,7 @@ export function ApiKeysMutateDrawer({
                     name='quota_limit_monthly'
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>{quotaLabel}</FormLabel>
+                        <FormLabel>{t('Monthly Quota Limit')}</FormLabel>
                         <FormControl>
                           <Input
                             {...field}

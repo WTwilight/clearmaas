@@ -329,6 +329,8 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Save the original value before field assignments.
+	prevModelLimitsEnabled := cleanToken.ModelLimitsEnabled
 	if token.Status == common.TokenStatusEnabled {
 		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime <= common.GetTimestamp() && cleanToken.ExpiredTime != -1 {
 			common.ApiErrorI18n(c, i18n.MsgTokenExpiredCannotEnable)
@@ -371,12 +373,25 @@ func UpdateToken(c *gin.Context) {
 		return
 	}
 
-	if len(token.SelectModels) > 0 {
+	// Delete bindings when switching to unlimited model (model_limits_enabled: false),
+	// or when replacing with new select_models.
+	needsBindingCleanup := len(token.SelectModels) > 0 ||
+		(token.ModelLimitsEnabled == false && prevModelLimitsEnabled == true)
+
+	common.SysLog(fmt.Sprintf("DEBUG binding cleanup: selectModels=%d modelLimitsEnabled=%v prevModelLimitsEnabled=%v needsCleanup=%v cleanToken.Id=%d",
+		len(token.SelectModels), token.ModelLimitsEnabled, prevModelLimitsEnabled, needsBindingCleanup, cleanToken.Id))
+
+	if needsBindingCleanup {
+		var count int64
+		tx.Model(&model.TokenPricingModelBinding{}).Where("token_id = ?", cleanToken.Id).Count(&count)
+		common.SysLog(fmt.Sprintf("DEBUG: found %d bindings before delete for token_id=%d", count, cleanToken.Id))
 		if err := model.DeleteTokenPricingModelBindings(cleanToken.Id, tx); err != nil {
 			tx.Rollback()
 			common.ApiError(c, err)
 			return
 		}
+	}
+	if len(token.SelectModels) > 0 {
 		now := time.Now().Unix()
 		for _, m := range token.SelectModels {
 			binding := &model.TokenPricingModelBinding{

@@ -285,6 +285,7 @@ export interface SheetTokenBinding {
   accessed_time: number
   token_group: string
   binding_created_at: number
+  models: string[]
 }
 
 export async function getSheetTokenBindings(
