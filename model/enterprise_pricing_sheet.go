@@ -112,8 +112,8 @@ func GetAllActivePricingSheetsByEnterpriseIdByType(enterpriseType string) ([]*En
 	var sheets []*EnterprisePricingSheet
 	now := time.Now().Unix()
 	err := DB.
-		Joins("JOIN `enterprises` ON `enterprises`.id = enterprise_pricing_sheets.enterprise_id").
-		Where("`enterprises`.`ent_type` = ?", enterpriseType).
+		Joins(`JOIN "enterprises" ON "enterprises".id = enterprise_pricing_sheets.enterprise_id`).
+		Where(`"enterprises"."ent_type" = ?`, enterpriseType).
 		Where("enterprise_pricing_sheets.status = ?", PricingSheetStatusActive).
 		Where("enterprise_pricing_sheets.start_time <= ? AND enterprise_pricing_sheets.end_time >= ?", now, now).
 		Order("enterprise_pricing_sheets.id desc").
