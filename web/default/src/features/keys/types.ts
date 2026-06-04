@@ -45,6 +45,11 @@ export const apiKeySchema = z.object({
   model_limits_enabled: z.boolean(),
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
+  // Period quota fields
+  quota_limit_daily: z.number().optional().default(0),
+  quota_limit_monthly: z.number().optional().default(0),
+  quota_used_daily: z.number().optional().default(0),
+  quota_used_monthly: z.number().optional().default(0),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>

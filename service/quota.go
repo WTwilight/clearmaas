@@ -102,6 +102,15 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		return err
 	}
 
+	now := common.GetTimestamp()
+	if err := ResetTokenPeriodQuotaIfDue(token, now); err != nil {
+		return err
+	}
+	token, err = model.GetTokenByKey(strings.TrimPrefix(relayInfo.TokenKey, "sk-"), false)
+	if err != nil {
+		return err
+	}
+
 	modelName := relayInfo.OriginModelName
 	textInputTokens := usage.InputTokenDetails.TextTokens
 	textOutTokens := usage.OutputTokenDetails.TextTokens
@@ -144,8 +153,30 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 		return fmt.Errorf("user quota is not enough, user quota: %s, need quota: %s", logger.FormatQuota(userQuota), logger.FormatQuota(quota))
 	}
 
-	if !token.UnlimitedQuota && token.RemainQuota < quota {
-		return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+	if !token.UnlimitedQuota {
+		if token.QuotaLimitDaily > 0 && token.QuotaUsedDaily+quota > token.QuotaLimitDaily {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("daily quota exceeded: limit=%d used=%d need=%d",
+					token.QuotaLimitDaily, token.QuotaUsedDaily, quota),
+				types.ErrorCodeTokenDailyQuotaExceeded,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+				types.ErrOptionWithNoRecordErrorLog(),
+			)
+		}
+		if token.QuotaLimitMonthly > 0 && token.QuotaUsedMonthly+quota > token.QuotaLimitMonthly {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("monthly quota exceeded: limit=%d used=%d need=%d",
+					token.QuotaLimitMonthly, token.QuotaUsedMonthly, quota),
+				types.ErrorCodeTokenMonthlyQuotaExceeded,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+				types.ErrOptionWithNoRecordErrorLog(),
+			)
+		}
+		if token.RemainQuota < quota {
+			return fmt.Errorf("token quota is not enough, token remain quota: %s, need quota: %s", logger.FormatQuota(token.RemainQuota), logger.FormatQuota(quota))
+		}
 	}
 
 	err = PostConsumeQuota(relayInfo, quota, 0, false)

@@ -193,6 +193,61 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
       meta: { label: t('Quota') },
     },
     {
+      id: 'period_quota',
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title={t('Period Quota')} />
+      ),
+      cell: ({ row }) => {
+        const apiKey = row.original
+        const hasDaily = (apiKey.quota_limit_daily ?? 0) > 0
+        const hasMonthly = (apiKey.quota_limit_monthly ?? 0) > 0
+
+        if (!hasDaily && !hasMonthly) return null
+
+        return (
+          <Tooltip>
+            <TooltipTrigger render={<div className='space-y-0.5' />}>
+              {hasDaily && (
+                <div className='flex gap-1 text-xs'>
+                  <span className='text-muted-foreground'>{t('Daily')}:</span>
+                  <span className='tabular-nums'>
+                    {formatQuota(apiKey.quota_used_daily ?? 0)}/{formatQuota(apiKey.quota_limit_daily ?? 0)}
+                  </span>
+                </div>
+              )}
+              {hasMonthly && (
+                <div className='flex gap-1 text-xs'>
+                  <span className='text-muted-foreground'>{t('Monthly')}:</span>
+                  <span className='tabular-nums'>
+                    {formatQuota(apiKey.quota_used_monthly ?? 0)}/{formatQuota(apiKey.quota_limit_monthly ?? 0)}
+                  </span>
+                </div>
+              )}
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className='space-y-1 text-xs'>
+                {hasDaily && (
+                  <>
+                    <div>{t('Daily Limit:')}</div>
+                    <div>{t('Used:')} {formatQuota(apiKey.quota_used_daily ?? 0)}</div>
+                    <div>{t('Remaining:')} {formatQuota((apiKey.quota_limit_daily ?? 0) - (apiKey.quota_used_daily ?? 0))}</div>
+                  </>
+                )}
+                {hasMonthly && (
+                  <>
+                    <div>{t('Monthly Limit:')}</div>
+                    <div>{t('Used:')} {formatQuota(apiKey.quota_used_monthly ?? 0)}</div>
+                    <div>{t('Remaining:')} {formatQuota((apiKey.quota_limit_monthly ?? 0) - (apiKey.quota_used_monthly ?? 0))}</div>
+                  </>
+                )}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )
+      },
+      meta: { label: t('Period Quota'), mobileHidden: true },
+    },
+    {
       accessorKey: 'group',
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('Group')} />
