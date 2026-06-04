@@ -456,8 +456,7 @@ export function formatQuotaWithCurrency(
   if (quota == null || Number.isNaN(quota)) return '-'
 
   const { config } = getCurrencyDisplay()
-  const quotaPerUnit = config.quotaPerUnit > 0 ? config.quotaPerUnit : 500_000
-  const amountUSD = quota / quotaPerUnit
+  const amountUSD = quota / config.quotaPerUnit
   return formatCurrencyFromUSD(amountUSD, options)
 }
 

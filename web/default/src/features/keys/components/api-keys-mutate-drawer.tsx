@@ -844,12 +844,11 @@ export function ApiKeysMutateDrawer({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Period used: {{used}}, remaining: {{remaining}} / {{limit}} (UTC, resets at 00:00)', {
+                      {t('Used: {{used}} / Remaining: {{remaining}}', {
                         used: formatQuota(form.watch('quota_used_daily') ?? 0),
                         remaining: formatQuota(
                           Math.max(0, (form.watch('quota_limit_daily') ?? 0) - (form.watch('quota_used_daily') ?? 0))
                         ),
-                        limit: formatQuota(form.watch('quota_limit_daily') ?? 0),
                       })}
                     </FormDescription>
                     <FormMessage />
@@ -877,12 +876,11 @@ export function ApiKeysMutateDrawer({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Period used: {{used}}, remaining: {{remaining}} / {{limit}} (UTC, resets on the 1st)', {
+                      {t('Used: {{used}} / Remaining: {{remaining}}', {
                         used: formatQuota(form.watch('quota_used_monthly') ?? 0),
                         remaining: formatQuota(
                           Math.max(0, (form.watch('quota_limit_monthly') ?? 0) - (form.watch('quota_used_monthly') ?? 0))
                         ),
-                        limit: formatQuota(form.watch('quota_limit_monthly') ?? 0),
                       })}
                     </FormDescription>
                     <FormMessage />

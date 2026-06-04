@@ -87,9 +87,8 @@ export function parseQuotaFromDollars(amount: number): number {
     meta.kind === 'currency' || meta.kind === 'custom' ? meta.exchangeRate : 1
 
   const usdAmount = exchangeRate > 0 ? amount / exchangeRate : amount
-  const quotaPerUnit = config.quotaPerUnit > 0 ? config.quotaPerUnit : 500_000
 
-  return Math.round(usdAmount * quotaPerUnit)
+  return Math.round(usdAmount * config.quotaPerUnit)
 }
 
 /**
@@ -103,8 +102,7 @@ export function quotaUnitsToDollars(units: number): number {
     return units
   }
 
-  const quotaPerUnit = config.quotaPerUnit > 0 ? config.quotaPerUnit : 500_000
-  const usdAmount = units / quotaPerUnit
+  const usdAmount = units / config.quotaPerUnit
   const exchangeRate =
     meta.kind === 'currency' || meta.kind === 'custom' ? meta.exchangeRate : 1
 
