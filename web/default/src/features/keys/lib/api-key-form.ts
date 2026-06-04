@@ -32,6 +32,8 @@ export const apiKeyFormSchema = z.object({
   unlimited_quota: z.boolean(),
   quota_limit_daily: z.number().min(0).optional().default(0),
   quota_limit_monthly: z.number().min(0).optional().default(0),
+  quota_used_daily: z.number().min(0).optional().default(0),
+  quota_used_monthly: z.number().min(0).optional().default(0),
   model_limits: z.array(z.string()),
   allow_ips: z.string().optional(),
   group: z.string().optional(),
@@ -52,6 +54,8 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   unlimited_quota: true,
   quota_limit_daily: 0,
   quota_limit_monthly: 0,
+  quota_used_daily: 0,
+  quota_used_monthly: 0,
   model_limits: [],
   allow_ips: '',
   group: DEFAULT_GROUP,
@@ -112,8 +116,14 @@ export function transformApiKeyToFormDefaults(
         ? new Date(apiKey.expired_time * 1000)
         : undefined,
     unlimited_quota: apiKey.unlimited_quota,
-    quota_limit_daily: quotaUnitsToDollars((apiKey as any).quota_limit_daily ?? 0),
-    quota_limit_monthly: quotaUnitsToDollars((apiKey as any).quota_limit_monthly ?? 0),
+    quota_limit_daily: apiKey.unlimited_quota
+      ? 0
+      : quotaUnitsToDollars((apiKey as any).quota_limit_daily ?? 0),
+    quota_limit_monthly: apiKey.unlimited_quota
+      ? 0
+      : quotaUnitsToDollars((apiKey as any).quota_limit_monthly ?? 0),
+    quota_used_daily: quotaUnitsToDollars((apiKey as any).quota_used_daily ?? 0),
+    quota_used_monthly: quotaUnitsToDollars((apiKey as any).quota_used_monthly ?? 0),
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],

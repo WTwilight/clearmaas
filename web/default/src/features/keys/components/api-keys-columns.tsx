@@ -211,7 +211,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
                 <div className='flex gap-1 text-xs'>
                   <span className='text-muted-foreground'>{t('Daily')}:</span>
                   <span className='tabular-nums'>
-                    {formatQuota(apiKey.quota_used_daily ?? 0)}/{formatQuota(apiKey.quota_limit_daily ?? 0)}
+                    {formatQuota((apiKey.quota_limit_daily ?? 0) - (apiKey.quota_used_daily ?? 0))} / {formatQuota(apiKey.quota_limit_daily ?? 0)}
                   </span>
                 </div>
               )}
@@ -219,7 +219,7 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
                 <div className='flex gap-1 text-xs'>
                   <span className='text-muted-foreground'>{t('Monthly')}:</span>
                   <span className='tabular-nums'>
-                    {formatQuota(apiKey.quota_used_monthly ?? 0)}/{formatQuota(apiKey.quota_limit_monthly ?? 0)}
+                    {formatQuota((apiKey.quota_limit_monthly ?? 0) - (apiKey.quota_used_monthly ?? 0))} / {formatQuota(apiKey.quota_limit_monthly ?? 0)}
                   </span>
                 </div>
               )}
@@ -228,14 +228,14 @@ export function useApiKeysColumns(): ColumnDef<ApiKey>[] {
               <div className='space-y-1 text-xs'>
                 {hasDaily && (
                   <>
-                    <div>{t('Daily Limit:')}</div>
+                    <div>{t('Daily Limit:')} {formatQuota(apiKey.quota_limit_daily ?? 0)}</div>
                     <div>{t('Used:')} {formatQuota(apiKey.quota_used_daily ?? 0)}</div>
                     <div>{t('Remaining:')} {formatQuota((apiKey.quota_limit_daily ?? 0) - (apiKey.quota_used_daily ?? 0))}</div>
                   </>
                 )}
                 {hasMonthly && (
                   <>
-                    <div>{t('Monthly Limit:')}</div>
+                    <div>{t('Monthly Limit:')} {formatQuota(apiKey.quota_limit_monthly ?? 0)}</div>
                     <div>{t('Used:')} {formatQuota(apiKey.quota_used_monthly ?? 0)}</div>
                     <div>{t('Remaining:')} {formatQuota((apiKey.quota_limit_monthly ?? 0) - (apiKey.quota_used_monthly ?? 0))}</div>
                   </>

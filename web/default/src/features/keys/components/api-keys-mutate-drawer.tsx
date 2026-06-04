@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
@@ -433,6 +434,14 @@ export function ApiKeysMutateDrawer({
   const selectedGroup = form.watch('group')
   const unlimitedQuota = form.watch('unlimited_quota')
 
+  // When unlimited quota is enabled, reset daily/monthly limits to 0
+  useEffect(() => {
+    if (unlimitedQuota) {
+      form.setValue('quota_limit_daily', 0, { shouldValidate: false })
+      form.setValue('quota_limit_monthly', 0, { shouldValidate: false })
+    }
+  }, [unlimitedQuota, form])
+
   return (
     <Sheet
       open={open}
@@ -785,89 +794,101 @@ export function ApiKeysMutateDrawer({
               icon={WalletCards}
             >
               {!unlimitedQuota && (
-                <>
-                  <FormField
-                    control={form.control}
-                    name='remain_quota_dollars'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Totle Quota Limit')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            step={tokensOnly ? 1 : 0.01}
-                            placeholder={quotaPlaceholder}
-                            onChange={(e) =>
-                              field.onChange(parseFloat(e.target.value) || 0)
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {tokensOnly
-                            ? t('Enter the quota amount in tokens')
-                            : t('Enter the quota amount in {{currency}}', {
-                                currency: currencyLabel,
-                              })}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name='quota_limit_daily'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Daily Quota Limit')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            step={1}
-                            min={0}
-                            placeholder={t('0 = unlimited')}
-                            onChange={(e) =>
-                              field.onChange(parseInt(e.target.value, 10) || 0)
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t('Maximum per day (UTC, resets at 00:00)')}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name='quota_limit_monthly'
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('Monthly Quota Limit')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type='number'
-                            step={1}
-                            min={0}
-                            placeholder={t('0 = unlimited')}
-                            onChange={(e) =>
-                              field.onChange(parseInt(e.target.value, 10) || 0)
-                            }
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          {t('Maximum per month (UTC, resets on the 1st)')}
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
+                <FormField
+                  control={form.control}
+                  name='remain_quota_dollars'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Totle Quota Limit')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          step={tokensOnly ? 1 : 0.01}
+                          placeholder={quotaPlaceholder}
+                          onChange={(e) =>
+                            field.onChange(parseFloat(e.target.value) || 0)
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {tokensOnly
+                          ? t('Enter the quota amount in tokens')
+                          : t('Enter the quota amount in {{currency}}', {
+                              currency: currencyLabel,
+                            })}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               )}
+
+              <FormField
+                control={form.control}
+                name='quota_limit_daily'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Daily Quota Limit')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        step={1}
+                        min={0}
+                        placeholder={t('0 = unlimited')}
+                        disabled={unlimitedQuota}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Period used: {{used}}, remaining: {{remaining}} / {{limit}} (UTC, resets at 00:00)', {
+                        used: formatQuota(form.watch('quota_used_daily') ?? 0),
+                        remaining: formatQuota(
+                          Math.max(0, (form.watch('quota_limit_daily') ?? 0) - (form.watch('quota_used_daily') ?? 0))
+                        ),
+                        limit: formatQuota(form.watch('quota_limit_daily') ?? 0),
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='quota_limit_monthly'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Monthly Quota Limit')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        step={1}
+                        min={0}
+                        placeholder={t('0 = unlimited')}
+                        disabled={unlimitedQuota}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Period used: {{used}}, remaining: {{remaining}} / {{limit}} (UTC, resets on the 1st)', {
+                        used: formatQuota(form.watch('quota_used_monthly') ?? 0),
+                        remaining: formatQuota(
+                          Math.max(0, (form.watch('quota_limit_monthly') ?? 0) - (form.watch('quota_used_monthly') ?? 0))
+                        ),
+                        limit: formatQuota(form.watch('quota_limit_monthly') ?? 0),
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

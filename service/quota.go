@@ -623,23 +623,39 @@ func checkAndSendSubscriptionQuotaNotify(relayInfo *relaycommon.RelayInfo) {
 // 只有当 reset_last < 当前周期起始时间时才写 DB（惰性重置）
 func ResetTokenPeriodQuotaIfDue(token *model.Token, now int64) error {
 	dailyStart := getDailyPeriodStart(now)
-	if token.QuotaDailyResetLast < dailyStart {
-		if err := model.DB.Model(token).Updates(map[string]interface{}{
-			"quota_used_daily":       0,
-			"quota_daily_reset_last": dailyStart,
-		}).Error; err != nil {
-			return err
-		}
-	}
 	monthlyStart := getMonthlyPeriodStart(now)
-	if token.QuotaMonthlyResetLast < monthlyStart {
-		if err := model.DB.Model(token).Updates(map[string]interface{}{
-			"quota_used_monthly":       0,
-			"quota_monthly_reset_last": monthlyStart,
-		}).Error; err != nil {
-			return err
-		}
+
+	needsDailyReset := token.QuotaDailyResetLast < dailyStart
+	needsMonthlyReset := token.QuotaMonthlyResetLast < monthlyStart
+
+	if !needsDailyReset && !needsMonthlyReset {
+		return nil
 	}
+
+	updates := make(map[string]interface{})
+	if needsDailyReset {
+		updates["quota_used_daily"] = 0
+		updates["quota_daily_reset_last"] = dailyStart
+	}
+	if needsMonthlyReset {
+		updates["quota_used_monthly"] = 0
+		updates["quota_monthly_reset_last"] = monthlyStart
+	}
+
+	if err := model.DB.Model(token).Updates(updates).Error; err != nil {
+		return err
+	}
+
+	// 同步更新内存对象，避免调用方需要额外 reload
+	if needsDailyReset {
+		token.QuotaUsedDaily = 0
+		token.QuotaDailyResetLast = dailyStart
+	}
+	if needsMonthlyReset {
+		token.QuotaUsedMonthly = 0
+		token.QuotaMonthlyResetLast = monthlyStart
+	}
+
 	return nil
 }
 
