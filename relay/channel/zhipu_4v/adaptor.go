@@ -50,6 +50,9 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	}
 	specialPlan, hasSpecialPlan := channelconstant.ChannelSpecialBases[baseURL]
 
+	// 官方默认 base URL
+	officialBaseURL := channelconstant.ChannelBaseURLs[channelconstant.ChannelTypeZhipu_v4]
+
 	switch info.RelayFormat {
 	case types.RelayFormatClaude:
 		if hasSpecialPlan && specialPlan.ClaudeBaseURL != "" {
@@ -62,15 +65,27 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
 				return fmt.Sprintf("%s/embeddings", specialPlan.OpenAIBaseURL), nil
 			}
+			// 第三方代理使用标准 OpenAI 路径；官方追加 /api/paas/v4
+			if baseURL != officialBaseURL {
+				return fmt.Sprintf("%s/v1/embeddings", baseURL), nil
+			}
 			return fmt.Sprintf("%s/api/paas/v4/embeddings", baseURL), nil
 		case relayconstant.RelayModeImagesGenerations:
 			if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
 				return fmt.Sprintf("%s/images/generations", specialPlan.OpenAIBaseURL), nil
 			}
+			// 第三方代理使用标准 OpenAI 路径；官方追加 /api/paas/v4
+			if baseURL != officialBaseURL {
+				return fmt.Sprintf("%s/v1/images/generations", baseURL), nil
+			}
 			return fmt.Sprintf("%s/api/paas/v4/images/generations", baseURL), nil
 		default:
 			if hasSpecialPlan && specialPlan.OpenAIBaseURL != "" {
 				return fmt.Sprintf("%s/chat/completions", specialPlan.OpenAIBaseURL), nil
+			}
+			// 第三方代理使用标准 OpenAI 路径；官方追加 /api/paas/v4
+			if baseURL != officialBaseURL {
+				return fmt.Sprintf("%s/v1/chat/completions", baseURL), nil
 			}
 			return fmt.Sprintf("%s/api/paas/v4/chat/completions", baseURL), nil
 		}
