@@ -103,6 +103,8 @@ export const VENDOR_TYPES = {
   mistral: { labelKey: 'Mistral', patterns: ['mistral-', 'mixtral-'] },
   meta: { labelKey: 'Meta', patterns: ['llama-', 'meta-'] },
   cohere: { labelKey: 'Cohere', patterns: ['command-', 'cohere-'] },
+  zhipu: { labelKey: 'Zhipu', patterns: ['glm-'] },
+  minimax: { labelKey: 'MiniMax', patterns: ['minimax-'] },
 } as const
 
 export type VendorType = keyof typeof VENDOR_TYPES
@@ -123,6 +125,8 @@ function doResolveVendorType(modelName: string): VendorType | null {
   if (hasAny(model, VENDOR_TYPES.mistral.patterns)) return 'mistral'
   if (hasAny(model, VENDOR_TYPES.meta.patterns)) return 'meta'
   if (hasAny(model, VENDOR_TYPES.cohere.patterns)) return 'cohere'
+  if (hasAny(model, VENDOR_TYPES.zhipu.patterns)) return 'zhipu'
+  if (hasAny(model, VENDOR_TYPES.minimax.patterns)) return 'minimax'
   return null
 }
 
