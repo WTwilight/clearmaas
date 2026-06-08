@@ -118,12 +118,12 @@ export function transformApiKeyToFormDefaults(
     unlimited_quota: apiKey.unlimited_quota,
     quota_limit_daily: apiKey.unlimited_quota
       ? 0
-      : ((apiKey as any).quota_limit_daily ?? 0),
+      : quotaUnitsToDollars(((apiKey as any).quota_limit_daily ?? 0)),
     quota_limit_monthly: apiKey.unlimited_quota
       ? 0
-      : ((apiKey as any).quota_limit_monthly ?? 0),
-    quota_used_daily: ((apiKey as any).quota_used_daily ?? 0),
-    quota_used_monthly: ((apiKey as any).quota_used_monthly ?? 0),
+      : quotaUnitsToDollars(((apiKey as any).quota_limit_monthly ?? 0)),
+    quota_used_daily: quotaUnitsToDollars(((apiKey as any).quota_used_daily ?? 0)),
+    quota_used_monthly: quotaUnitsToDollars(((apiKey as any).quota_used_monthly ?? 0)),
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],

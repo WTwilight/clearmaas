@@ -212,6 +212,7 @@ export function SheetTable({ onEnterpriseFilterChange }: SheetTableProps) {
       )}
       skeletonKeyPrefix='sheet-skeleton'
       toolbar={toolbar}
+      paginationInFooter={false}
     />
   )
 }

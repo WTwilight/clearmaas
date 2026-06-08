@@ -120,6 +120,7 @@ export function SupplierTable() {
       toolbarProps={{
         searchPlaceholder: t('Filter by name...'),
       }}
+      paginationInFooter={false}
     />
   );
 }

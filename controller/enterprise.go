@@ -524,13 +524,30 @@ func ListPricingItems(c *gin.Context) {
 		return
 	}
 
-	items, err := model.GetPricingItemsBySheetId(sheetId)
+	p, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if p < 1 {
+		p = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+
+	items, total, err := model.GetPricingItemsBySheetIdPaginated(sheetId, p, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"items":     items,
+		"total":     total,
+		"page":      p,
+		"page_size": pageSize,
+	}})
 }
 
 func AddPricingItem(c *gin.Context) {

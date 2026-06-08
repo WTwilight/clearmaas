@@ -31,7 +31,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
-import { formatQuota } from '@/lib/format'
+import { formatCurrencyUSD } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
@@ -845,8 +845,8 @@ export function ApiKeysMutateDrawer({
                     </FormControl>
                     <FormDescription>
                       {t('Used: {{used}} / Remaining: {{remaining}}', {
-                        used: formatQuota(form.watch('quota_used_daily') ?? 0),
-                        remaining: formatQuota(
+                        used: formatCurrencyUSD(form.watch('quota_used_daily') ?? 0),
+                        remaining: formatCurrencyUSD(
                           Math.max(0, (form.watch('quota_limit_daily') ?? 0) - (form.watch('quota_used_daily') ?? 0))
                         ),
                       })}
@@ -877,8 +877,8 @@ export function ApiKeysMutateDrawer({
                     </FormControl>
                     <FormDescription>
                       {t('Used: {{used}} / Remaining: {{remaining}}', {
-                        used: formatQuota(form.watch('quota_used_monthly') ?? 0),
-                        remaining: formatQuota(
+                        used: formatCurrencyUSD(form.watch('quota_used_monthly') ?? 0),
+                        remaining: formatCurrencyUSD(
                           Math.max(0, (form.watch('quota_limit_monthly') ?? 0) - (form.watch('quota_used_monthly') ?? 0))
                         ),
                       })}

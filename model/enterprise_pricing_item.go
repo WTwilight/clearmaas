@@ -116,3 +116,18 @@ func GetPricingItemBySheetIdAndModelName(sheetId int, modelName string) (*Enterp
 func DeletePricingItem(id int) error {
 	return DB.Delete(&EnterprisePricingItem{}, id).Error
 }
+
+// GetPricingItemsBySheetIdPaginated returns pricing items for a pricing sheet with pagination.
+func GetPricingItemsBySheetIdPaginated(sheetId, page, pageSize int) ([]*EnterprisePricingItem, int64, error) {
+	var items []*EnterprisePricingItem
+	var total int64
+	if err := DB.Model(&EnterprisePricingItem{}).Where("pricing_sheet_id = ?", sheetId).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	err := DB.Where("pricing_sheet_id = ?", sheetId).Order("id ASC").Offset(offset).Limit(pageSize).Find(&items).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
+}

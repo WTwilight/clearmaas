@@ -134,6 +134,7 @@ export function EnterpriseTable() {
       toolbarProps={{
         searchPlaceholder: t('Filter by name...'),
       }}
+      paginationInFooter={false}
     />
   )
 }

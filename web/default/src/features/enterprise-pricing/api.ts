@@ -170,9 +170,13 @@ export async function getAllUserBindings(): Promise<
 // ============================================================================
 
 export async function getPricingItems(
-  sheetId: number
-): Promise<ApiResponse<PricingItem[]>> {
-  const res = await api.get(`/api/pricing-sheet/${sheetId}/item`)
+  sheetId: number,
+  params: { p?: number; page_size?: number } = {}
+): Promise<{ success: boolean; data?: { items: PricingItem[]; total: number; page: number; page_size: number }; message?: string }> {
+  const { p = 1, page_size = 20 } = params
+  const res = await api.get(`/api/pricing-sheet/${sheetId}/item`, {
+    params: { p, page_size },
+  })
   return res.data
 }
 
