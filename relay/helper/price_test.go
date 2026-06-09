@@ -77,7 +77,7 @@ func TestHandleGroupRatio_NoSpecialRule(t *testing.T) {
 		UsingGroup:      "default",
 	}
 
-	result := HandleGroupRatio(c, info)
+	result, _ := HandleGroupRatio(c, info)
 	require.Equal(t, 1.0, result.GroupRatio, "no special ratio → default ratio = 1.0")
 	require.False(t, result.HasSpecialRatio)
 }
@@ -95,7 +95,7 @@ func TestHandleGroupRatio_AutoGroup(t *testing.T) {
 
 	// Simulate auto group selection
 	c.Set("auto_group", "vip")
-	result := HandleGroupRatio(c, info)
+	result, _ := HandleGroupRatio(c, info)
 
 	// UsingGroup should be updated to the auto group
 	require.Equal(t, "vip", info.UsingGroup)
@@ -116,7 +116,7 @@ func TestHandleGroupRatio_WithSpecialRule(t *testing.T) {
 	// Note: GetGroupGroupRatio reads from config; in a test environment without
 	// the config populated, it may return (0, false). We test the function
 	// doesn't panic and returns a valid struct.
-	result := HandleGroupRatio(c, info)
+	result, _ := HandleGroupRatio(c, info)
 	require.NotZero(t, result.GroupRatio)
 }
 
@@ -131,7 +131,7 @@ func TestHandleGroupRatio_DefaultValues(t *testing.T) {
 		UsingGroup:      "unknown-group",
 	}
 
-	result := HandleGroupRatio(c, info)
+	result, _ := HandleGroupRatio(c, info)
 	require.Equal(t, 1.0, result.GroupRatio, "unknown group → default ratio = 1.0")
 }
 

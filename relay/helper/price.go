@@ -2,6 +2,7 @@ package helper
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -36,10 +37,11 @@ func modelPriceNotConfiguredError(modelName string, userId int) error {
 // https://docs.claude.com/en/docs/build-with-claude/prompt-caching#1-hour-cache-duration
 const claudeCacheCreation1hMultiplier = 6 / 3.75
 
-// HandleGroupRatio checks for "auto_group" in the context and updates the group ratio and relayInfo.UsingGroup if present.
-// It also checks for enterprise pricing sheet discounts which take precedence over group ratios,
-// and for supplier pricing sheet costs which are independent of customer billing.
-func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.GroupRatioInfo {
+// HandleGroupRatio returns the billing ratio info and any error.
+// When ModelLimitsEnabled=true and the model is in ModelLimits but not in the binding table,
+// it returns a 403 error indicating a data consistency violation.
+// The relay layer will catch this error and return an HTTP 403 response.
+func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) (types.GroupRatioInfo, error) {
 	groupRatioInfo := types.GroupRatioInfo{
 		GroupRatio:        1.0, // default ratio
 		GroupSpecialRatio: -1,
@@ -55,63 +57,164 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 	// check user group special ratio
 	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
 	if ok {
-		// user group special ratio
 		groupRatioInfo.GroupSpecialRatio = userGroupRatio
 		groupRatioInfo.GroupRatio = userGroupRatio
 		groupRatioInfo.HasSpecialRatio = true
 		groupRatioInfo.RatioSource = "group_group_ratio"
 	} else {
-		// normal group ratio
 		groupRatioInfo.GroupRatio = ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
 		groupRatioInfo.RatioSource = "group_ratio"
 	}
 
-	// check enterprise pricing sheet - takes precedence over group ratios
-	groupRatioInfo = HandleEnterprisePricingSheet(ctx, relayInfo, groupRatioInfo)
+	// Priority 1: Token Pricing Binding (highest)
+	// Only applies when token.ModelLimitsEnabled=true AND model is in ModelLimits whitelist.
+	// Core invariant: when ModelLimitsEnabled=true, ModelLimits whitelist and binding table must stay in sync.
+	//   - If model is in ModelLimits but NOT in binding table → 403 (data inconsistency)
+	//   - If model is NOT in ModelLimits → skip Token binding, fall through to enterprise/platform
+	//   - When ModelLimitsEnabled=false, binding table data is preserved but not used for billing
+	// Read from gin context (set by auth middleware).
+	modelLimitsEnabled := common.GetContextKeyBool(ctx, constant.ContextKeyTokenModelLimitEnabled)
+	modelLimitsAllowed := false
+	if modelLimitsEnabled {
+		modelLimitsMapRaw, _ := ctx.Get(string(constant.ContextKeyTokenModelLimit))
+		modelLimitsMap, _ := modelLimitsMapRaw.(map[string]bool)
+		modelLimitsAllowed = modelLimitsMap != nil && modelLimitsMap[relayInfo.OriginModelName]
+	}
 
-	// check supplier pricing sheet - records supplier cost independently
+	if modelLimitsEnabled && modelLimitsAllowed {
+		// Model is in both ModelLimits whitelist and binding table → apply Token binding discount
+		// OR model is in ModelLimits but NOT in binding table → 403
+		modelBinding, err := model.GetTokenPricingModelBindingByTokenAndModel(
+			relayInfo.TokenId,
+			relayInfo.OriginModelName,
+		)
+		if err != nil {
+			// Database query error (not "not found"). Log and fall back conservatively.
+			logger.LogError(ctx, fmt.Sprintf("token binding query error: %v", err))
+			var fallbackErr error
+			groupRatioInfo, fallbackErr = handleEnterpriseAndGroupRatio(ctx, relayInfo, groupRatioInfo)
+			if fallbackErr != nil {
+				return groupRatioInfo, fallbackErr
+			}
+		} else if modelBinding != nil {
+			pricingItem, err := model.GetPricingItemBySheetIdAndModelName(
+				modelBinding.PricingSheetId,
+				relayInfo.OriginModelName,
+			)
+			if err != nil {
+				logger.LogError(ctx, fmt.Sprintf("pricing item query error: %v", err))
+				var fallbackErr error
+				groupRatioInfo, fallbackErr = handleEnterpriseAndGroupRatio(ctx, relayInfo, groupRatioInfo)
+				if fallbackErr != nil {
+					return groupRatioInfo, fallbackErr
+				}
+			} else if pricingItem != nil {
+				groupRatioInfo.EnterpriseSheetId = modelBinding.PricingSheetId
+				if pricingItem.DiscountType == model.DiscountTypePerCall {
+					groupRatioInfo.PerCallPriceSheet = pricingItem.DiscountValue
+				} else {
+					groupRatioInfo.GroupRatio = pricingItem.DiscountValue
+				}
+				groupRatioInfo.RatioSource = "token_pricing_binding"
+			}
+			// Whether or not pricingItem was found, do not fall through to enterprise/platform chain
+		} else {
+			// Model is in ModelLimits but NOT in binding table → 403 (data inconsistency)
+			return groupRatioInfo, types.NewErrorWithStatusCode(
+				fmt.Errorf("model '%s' is in token model limits but not found in pricing binding", relayInfo.OriginModelName),
+				types.ErrorCodeTokenModelLimitInconsistent,
+				http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(),
+			)
+		}
+	} else {
+		// ModelLimitsEnabled=false OR model not in ModelLimits whitelist → skip Token binding chain
+		var fallbackErr error
+		groupRatioInfo, fallbackErr = handleEnterpriseAndGroupRatio(ctx, relayInfo, groupRatioInfo)
+		if fallbackErr != nil {
+			return groupRatioInfo, fallbackErr
+		}
+	}
+
+	// Priority 5: Supplier pricing sheet cost tracking (does not affect customer billing)
 	groupRatioInfo = HandleSupplierPricingSheet(ctx, relayInfo, groupRatioInfo)
 
-	return groupRatioInfo
+	return groupRatioInfo, nil
 }
 
-// HandleEnterprisePricingSheet checks if the user is bound to an enterprise with an active pricing sheet
-// and overrides the group ratio if a model discount is found.
-// Channel binding is not required for enterprise pricing to apply — it is a routing constraint
-// (which channels can use this sheet), not a billing condition.
-// If the model is not in the sheet, the system falls back to group ratio.
-func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
+// handleEnterpriseAndGroupRatio handles billing priorities 2-4:
+//   - Priority 2: User's enterprise pricing sheet
+//   - Priority 3: Platform pricing sheet (fallback when enterprise sheet doesn't have the model)
+//   - Priority 4: Group ratio (fallback when neither sheet has the model)
+//
+// Returns (groupRatioInfo, error). When error is non-nil, the caller should return it immediately.
+func handleEnterpriseAndGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, groupRatioInfo types.GroupRatioInfo) (types.GroupRatioInfo, error) {
+	// Priority 2: User's enterprise pricing sheet
 	sheet, err := getUserActivePricingSheetForBilling(relayInfo.UserId)
-	if err != nil || sheet == nil {
-		logger.LogInfo(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: userId=%d, no active enterprise sheet found (user not in enterprise or enterprise disabled)", relayInfo.UserId))
-		baseRatioInfo.RatioSource = "group_ratio"
-		return baseRatioInfo
+	if err != nil {
+		return groupRatioInfo, types.NewErrorWithStatusCode(
+			err, types.ErrorCodeModelPriceError, http.StatusInternalServerError,
+			types.ErrOptionWithSkipRetry(),
+		)
 	}
-	logger.LogInfo(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: userId=%d, found enterprise sheet id=%d name=%s", relayInfo.UserId, sheet.Id, sheet.Name))
-
-	pricingItem := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
-	if pricingItem.Found && pricingItem.Item != nil {
-		logger.LogInfo(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: model=%s matched in sheet id=%d, discountType=%s discountValue=%.4f", relayInfo.OriginModelName, sheet.Id, pricingItem.Item.DiscountType, pricingItem.Item.DiscountValue))
-		if pricingItem.Item.DiscountType == model.DiscountTypePerCall {
-			baseRatioInfo.PerCallPriceSheet = pricingItem.Item.DiscountValue
-			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
-			baseRatioInfo.EnterpriseSheetId = sheet.Id
-			baseRatioInfo.EnterpriseSheetName = sheet.Name
-			logger.LogInfo(ctx, fmt.Sprintf("[BILLING] HandleEnterprisePricingSheet: enterprise pricing sheet applied (per_call): sheetId=%d sheet=%s price=%.4f", sheet.Id, sheet.Name, pricingItem.Item.DiscountValue))
-		} else {
-			baseRatioInfo.GroupRatio = pricingItem.Item.DiscountValue
-			baseRatioInfo.RatioSource = "enterprise_pricing_sheet"
-			baseRatioInfo.EnterpriseSheetId = sheet.Id
-			baseRatioInfo.EnterpriseSheetName = sheet.Name
-			logger.LogInfo(ctx, fmt.Sprintf("[BILLING] HandleEnterprisePricingSheet: enterprise pricing sheet applied: sheetId=%d sheet=%s ratio=%.4f", sheet.Id, sheet.Name, pricingItem.Item.DiscountValue))
+	if sheet != nil {
+		pricingItemResult := getPricingItemResult(sheet.Id, relayInfo.OriginModelName)
+		if pricingItemResult.Found && pricingItemResult.Item != nil {
+			applyPricingItem(pricingItemResult.Item, sheet.Id, sheet.Name, &groupRatioInfo, "enterprise_pricing_sheet")
+			return groupRatioInfo, nil
 		}
-		return baseRatioInfo
 	}
 
-	// Model not found in this enterprise pricing sheet — fall back to group ratio
-	logger.LogInfo(ctx, fmt.Sprintf("[DEBUG_BILLING] HandleEnterprisePricingSheet: model=%s NOT found in enterprise sheet id=%d — falling back to group ratio", relayInfo.OriginModelName, sheet.Id))
-	baseRatioInfo.RatioSource = "group_ratio"
-	return baseRatioInfo
+	// Priority 3: Platform pricing sheet (fallback when enterprise sheet doesn't have this model)
+	// Aggregate all active platform sheets and use the lowest discount_value for this model.
+	platformSheets, err := model.GetAllActivePricingSheetsByEnterpriseIdByType(model.EnterpriseTypePlatform)
+	if err != nil {
+		return groupRatioInfo, types.NewErrorWithStatusCode(
+			err, types.ErrorCodeModelPriceError, http.StatusInternalServerError,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
+	bestItem := (*model.EnterprisePricingItem)(nil)
+	bestSheet := (*model.EnterprisePricingSheet)(nil)
+	for _, platformSheet := range platformSheets {
+		pricingItemResult := getPricingItemResult(platformSheet.Id, relayInfo.OriginModelName)
+		if pricingItemResult.Found && pricingItemResult.Item != nil {
+			if bestItem == nil || pricingItemResult.Item.DiscountValue < bestItem.DiscountValue {
+				bestItem = pricingItemResult.Item
+				bestSheet = platformSheet
+			}
+		}
+	}
+	if bestItem != nil && bestSheet != nil {
+		applyPricingItem(bestItem, bestSheet.Id, bestSheet.Name, &groupRatioInfo, "platform_pricing_sheet")
+		return groupRatioInfo, nil
+	}
+
+	// Priority 4: Fall back to group ratio (set by initial HandleGroupRatio, no change needed)
+	groupRatioInfo.RatioSource = "group_ratio"
+	return groupRatioInfo, nil
+}
+
+// applyPricingItem applies a pricing item's discount to the groupRatioInfo.
+func applyPricingItem(item *model.EnterprisePricingItem, sheetId int, sheetName string, info *types.GroupRatioInfo, source string) {
+	info.EnterpriseSheetId = sheetId
+	info.EnterpriseSheetName = sheetName
+	if item.DiscountType == model.DiscountTypePerCall {
+		info.PerCallPriceSheet = item.DiscountValue
+		info.RatioSource = source
+	} else {
+		info.GroupRatio = item.DiscountValue
+		info.RatioSource = source
+	}
+}
+
+// HandleEnterprisePricingSheet is kept for backward compatibility.
+// New billing code should use handleEnterpriseAndGroupRatio directly.
+// It delegates to handleEnterpriseAndGroupRatio but discards the error
+// (for cases where the caller cannot handle errors).
+func HandleEnterprisePricingSheet(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, baseRatioInfo types.GroupRatioInfo) types.GroupRatioInfo {
+	info, _ := handleEnterpriseAndGroupRatio(ctx, relayInfo, baseRatioInfo)
+	return info
 }
 
 // getUserActivePricingSheetForBilling is the internal helper for billing.
@@ -146,7 +249,10 @@ func getPricingItemResult(sheetId int, modelName string) PricingItemResult {
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 
-	groupRatioInfo := HandleGroupRatio(c, info)
+	groupRatioInfo, billingErr := HandleGroupRatio(c, info)
+	if billingErr != nil {
+		return types.PriceData{}, billingErr
+	}
 
 	// per_call: enterprise pricing sheet sets a fixed per-call price for this model.
 	// The billing behaves like per-call (MJ/Task): charge a fixed amount per request.
@@ -275,7 +381,10 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 // ModelPriceHelperPerCall 按次/按量计费的 PriceHelper (MJ、Task)
 // 支持企业报价单的 per_call 类型：报价单中配置了 per_call 时，discount_value 作为绝对价格使用。
 func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types.PriceData, error) {
-	groupRatioInfo := HandleGroupRatio(c, info)
+	groupRatioInfo, billingErr := HandleGroupRatio(c, info)
+	if billingErr != nil {
+		return types.PriceData{}, billingErr
+	}
 
 	// per_call 优先级最高：使用企业报价单的绝对价格作为每次调用费用。
 	if groupRatioInfo.PerCallPriceSheet > 0 {

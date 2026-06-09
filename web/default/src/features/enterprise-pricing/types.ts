@@ -103,6 +103,7 @@ export interface PaginatedResponse<T> {
 export interface GetEnterprisesParams {
   p?: number
   page_size?: number
+  include_platform?: boolean
 }
 
 export interface CreateEnterpriseData {

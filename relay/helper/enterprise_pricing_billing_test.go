@@ -3,148 +3,83 @@ package helper
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/QuantumNous/new-api/types"
-	"github.com/glebarez/sqlite"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
-// TestMain sets up the shared test DB with seeded enterprise pricing data.
-// Each user has a different setup:
-//   - userId=1: bound to enterprise but no active pricing sheet
-//   - userId=2: bound to enterprise with sheet that has gpt-4o-mini at 0.5
-//   - userId=3: bound to enterprise with sheet that has gpt-4o at 0.5
-func TestMain(m *testing.M) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		panic("failed to open test db: " + err.Error())
-	}
+// NOTE: TestMain is defined in setup_test.go — all test files share the same setup.
 
-	model.DB = db
-	model.LOG_DB = db
-
-	common.UsingSQLite = true
-	common.RedisEnabled = false
-	common.BatchUpdateEnabled = false
-	common.LogConsumeEnabled = true
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		panic("failed to get sql.DB: " + err.Error())
-	}
-	sqlDB.SetMaxOpenConns(1)
-
-	if err := db.AutoMigrate(
-		&model.Enterprise{},
-		&model.EnterprisePricingSheet{},
-		&model.EnterprisePricingItem{},
-		&model.EnterpriseUserBinding{},
-		&model.User{},
-	); err != nil {
-		panic("failed to migrate: " + err.Error())
-	}
-
-	// Seed test data for billing integration tests
-	seedBillingTestData(db)
-
-	os.Exit(m.Run())
+// ensurePlatformEnterpriseForBilling upserts the platform enterprise with id=-1 and ent_type='platform'.
+// It is safe to call multiple times; each call updates the existing record rather than creating duplicates.
+func ensurePlatformEnterpriseForBilling(t *testing.T) {
+	t.Helper()
+	now := time.Now().Unix()
+	model.DB.Exec(
+		"INSERT OR REPLACE INTO enterprises (id, name, ent_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		-1, "平台", model.EnterpriseTypePlatform, 1, now, now,
+	)
 }
 
 // seedBillingTestData creates the user/enterprise/pricing data referenced by billing tests.
+// Uses INSERT OR REPLACE so it can be called multiple times without duplicate key errors
+// (e.g., from TestMain and also when tests re-seed with the same IDs).
 func seedBillingTestData(db *gorm.DB) {
 	now := time.Now().Unix()
 
+	// Ensure platform enterprise exists (ent_type='platform').
+	db.Exec(
+		"INSERT OR REPLACE INTO enterprises (id, name, ent_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		-1, "平台", model.EnterpriseTypePlatform, 1, now, now,
+	)
+
 	// --- User 1: bound to enterprise, no active pricing sheet ---
-	e1 := &model.Enterprise{Name: "Corp1", Status: model.EnterpriseStatusEnabled}
-	e1.CreatedAt = now
-	e1.UpdatedAt = now
-	db.Create(e1)
-
-	u1 := &model.User{Id: 1, Username: "user1", Status: 1, Quota: 1000, AffCode: "aff1"}
-	u1.CreatedAt = now
-	db.Create(u1)
-
-	b1 := &model.EnterpriseUserBinding{EnterpriseId: e1.Id, UserId: u1.Id}
-	b1.CreatedAt = now
-	db.Create(b1)
-	// Note: e1 has NO pricing sheet
+	db.Exec("INSERT OR REPLACE INTO enterprises (id, name, ent_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		1, "Corp1", model.EnterpriseTypeEnterprise, model.EnterpriseStatusEnabled, now, now)
+	db.Exec("INSERT OR REPLACE INTO users (id, username, password, status, quota, aff_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		1, "user1", "test-hash-placeholder", 1, 1000, "aff1", now)
+	db.Exec("INSERT OR REPLACE INTO enterprise_user_bindings (enterprise_id, user_id, created_at) VALUES (?, ?, ?)",
+		1, 1, now)
+	// Note: enterprise 1 has NO pricing sheet
 
 	// --- User 2: bound to enterprise with sheet that has gpt-4o-mini (not gpt-4o) ---
-	e2 := &model.Enterprise{Name: "Corp2", Status: model.EnterpriseStatusEnabled}
-	e2.CreatedAt = now
-	e2.UpdatedAt = now
-	db.Create(e2)
+	db.Exec("INSERT OR REPLACE INTO enterprises (id, name, ent_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		2, "Corp2", model.EnterpriseTypeEnterprise, model.EnterpriseStatusEnabled, now, now)
+	db.Exec("INSERT OR REPLACE INTO users (id, username, password, status, quota, aff_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		2, "user2", "test-hash-placeholder", 1, 1000, "aff2", now)
+	db.Exec("INSERT OR REPLACE INTO enterprise_user_bindings (enterprise_id, user_id, created_at) VALUES (?, ?, ?)",
+		2, 2, now)
 
-	u2 := &model.User{Id: 2, Username: "user2", Status: 1, Quota: 1000, AffCode: "aff2"}
-	u2.CreatedAt = now
-	db.Create(u2)
-
-	b2 := &model.EnterpriseUserBinding{EnterpriseId: e2.Id, UserId: u2.Id}
-	b2.CreatedAt = now
-	db.Create(b2)
-
-	sheet2 := &model.EnterprisePricingSheet{
-		EnterpriseId: e2.Id,
-		Name:        "Corp2报价单",
-		Status:      model.PricingSheetStatusActive,
-		StartTime:   now - 86400,
-		EndTime:     now + 86400,
-	}
+	sheet2 := &model.EnterprisePricingSheet{EnterpriseId: 2, Name: "Corp2报价单", Status: model.PricingSheetStatusActive, StartTime: now - 86400, EndTime: now + 86400}
 	sheet2.CreatedAt = now
 	sheet2.UpdatedAt = now
 	db.Create(sheet2)
 
-	item2 := &model.EnterprisePricingItem{
-		PricingSheetId: sheet2.Id,
-		VendorType:    "openai",
-		Models:        []string{"gpt-4o-mini"},
-		DiscountType:  model.DiscountTypeRatio,
-		DiscountValue: 0.5,
-	}
+	item2 := &model.EnterprisePricingItem{PricingSheetId: sheet2.Id, VendorType: "openai", Models: []string{"gpt-4o-mini"}, DiscountType: model.DiscountTypeRatio, DiscountValue: 0.5}
 	db.Create(item2)
 
 	// --- User 3: bound to enterprise with sheet that has gpt-4o at 0.5 ---
-	e3 := &model.Enterprise{Name: "Corp3", Status: model.EnterpriseStatusEnabled}
-	e3.CreatedAt = now
-	e3.UpdatedAt = now
-	db.Create(e3)
+	db.Exec("INSERT OR REPLACE INTO enterprises (id, name, ent_type, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+		3, "Corp3", model.EnterpriseTypeEnterprise, model.EnterpriseStatusEnabled, now, now)
+	db.Exec("INSERT OR REPLACE INTO users (id, username, password, status, quota, aff_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		3, "user3", "test-hash-placeholder", 1, 1000, "aff3", now)
+	db.Exec("INSERT OR REPLACE INTO enterprise_user_bindings (enterprise_id, user_id, created_at) VALUES (?, ?, ?)",
+		3, 3, now)
 
-	u3 := &model.User{Id: 3, Username: "user3", Status: 1, Quota: 1000, AffCode: "aff3"}
-	u3.CreatedAt = now
-	db.Create(u3)
-
-	b3 := &model.EnterpriseUserBinding{EnterpriseId: e3.Id, UserId: u3.Id}
-	b3.CreatedAt = now
-	db.Create(b3)
-
-	sheet3 := &model.EnterprisePricingSheet{
-		EnterpriseId: e3.Id,
-		Name:        "测试报价单",
-		Status:      model.PricingSheetStatusActive,
-		StartTime:   now - 86400,
-		EndTime:     now + 86400,
-	}
+	sheet3 := &model.EnterprisePricingSheet{EnterpriseId: 3, Name: "测试报价单", Status: model.PricingSheetStatusActive, StartTime: now - 86400, EndTime: now + 86400}
 	sheet3.CreatedAt = now
 	sheet3.UpdatedAt = now
 	db.Create(sheet3)
 
-	item3 := &model.EnterprisePricingItem{
-		PricingSheetId: sheet3.Id,
-		VendorType:    "openai",
-		Models:        []string{"gpt-4o"},
-		DiscountType:  model.DiscountTypeRatio,
-		DiscountValue: 0.5,
-	}
+	item3 := &model.EnterprisePricingItem{PricingSheetId: sheet3.Id, VendorType: "openai", Models: []string{"gpt-4o"}, DiscountType: model.DiscountTypeRatio, DiscountValue: 0.5}
 	db.Create(item3)
 
 	// Set up config so ratio_setting works in tests
@@ -163,16 +98,16 @@ func TestHandleEnterprisePricingSheet_NoBinding(t *testing.T) {
 
 	// User not in any enterprise
 	info := &relaycommon.RelayInfo{
-		UserId:       99999,
-		UsingGroup:   "default",
-		OriginModelName: "gpt-4o",
+		UserId:           99999,
+		UsingGroup:       "default",
+		OriginModelName:  "gpt-4o",
 	}
 
 	// Base group ratio = 1.0
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      1.0,
-		GroupSpecialRatio: -1,
-		HasSpecialRatio: false,
+		GroupRatio:        1.0,
+		GroupSpecialRatio:  -1,
+		HasSpecialRatio:   false,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -191,15 +126,15 @@ func TestHandleEnterprisePricingSheet_BindingButNoActiveSheet(t *testing.T) {
 	// User is bound to enterprise, but enterprise has no active pricing sheet
 	// (seeded by test setup — userId=1 has binding but no sheet)
 	info := &relaycommon.RelayInfo{
-		UserId:       1,
-		UsingGroup:   "default",
-		OriginModelName: "gpt-4o",
+		UserId:           1,
+		UsingGroup:       "default",
+		OriginModelName:  "gpt-4o",
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      1.5, // some group ratio
-		GroupSpecialRatio: -1,
-		HasSpecialRatio: false,
+		GroupRatio:        1.5, // some group ratio
+		GroupSpecialRatio:  -1,
+		HasSpecialRatio:   false,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -217,15 +152,15 @@ func TestHandleEnterprisePricingSheet_SheetHasNoModelDiscount(t *testing.T) {
 	// User bound to enterprise with active sheet, but sheet doesn't have gpt-4o
 	// (userId=2 scenario — sheet has gpt-4o-mini but not gpt-4o)
 	info := &relaycommon.RelayInfo{
-		UserId:       2,
-		UsingGroup:   "default",
-		OriginModelName: "gpt-4o", // not in sheet
+		UserId:           2,
+		UsingGroup:       "default",
+		OriginModelName:  "gpt-4o", // not in sheet
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      2.0,
-		GroupSpecialRatio: -1,
-		HasSpecialRatio: false,
+		GroupRatio:        2.0,
+		GroupSpecialRatio:  -1,
+		HasSpecialRatio:   false,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -243,15 +178,15 @@ func TestHandleEnterprisePricingSheet_ModelDiscountOverrides(t *testing.T) {
 	// User bound to enterprise with active sheet that has gpt-4o at 0.5 ratio
 	// (userId=3 scenario, sheet3 bound to channel 100)
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
-		OriginModelName: "gpt-4o",
+		UserId:           3,
+		UsingGroup:       "default",
+		OriginModelName:  "gpt-4o",
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      1.5, // original group ratio
-		GroupSpecialRatio: 2.0,
-		HasSpecialRatio: true,
+		GroupRatio:        1.5, // original group ratio
+		GroupSpecialRatio:  2.0,
+		HasSpecialRatio:   true,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -271,15 +206,15 @@ func TestHandleEnterprisePricingSheet_GroupGroupRatioAlsoOverridden(t *testing.T
 	// User has GroupGroupRatio (special ratio = 0.8)
 	// Enterprise pricing sheet should still override it
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
-		OriginModelName: "gpt-4o",
+		UserId:           3,
+		UsingGroup:       "default",
+		OriginModelName:  "gpt-4o",
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      0.8, // GroupGroupRatio already applied
-		GroupSpecialRatio: 0.8,
-		HasSpecialRatio: true,
+		GroupRatio:        0.8, // GroupGroupRatio already applied
+		GroupSpecialRatio:  0.8,
+		HasSpecialRatio:    true,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -296,15 +231,15 @@ func TestHandleEnterprisePricingSheet_UnknownModelNotInSheet(t *testing.T) {
 
 	// User has active enterprise pricing sheet, but model is not in it
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
-		OriginModelName: "completely-unknown-model-xyz",
+		UserId:           3,
+		UsingGroup:       "default",
+		OriginModelName:  "completely-unknown-model-xyz",
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      1.5,
-		GroupSpecialRatio: -1,
-		HasSpecialRatio: false,
+		GroupRatio:        1.5,
+		GroupSpecialRatio:  -1,
+		HasSpecialRatio:   false,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -320,15 +255,15 @@ func TestHandleEnterprisePricingSheet_ModelMatchCaseSensitive(t *testing.T) {
 
 	// Sheet has gpt-4o at 0.5, but request uses GPT-4o (different case)
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
-		OriginModelName: "GPT-4O", // uppercase — should NOT match
+		UserId:           3,
+		UsingGroup:       "default",
+		OriginModelName:  "GPT-4O", // uppercase — should NOT match
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
-		GroupRatio:      1.5,
-		GroupSpecialRatio: -1,
-		HasSpecialRatio: false,
+		GroupRatio:        1.5,
+		GroupSpecialRatio:  -1,
+		HasSpecialRatio:   false,
 	}
 
 	result := HandleEnterprisePricingSheet(c, info, baseRatioInfo)
@@ -346,9 +281,9 @@ func TestEnterprisePricingSheet_TraceFields(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
-		OriginModelName: "gpt-4o",
+		UserId:           3,
+		UsingGroup:       "default",
+		OriginModelName:  "gpt-4o",
 	}
 
 	baseRatioInfo := types.GroupRatioInfo{
@@ -383,8 +318,8 @@ func TestModelPriceHelper_UsesEnterprisePricing(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	c.Set("group", "default")
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
+		UserId:          3,
+		UsingGroup:      "default",
 		OriginModelName: "gpt-4o",
 	}
 
@@ -413,8 +348,8 @@ func TestModelPriceHelper_EnterprisePricingPreConsumeQuota(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
 	c.Set("group", "default")
 	info := &relaycommon.RelayInfo{
-		UserId:       3,
-		UsingGroup:   "default",
+		UserId:          3,
+		UsingGroup:      "default",
 		OriginModelName: "gpt-4o",
 	}
 
@@ -478,8 +413,8 @@ func TestHandleEnterprisePricingSheet_FallbackChain(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			info := &relaycommon.RelayInfo{
-				UserId:         tt.userId,
-				UsingGroup:     "default",
+				UserId:          tt.userId,
+				UsingGroup:      "default",
 				OriginModelName: tt.model,
 			}
 			baseRatioInfo := types.GroupRatioInfo{

@@ -1,9 +1,12 @@
 import { Modal, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
+import { getRouteApi } from '@tanstack/react-router';
 import { deleteSupplierPricingItem } from '../api';
 import { useSupplierPricing } from './supplier-pricing-provider';
 import type { SupplierPricingItem } from '../types';
+
+const route = getRouteApi('/_authenticated/supplier-pricing/items/');
 
 interface Props {
   open: boolean;
@@ -13,12 +16,15 @@ interface Props {
 
 export function ItemDeleteDialog({ open, item, onClose }: Props) {
   const { t } = useTranslation();
-  const { selectedSupplierId, selectedSheetId, triggerItemRefresh } = useSupplierPricing();
+  const { triggerItemRefresh } = useSupplierPricing();
+  const routeSearch = route.useSearch();
+  const currentSupplierId = routeSearch.supplierId;
+  const currentSheetId = routeSearch.sheetId;
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!item || !selectedSupplierId || !selectedSheetId) throw new Error('Invalid state');
-      return deleteSupplierPricingItem(selectedSupplierId, selectedSheetId, item.id);
+      if (!item || !currentSupplierId || !currentSheetId) throw new Error('Invalid state');
+      return deleteSupplierPricingItem(currentSupplierId, currentSheetId, item.id);
     },
     onSuccess: () => {
       message.success(t('Pricing item deleted'));

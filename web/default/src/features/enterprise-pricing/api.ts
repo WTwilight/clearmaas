@@ -14,6 +14,7 @@ import type {
   CreatePricingItemData,
   UpdatePricingItemData,
   BindUserData,
+  EnterpriseUserBinding,
   EnterpriseUserWithBinding,
 } from './types'
 
@@ -25,7 +26,11 @@ export async function getEnterprises(
   params: GetEnterprisesParams = {}
 ): Promise<PaginatedResponse<Enterprise>> {
   const { p = 1, page_size = 10 } = params
-  const res = await api.get(`/api/enterprise?p=${p}&page_size=${page_size}`)
+  const qs = new URLSearchParams({ p: String(p), page_size: String(page_size) })
+  if (params.include_platform !== undefined) {
+    qs.set('include_platform', String(params.include_platform))
+  }
+  const res = await api.get(`/api/enterprise?${qs}`)
   return res.data
 }
 
@@ -165,9 +170,13 @@ export async function getAllUserBindings(): Promise<
 // ============================================================================
 
 export async function getPricingItems(
-  sheetId: number
-): Promise<ApiResponse<PricingItem[]>> {
-  const res = await api.get(`/api/pricing-sheet/${sheetId}/item`)
+  sheetId: number,
+  params: { p?: number; page_size?: number } = {}
+): Promise<{ success: boolean; data?: { items: PricingItem[]; total: number; page: number; page_size: number }; message?: string }> {
+  const { p = 1, page_size = 20 } = params
+  const res = await api.get(`/api/pricing-sheet/${sheetId}/item`, {
+    params: { p, page_size },
+  })
   return res.data
 }
 
@@ -221,6 +230,22 @@ export async function getEnabledModels(): Promise<string[]> {
   return res.data?.data || []
 }
 
+// Utility: Get models for a specific pricing sheet (scoped to bound channels)
+export async function getSheetModels(
+  sheetId: number,
+): Promise<{ success: boolean; data: string[]; channel_count: number }> {
+  const res = await api.get(`/api/pricing-sheet/${sheetId}/models`)
+  return res.data
+}
+
+// Utility: Get models directly by channel IDs (comma-separated)
+export async function getModelsByChannelIds(
+  channelIds: number[],
+): Promise<{ success: boolean; data: string[]; channel_count: number }> {
+  const res = await api.get(`/api/models/by-channels?channel_ids=${channelIds.join(',')}`)
+  return res.data
+}
+
 // ============================================================================
 // Pricing Sheet Channel Binding APIs
 // ============================================================================
@@ -247,4 +272,37 @@ export async function unbindSheetChannel(
 ): Promise<void> {
   const res = await api.delete(`/api/pricing-sheet/${sheetId}/channels/${channelId}`)
   if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to unbind channel')
+}
+
+// ============================================================================
+// Pricing Sheet Token Binding APIs
+// ============================================================================
+
+export interface SheetTokenBinding {
+  id: number
+  user_id: number
+  username: string
+  name: string
+  status: number
+  key: string
+  created_time: number
+  accessed_time: number
+  token_group: string
+  binding_created_at: number
+  models: string[]
+}
+
+export async function getSheetTokenBindings(
+  sheetId: number
+): Promise<SheetTokenBinding[]> {
+  const res = await api.get(`/api/pricing-sheet/${sheetId}/token-bindings`)
+  if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to fetch token bindings')
+  return res.data?.data ?? []
+}
+
+export async function unbindTokenPricingBinding(
+  tokenId: number
+): Promise<void> {
+  const res = await api.delete(`/api/token/${tokenId}/pricing-models`)
+  if (!res.data?.success) throw new Error(res.data?.message ?? 'Failed to unbind token pricing')
 }

@@ -341,27 +341,6 @@ export function usePricingColumns(
       enableSorting: false,
     },
 
-    // Discount Ratio column - only show when no discount (for transparent display)
-    {
-      id: 'discount_ratio',
-      meta: { label: t('Ratio') },
-      header: t('Ratio'),
-      cell: ({ row }) => {
-        const model = row.original
-        const ratio = getEffectiveRatio(model)
-        const formattedRatio = formatDiscountRatio(ratio)
-
-        // Hide this column when there's a discount (price column shows it instead)
-        if (formattedRatio) {
-          return null
-        }
-
-        return <span className='text-muted-foreground/30 text-xs'>—</span>
-      },
-      size: 70,
-      enableSorting: false,
-    },
-
     // Cached price column (Vercel AI Gateway style)
     {
       id: 'cached_price',

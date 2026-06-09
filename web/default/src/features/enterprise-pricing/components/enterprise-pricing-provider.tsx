@@ -7,6 +7,7 @@ type SheetDialogType = 'create' | 'update' | 'delete'
 type ItemDialogType = 'create' | 'update' | 'delete'
 type BindingDialogType = 'bind' | 'unbind'
 type ChannelBindingDialogType = 'bindChannels'
+type UserKeysDialogType = 'manageUserKeys'
 
 type EnterprisePricingContextType = {
   // Enterprise dialog state
@@ -32,6 +33,9 @@ type EnterprisePricingContextType = {
   // Channel binding dialog state
   channelBindingOpen: ChannelBindingDialogType | null
   setChannelBindingOpen: (str: ChannelBindingDialogType | null) => void
+  // User keys dialog state
+  userKeysOpen: UserKeysDialogType | null
+  setUserKeysOpen: (str: UserKeysDialogType | null) => void
   // Shared enterprise context for sheets/items pages
   selectedEnterpriseId: number | null
   setSelectedEnterpriseId: React.Dispatch<React.SetStateAction<number | null>>
@@ -72,6 +76,9 @@ export function EnterprisePricingProvider({
   // Channel binding dialogs
   const [channelBindingOpen, setChannelBindingOpen] =
     useDialogState<ChannelBindingDialogType>(null)
+  // User keys dialogs
+  const [userKeysOpen, setUserKeysOpen] =
+    useDialogState<UserKeysDialogType>(null)
   // Shared context
   const [selectedEnterpriseId, setSelectedEnterpriseId] = useState<number | null>(
     null
@@ -103,6 +110,8 @@ export function EnterprisePricingProvider({
         setCurrentBindingId,
         channelBindingOpen,
         setChannelBindingOpen,
+        userKeysOpen,
+        setUserKeysOpen,
         selectedEnterpriseId,
         setSelectedEnterpriseId,
         refreshTrigger,

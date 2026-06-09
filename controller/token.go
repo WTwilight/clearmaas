@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
 	"github.com/gin-gonic/gin"
@@ -74,7 +76,11 @@ func GetToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, buildMaskedTokenResponse(token))
+	bindings, _ := model.GetTokenPricingModelBindings(token.Id)
+	common.ApiSuccess(c, gin.H{
+		"token":            buildMaskedTokenResponse(token),
+		"pricing_bindings":  bindings,
+	})
 }
 
 func GetTokenKey(c *gin.Context) {
@@ -221,15 +227,62 @@ func AddToken(c *gin.Context) {
 		AllowIps:           token.AllowIps,
 		Group:              token.Group,
 		CrossGroupRetry:    token.CrossGroupRetry,
+		QuotaLimitDaily:    token.QuotaLimitDaily,
+		QuotaLimitMonthly:  token.QuotaLimitMonthly,
 	}
 	err = cleanToken.Insert()
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+
+	// If select_models is provided, use a transaction to atomically write token + bindings.
+	// Otherwise fall back to the old auto-bind-from-pricing-sheet behavior.
+	if len(token.SelectModels) > 0 {
+		tx := model.DB.Begin()
+		now := time.Now().Unix()
+		for _, m := range token.SelectModels {
+			binding := &model.TokenPricingModelBinding{
+				UserId:         c.GetInt("id"),
+				TokenId:        cleanToken.Id,
+				PricingSheetId: m.PricingSheetId,
+				Model:          m.Model,
+				CreatedAt:      now,
+			}
+			if err := binding.CreateWithTx(tx); err != nil {
+				tx.Rollback()
+				common.ApiError(c, err)
+				return
+			}
+		}
+		if err := tx.Commit().Error; err != nil {
+			tx.Rollback()
+			common.ApiError(c, err)
+			return
+		}
+	} else {
+		autoBindModels := service.GetSelectableModelsForUser(c.GetInt("id"))
+		if len(autoBindModels) > 0 {
+			now := common.GetTimestamp()
+			for _, m := range autoBindModels {
+				binding := &model.TokenPricingModelBinding{
+					UserId:         c.GetInt("id"),
+					TokenId:        cleanToken.Id,
+					PricingSheetId: m.SheetId,
+					Model:          m.Model,
+					CreatedAt:      now,
+				}
+				_ = binding.Create()
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
+		"data": gin.H{
+			"id": cleanToken.Id,
+		},
 	})
 }
 
@@ -276,6 +329,8 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Save the original value before field assignments.
+	prevModelLimitsEnabled := cleanToken.ModelLimitsEnabled
 	if token.Status == common.TokenStatusEnabled {
 		if cleanToken.Status == common.TokenStatusExpired && cleanToken.ExpiredTime <= common.GetTimestamp() && cleanToken.ExpiredTime != -1 {
 			common.ApiErrorI18n(c, i18n.MsgTokenExpiredCannotEnable)
@@ -299,9 +354,63 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
+		cleanToken.QuotaLimitDaily = token.QuotaLimitDaily
+		cleanToken.QuotaLimitMonthly = token.QuotaLimitMonthly
 	}
-	err = cleanToken.Update()
-	if err != nil {
+
+	// statusOnly does not support select_models (they are not updated by UpdateWithTx Select list).
+	// Reject the combination to avoid inconsistency.
+	if statusOnly != "" && len(token.SelectModels) > 0 {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+
+	// Wrap token update and binding sync in a single transaction for atomicity.
+	tx := model.DB.Begin()
+	if err := cleanToken.UpdateWithTx(tx); err != nil {
+		tx.Rollback()
+		common.ApiError(c, err)
+		return
+	}
+
+	// Delete bindings when switching to unlimited model (model_limits_enabled: false),
+	// or when replacing with new select_models.
+	needsBindingCleanup := len(token.SelectModels) > 0 ||
+		(token.ModelLimitsEnabled == false && prevModelLimitsEnabled == true)
+
+	common.SysLog(fmt.Sprintf("DEBUG binding cleanup: selectModels=%d modelLimitsEnabled=%v prevModelLimitsEnabled=%v needsCleanup=%v cleanToken.Id=%d",
+		len(token.SelectModels), token.ModelLimitsEnabled, prevModelLimitsEnabled, needsBindingCleanup, cleanToken.Id))
+
+	if needsBindingCleanup {
+		var count int64
+		tx.Model(&model.TokenPricingModelBinding{}).Where("token_id = ?", cleanToken.Id).Count(&count)
+		common.SysLog(fmt.Sprintf("DEBUG: found %d bindings before delete for token_id=%d", count, cleanToken.Id))
+		if err := model.DeleteTokenPricingModelBindings(cleanToken.Id, tx); err != nil {
+			tx.Rollback()
+			common.ApiError(c, err)
+			return
+		}
+	}
+	if len(token.SelectModels) > 0 {
+		now := time.Now().Unix()
+		for _, m := range token.SelectModels {
+			binding := &model.TokenPricingModelBinding{
+				UserId:         userId,
+				TokenId:        cleanToken.Id,
+				PricingSheetId: m.PricingSheetId,
+				Model:          m.Model,
+				CreatedAt:      now,
+			}
+			if err := binding.CreateWithTx(tx); err != nil {
+				tx.Rollback()
+				common.ApiError(c, err)
+				return
+			}
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
 		common.ApiError(c, err)
 		return
 	}

@@ -45,6 +45,11 @@ export const apiKeySchema = z.object({
   model_limits_enabled: z.boolean(),
   model_limits: z.string().nullish().default(''),
   allow_ips: z.string().nullish().default(''),
+  // Period quota fields
+  quota_limit_daily: z.number().optional().default(0),
+  quota_limit_monthly: z.number().optional().default(0),
+  quota_used_daily: z.number().optional().default(0),
+  quota_used_monthly: z.number().optional().default(0),
 })
 
 export type ApiKey = z.infer<typeof apiKeySchema>
@@ -87,11 +92,48 @@ export interface ApiKeyFormData {
   remain_quota: number
   expired_time: number
   unlimited_quota: boolean
+  quota_limit_daily: number
+  quota_limit_monthly: number
   model_limits_enabled: boolean
   model_limits: string
   allow_ips: string
   group: string
   cross_group_retry: boolean
+  select_models?: SelectModel[]
+}
+
+// ============================================================================
+// Pricing Binding Types
+// ============================================================================
+
+export interface PricingBinding {
+  id: number
+  token_id: number
+  model: string
+  pricing_sheet_id: number
+  sheet_name: string
+  discount_type: string
+  discount_value: number
+  created_at: number
+}
+
+export interface SelectModel {
+  model: string
+  pricing_sheet_id: number
+}
+
+export interface SelectablePricingModel {
+  model: string
+  quota_type: number // 0=ratio(per 1M tokens), 1=fixed(per request)
+  input_original_price: number
+  output_original_price: number
+  discount_ratio: number
+  input_discounted_price: number
+  output_discounted_price: number
+  vendor_type: string
+  source: 'enterprise' | 'platform'
+  sheet_id: number
+  sheet_name: string
 }
 
 // ============================================================================

@@ -88,6 +88,13 @@ func GetPricingItemsBySheetId(sheetId int) ([]*EnterprisePricingItem, error) {
 	return items, err
 }
 
+// GetPricingItemsBySheetIdTx returns all pricing items for a pricing sheet within a transaction.
+func GetPricingItemsBySheetIdTx(sheetId int, tx *gorm.DB) ([]*EnterprisePricingItem, error) {
+	var items []*EnterprisePricingItem
+	err := tx.Where("pricing_sheet_id = ?", sheetId).Find(&items).Error
+	return items, err
+}
+
 // GetPricingItemBySheetIdAndModelName returns the pricing item whose models JSON array contains the given model name.
 func GetPricingItemBySheetIdAndModelName(sheetId int, modelName string) (*EnterprisePricingItem, error) {
 	var items []*EnterprisePricingItem
@@ -108,4 +115,19 @@ func GetPricingItemBySheetIdAndModelName(sheetId int, modelName string) (*Enterp
 // DeletePricingItem deletes a pricing item by ID.
 func DeletePricingItem(id int) error {
 	return DB.Delete(&EnterprisePricingItem{}, id).Error
+}
+
+// GetPricingItemsBySheetIdPaginated returns pricing items for a pricing sheet with pagination.
+func GetPricingItemsBySheetIdPaginated(sheetId, page, pageSize int) ([]*EnterprisePricingItem, int64, error) {
+	var items []*EnterprisePricingItem
+	var total int64
+	if err := DB.Model(&EnterprisePricingItem{}).Where("pricing_sheet_id = ?", sheetId).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	err := DB.Where("pricing_sheet_id = ?", sheetId).Order("id ASC").Offset(offset).Limit(pageSize).Find(&items).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }

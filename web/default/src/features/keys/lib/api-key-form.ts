@@ -30,6 +30,10 @@ export const apiKeyFormSchema = z.object({
   remain_quota_dollars: z.number().min(0).optional(),
   expired_time: z.date().optional(),
   unlimited_quota: z.boolean(),
+  quota_limit_daily: z.number().min(0).optional().default(0),
+  quota_limit_monthly: z.number().min(0).optional().default(0),
+  quota_used_daily: z.number().min(0).optional().default(0),
+  quota_used_monthly: z.number().min(0).optional().default(0),
   model_limits: z.array(z.string()),
   allow_ips: z.string().optional(),
   group: z.string().optional(),
@@ -48,6 +52,10 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   remain_quota_dollars: 10,
   expired_time: undefined,
   unlimited_quota: true,
+  quota_limit_daily: 0,
+  quota_limit_monthly: 0,
+  quota_used_daily: 0,
+  quota_used_monthly: 0,
   model_limits: [],
   allow_ips: '',
   group: DEFAULT_GROUP,
@@ -84,6 +92,8 @@ export function transformFormDataToPayload(
       ? Math.floor(data.expired_time.getTime() / 1000)
       : -1,
     unlimited_quota: data.unlimited_quota,
+    quota_limit_daily: parseQuotaFromDollars(data.quota_limit_daily ?? 0),
+    quota_limit_monthly: parseQuotaFromDollars(data.quota_limit_monthly ?? 0),
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
     allow_ips: data.allow_ips || '',
@@ -106,6 +116,14 @@ export function transformApiKeyToFormDefaults(
         ? new Date(apiKey.expired_time * 1000)
         : undefined,
     unlimited_quota: apiKey.unlimited_quota,
+    quota_limit_daily: apiKey.unlimited_quota
+      ? 0
+      : quotaUnitsToDollars(((apiKey as any).quota_limit_daily ?? 0)),
+    quota_limit_monthly: apiKey.unlimited_quota
+      ? 0
+      : quotaUnitsToDollars(((apiKey as any).quota_limit_monthly ?? 0)),
+    quota_used_daily: quotaUnitsToDollars(((apiKey as any).quota_used_daily ?? 0)),
+    quota_used_monthly: quotaUnitsToDollars(((apiKey as any).quota_used_monthly ?? 0)),
     model_limits: apiKey.model_limits
       ? apiKey.model_limits.split(',').filter(Boolean)
       : [],

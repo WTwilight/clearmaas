@@ -61,9 +61,10 @@ const (
 	ErrorCodeChannelResponseTimeExceeded  ErrorCode = "channel:response_time_exceeded"
 
 	// client request error
-	ErrorCodeReadRequestBodyFailed ErrorCode = "read_request_body_failed"
-	ErrorCodeConvertRequestFailed  ErrorCode = "convert_request_failed"
-	ErrorCodeAccessDenied          ErrorCode = "access_denied"
+	ErrorCodeReadRequestBodyFailed   ErrorCode = "read_request_body_failed"
+	ErrorCodeConvertRequestFailed    ErrorCode = "convert_request_failed"
+	ErrorCodeAccessDenied           ErrorCode = "access_denied"
+	ErrorCodeTokenModelLimitInconsistent ErrorCode = "token_model_limit_inconsistent"
 
 	// request error
 	ErrorCodeBadRequestBody ErrorCode = "bad_request_body"
@@ -85,6 +86,8 @@ const (
 	// quota error
 	ErrorCodeInsufficientUserQuota      ErrorCode = "insufficient_user_quota"
 	ErrorCodePreConsumeTokenQuotaFailed ErrorCode = "pre_consume_token_quota_failed"
+	ErrorCodeTokenDailyQuotaExceeded   ErrorCode = "token_daily_quota_exceeded"
+	ErrorCodeTokenMonthlyQuotaExceeded  ErrorCode = "token_monthly_quota_exceeded"
 )
 
 type NewAPIError struct {

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Code, Table, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,7 @@ export function ModelMappingEditor({
   const [mode, setMode] = useState<'visual' | 'json'>('visual')
   const [rows, setRows] = useState<MappingRow[]>([])
   const [jsonValue, setJsonValue] = useState(value)
+  const isInternalUpdateRef = useRef(false)
 
   const parseJsonToRows = (json: string) => {
     try {
@@ -66,11 +67,13 @@ export function ModelMappingEditor({
     }
   }
 
-  // Parse JSON to rows when value changes externally
+  // Parse JSON to rows when value changes externally (from parent)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setJsonValue(value)
-    parseJsonToRows(value)
+    if (!isInternalUpdateRef.current) {
+      setJsonValue(value)
+      parseJsonToRows(value)
+    }
+    isInternalUpdateRef.current = false
   }, [value])
 
   const convertRowsToJson = (updatedRows: MappingRow[]): string => {
@@ -92,8 +95,8 @@ export function ModelMappingEditor({
       from: '',
       to: '',
     }
-    const updatedRows = [...rows, newRow]
-    setRows(updatedRows)
+    isInternalUpdateRef.current = true
+    setRows((prev) => [...prev, newRow])
   }
 
   const handleDeleteRow = (id: string) => {
@@ -101,6 +104,7 @@ export function ModelMappingEditor({
     setRows(updatedRows)
     const json = convertRowsToJson(updatedRows)
     setJsonValue(json)
+    isInternalUpdateRef.current = true
     onChange(json)
   }
 
@@ -115,13 +119,14 @@ export function ModelMappingEditor({
     setRows(updatedRows)
     const json = convertRowsToJson(updatedRows)
     setJsonValue(json)
+    isInternalUpdateRef.current = true
     onChange(json)
   }
 
   const handleJsonChange = (newJson: string) => {
     setJsonValue(newJson)
+    isInternalUpdateRef.current = true
     onChange(newJson)
-    parseJsonToRows(newJson)
   }
 
   const handleFillTemplate = () => {
@@ -131,20 +136,18 @@ export function ModelMappingEditor({
       2
     )
     setJsonValue(template)
+    isInternalUpdateRef.current = true
     onChange(template)
-    parseJsonToRows(template)
   }
 
   const toggleMode = () => {
     if (mode === 'visual') {
-      // Switching to JSON mode: sync rows to JSON
       const json = convertRowsToJson(rows)
       setJsonValue(json)
+      isInternalUpdateRef.current = true
       onChange(json)
       setMode('json')
     } else {
-      // Switching to visual mode: sync JSON to rows
-      parseJsonToRows(jsonValue)
       setMode('visual')
     }
   }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/model"
@@ -52,6 +53,7 @@ func CreateEnterprise(c *gin.Context) {
 func ListEnterprise(c *gin.Context) {
 	p, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	includePlatform, _ := strconv.ParseBool(c.DefaultQuery("include_platform", "true"))
 	if p < 1 {
 		p = 1
 	}
@@ -59,7 +61,7 @@ func ListEnterprise(c *gin.Context) {
 		pageSize = 20
 	}
 
-	enterprises, total, err := model.GetEnterprises(p, pageSize)
+	enterprises, total, err := model.GetEnterprises(p, pageSize, includePlatform)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
@@ -452,7 +454,7 @@ func UpdatePricingSheet(c *gin.Context) {
 	if req.Name != "" {
 		sheet.Name = req.Name
 	}
-	if req.Status != 0 {
+	if req.Status >= 0 {
 		sheet.Status = req.Status
 	}
 	if req.StartTime != 0 {
@@ -463,10 +465,15 @@ func UpdatePricingSheet(c *gin.Context) {
 	}
 	sheet.UpdatedAt = time.Now().Unix()
 
+	fmt.Printf("[UpdatePricingSheet] sheetId=%d name=%q status=%d updatedAt=%d\n",
+		sheet.Id, sheet.Name, sheet.Status, sheet.UpdatedAt)
+
 	if err := sheet.Update(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	fmt.Printf("[UpdatePricingSheet] after update: name=%q status=%d updatedAt=%d\n",
+		sheet.Name, sheet.Status, sheet.UpdatedAt)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": sheet})
 }
 
@@ -517,13 +524,30 @@ func ListPricingItems(c *gin.Context) {
 		return
 	}
 
-	items, err := model.GetPricingItemsBySheetId(sheetId)
+	p, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if p < 1 {
+		p = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+
+	items, total, err := model.GetPricingItemsBySheetIdPaginated(sheetId, p, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": items})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{
+		"items":     items,
+		"total":     total,
+		"page":      p,
+		"page_size": pageSize,
+	}})
 }
 
 func AddPricingItem(c *gin.Context) {
@@ -739,6 +763,59 @@ func ListPricingSheetChannels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": ids})
 }
 
+// ListPricingSheetModels returns all enabled model names supported by the channels bound to the given pricing sheet.
+func ListPricingSheetModels(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+	channelIds, err := model.GetChannelIdsBySheetId(sheetId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	models := model.GetEnabledModelsByChannelIds(channelIds)
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"data":          models,
+		"channel_count": len(channelIds),
+	})
+}
+
+// GetModelsByChannelIds returns all enabled model names for the given channel IDs.
+// Supports direct multi-channel query via query parameter: ?channel_ids=1,2,3
+func GetModelsByChannelIds(c *gin.Context) {
+	channelIdsStr := c.Query("channel_ids")
+	if channelIdsStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "channel_ids query parameter is required"})
+		return
+	}
+
+	var channelIds []int
+	for _, part := range strings.Split(channelIdsStr, ",") {
+		id, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid channel_id: " + part})
+			return
+		}
+		channelIds = append(channelIds, id)
+	}
+
+	if len(channelIds) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "at least one channel_id is required"})
+		return
+	}
+
+	models := model.GetEnabledModelsByChannelIds(channelIds)
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"data":          models,
+		"channel_count": len(channelIds),
+	})
+}
+
 // BindPricingSheetChannels replaces all channel bindings for a pricing sheet.
 func BindPricingSheetChannels(c *gin.Context) {
 	sheetIdStr := c.Param("sheetId")
@@ -784,4 +861,32 @@ func UnbindPricingSheetChannel(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ListPricingSheetTokenBindings returns all tokens bound to a pricing sheet via token_pricing_model_bindings.
+func ListPricingSheetTokenBindings(c *gin.Context) {
+	sheetIdStr := c.Param("sheetId")
+	sheetId, err := strconv.Atoi(sheetIdStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid sheet id"})
+		return
+	}
+
+	sheet, err := model.GetPricingSheetById(sheetId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	if sheet == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "pricing sheet not found"})
+		return
+	}
+
+	bindings, err := model.GetPricingSheetTokenBindings(sheetId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": bindings})
 }

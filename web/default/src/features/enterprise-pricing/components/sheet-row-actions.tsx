@@ -6,6 +6,7 @@ import {
   FileText,
   Link2,
   Network,
+  Key,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from '@tanstack/react-router'
@@ -31,7 +32,7 @@ export function SheetRowActions({ row }: SheetRowActionsProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const sheet = row.original
-  const { setSheetOpen, setCurrentSheet, setSelectedEnterpriseId, setBindingOpen, setChannelBindingOpen } =
+  const { setSheetOpen, setCurrentSheet, setSelectedEnterpriseId, setBindingOpen, setChannelBindingOpen, setUserKeysOpen } =
     useEnterprisePricing()
 
   const handleEdit = () => {
@@ -63,6 +64,12 @@ export function SheetRowActions({ row }: SheetRowActionsProps) {
     setChannelBindingOpen('bindChannels')
   }
 
+  const handleManageUserKeys = () => {
+    setSelectedEnterpriseId(sheet.enterprise_id)
+    setCurrentSheet(sheet)
+    setUserKeysOpen('manageUserKeys')
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -88,6 +95,10 @@ export function SheetRowActions({ row }: SheetRowActionsProps) {
         <DropdownMenuItem onClick={handleBindChannels}>
           <Network size={16} className='mr-2' />
           {t('Bind Channels')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleManageUserKeys}>
+          <Key size={16} className='mr-2' />
+          {t('Manage User Keys')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleEdit}>

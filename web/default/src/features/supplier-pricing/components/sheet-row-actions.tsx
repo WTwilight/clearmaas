@@ -33,9 +33,10 @@ export function SheetRowActions({ row }: SheetRowActionsProps) {
     useSupplierPricing()
 
   const handleManageItems = () => {
-    setSelectedSupplierId(sheet.supplier_id)
-    setSelectedSheetId(sheet.id)
-    navigate({ to: '/supplier-pricing/items' })
+    navigate({
+      to: '/supplier-pricing/items',
+      search: { supplierId: sheet.supplier_id, sheetId: sheet.id },
+    })
   }
 
   const handleBindChannel = () => {

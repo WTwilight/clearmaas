@@ -37,6 +37,7 @@ type Pricing struct {
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
 	DiscountRatio          float64                 `json:"discount_ratio,omitempty"`
+	RatioSource           string                 `json:"ratio_source,omitempty"`
 }
 
 type PricingVendor struct {

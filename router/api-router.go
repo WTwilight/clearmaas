@@ -271,6 +271,16 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
+			// Token pricing model bindings
+			tokenRoute.GET("/:id/pricing-models", controller.GetTokenPricingModels)
+			tokenRoute.POST("/:id/pricing-models", controller.BindTokenPricingModels)
+			tokenRoute.DELETE("/:id/pricing-models", controller.UnbindTokenPricingModels)
+		}
+
+		pricingRoute := apiRouter.Group("/pricing-sheets")
+		pricingRoute.Use(middleware.UserAuth())
+		{
+			pricingRoute.GET("/available", controller.GetAvailablePricingSheets)
 		}
 
 		usageRoute := apiRouter.Group("/usage")
@@ -347,8 +357,11 @@ func SetApiRouter(router *gin.Engine) {
 			pricingItemRoute.PUT("/:sheetId/item/:itemId", controller.UpdatePricingItem)
 			pricingItemRoute.DELETE("/:sheetId/item/:itemId", controller.DeletePricingItem)
 			pricingItemRoute.GET("/:sheetId/channels", controller.ListPricingSheetChannels)
+			pricingItemRoute.GET("/:sheetId/models", controller.ListPricingSheetModels)
 			pricingItemRoute.POST("/:sheetId/channels", controller.BindPricingSheetChannels)
 			pricingItemRoute.DELETE("/:sheetId/channels/:channelId", controller.UnbindPricingSheetChannel)
+			pricingItemRoute.GET("/:sheetId/token-bindings", controller.ListPricingSheetTokenBindings)
+		apiRouter.GET("/models/by-channels", controller.GetModelsByChannelIds)
 		}
 
 		// Supplier Pricing routes

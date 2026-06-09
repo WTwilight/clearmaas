@@ -144,10 +144,13 @@ export async function deleteSupplierPricingSheet(
 
 export async function getSupplierPricingItems(
   supplierId: number,
-  sheetId: number
-): Promise<ApiResponse<SupplierPricingItem[]>> {
-  const { data } = await axiosClient.get<ApiResponse<SupplierPricingItem[]>>(
-    `/api/supplier/${supplierId}/pricing-sheet/${sheetId}/items`
+  sheetId: number,
+  params?: { p?: number; page_size?: number }
+): Promise<ApiResponse<{ items: SupplierPricingItem[]; total: number; page: number; page_size: number }>> {
+  const { p = 1, page_size = 20 } = params ?? {}
+  const { data } = await axiosClient.get<ApiResponse<{ items: SupplierPricingItem[]; total: number; page: number; page_size: number }>>(
+    `/api/supplier/${supplierId}/pricing-sheet/${sheetId}/items`,
+    { params: { p, page_size } }
   );
   return data;
 }

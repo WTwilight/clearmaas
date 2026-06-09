@@ -186,6 +186,7 @@ export function SheetTable() {
       emptyDescription={t('No pricing sheets found. Try adjusting your search.')}
       skeletonKeyPrefix='sheet-skeleton'
       toolbar={toolbar}
+      paginationInFooter={false}
     />
   );
 }

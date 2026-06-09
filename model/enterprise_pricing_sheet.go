@@ -91,23 +91,136 @@ func GetFirstActivePricingSheetByEnterpriseId(enterpriseId int) (*EnterprisePric
 	return sheets[0], nil
 }
 
-// DeletePricingSheet deletes a pricing sheet by ID.
-// Returns an error if the pricing sheet has associated pricing items.
-func DeletePricingSheet(id int) error {
-	items, err := GetPricingItemsBySheetId(id)
+// GetFirstActivePricingSheetByEnterpriseIdByType returns the first active pricing sheet
+// for the enterprise identified by type (e.g., type='platform').
+// DEPRECATED: Use GetAllActivePricingSheetsByEnterpriseIdByType for multi-sheet support.
+func GetFirstActivePricingSheetByEnterpriseIdByType(enterpriseType string) (*EnterprisePricingSheet, error) {
+	sheets, err := GetAllActivePricingSheetsByEnterpriseIdByType(enterpriseType)
 	if err != nil {
+		return nil, err
+	}
+	if len(sheets) == 0 {
+		return nil, nil
+	}
+	return sheets[0], nil
+}
+
+// GetAllActivePricingSheetsByEnterpriseIdByType returns all active pricing sheets
+// for the enterprise identified by type (e.g., type='platform').
+// Sheets are returned ordered by ID descending (highest ID first).
+func GetAllActivePricingSheetsByEnterpriseIdByType(enterpriseType string) ([]*EnterprisePricingSheet, error) {
+	var sheets []*EnterprisePricingSheet
+	now := time.Now().Unix()
+	err := DB.
+		Joins(`JOIN "enterprises" ON "enterprises".id = enterprise_pricing_sheets.enterprise_id`).
+		Where(`"enterprises"."ent_type" = ?`, enterpriseType).
+		Where("enterprise_pricing_sheets.status = ?", PricingSheetStatusActive).
+		Where("enterprise_pricing_sheets.start_time <= ? AND enterprise_pricing_sheets.end_time >= ?", now, now).
+		Order("enterprise_pricing_sheets.id desc").
+		Find(&sheets).Error
+	if err != nil {
+		return nil, err
+	}
+	return sheets, nil
+}
+
+// DeletePricingSheet deletes a pricing sheet by ID.
+// Returns an error if the pricing sheet has associated pricing items or active Token bindings.
+// All checks and the delete operation run within a single transaction.
+func DeletePricingSheet(id int) error {
+	// Cannot delete the platform enterprise's pricing sheet
+	if IsPlatformEnterpriseId(id) {
+		return errors.New("cannot delete the platform enterprise's pricing sheet")
+	}
+
+	tx := DB.Begin()
+
+	// Check for pricing items
+	items, err := GetPricingItemsBySheetIdTx(id, tx)
+	if err != nil {
+		tx.Rollback()
 		return err
 	}
 	if len(items) > 0 {
+		tx.Rollback()
 		return errors.New("cannot delete pricing sheet with associated pricing items")
 	}
-	return DB.Delete(&EnterprisePricingSheet{}, id).Error
+
+	// Check for active Token bindings
+	count, err := CountTokenBindingsBySheetIdTx(id, tx)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	if count > 0 {
+		tx.Rollback()
+		return errors.New("cannot delete pricing sheet with active token bindings")
+	}
+
+	err = tx.Delete(&EnterprisePricingSheet{}, id).Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
+}
+
+// SheetInfo holds pricing sheet identification info used by controller/service layers.
+type SheetInfo struct {
+	SheetId   int
+	SheetName string
 }
 
 // PricingSheetWithEnterprise represents a pricing sheet with enterprise info.
 type PricingSheetWithEnterprise struct {
 	EnterprisePricingSheet
 	EnterpriseName string `json:"enterprise_name"`
+}
+
+// GetPricingSheetTokenBindings returns all unique tokens that have bindings referencing this pricing sheet.
+// Each token record includes the list of models bound via token_pricing_model_bindings.
+func GetPricingSheetTokenBindings(sheetId int) ([]*TokenBindingInfo, error) {
+	var results []*TokenBindingInfo
+	// Use GROUP BY to get one row per token, and MIN(created_at) for binding timestamp.
+	// Use commonGroupCol for cross-DB compatibility since "group" is a reserved keyword.
+	err := DB.Table("token_pricing_model_bindings").
+		Select("t.id, t.user_id, u.username, t.name, t.status, t.key, t.created_time, t.accessed_time, t."+commonGroupCol+" as token_group, MIN(token_pricing_model_bindings.created_at) as binding_created_at").
+		Joins("JOIN tokens t ON t.id = token_pricing_model_bindings.token_id").
+		Joins("JOIN users u ON u.id = t.user_id").
+		Where("token_pricing_model_bindings.pricing_sheet_id = ?", sheetId).
+		Group("t.id, t.user_id, u.username, t.name, t.status, t.key, t.created_time, t.accessed_time, t."+commonGroupCol).
+		Order("binding_created_at DESC").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Fill in models for each token binding.
+	for _, info := range results {
+		models, err := GetTokenPricingBindingModels(info.Id)
+		if err != nil {
+			return nil, err
+		}
+		info.Models = models
+	}
+
+	return results, nil
+}
+
+// TokenBindingInfo holds token info with binding metadata for display.
+type TokenBindingInfo struct {
+	Id               int      `json:"id"`
+	UserId           int      `json:"user_id"`
+	Username         string   `json:"username"`
+	Name             string   `json:"name"`
+	Status           int      `json:"status"`
+	Key              string   `json:"key"`
+	CreatedTime      int64    `json:"created_time"`
+	AccessedTime     int64    `json:"accessed_time"`
+	TokenGroup       string   `json:"token_group"`
+	BindingCreatedAt int64    `json:"binding_created_at"`
+	Models           []string `json:"models"` // models bound to this token via token_pricing_model_bindings
 }
 
 // GetAllPricingSheets returns all pricing sheets across all enterprises with pagination and optional enterprise filter.

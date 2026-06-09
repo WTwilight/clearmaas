@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
@@ -31,6 +31,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { formatCurrencyUSD } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
@@ -62,7 +63,14 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
 import { MultiSelect } from '@/components/multi-select'
-import { createApiKey, updateApiKey, getApiKey } from '../api'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  createApiKey,
+  updateApiKey,
+  getApiKey,
+  getAvailablePricingModels,
+  getTokenPricingModels,
+} from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
   apiKeyFormSchema,
@@ -71,7 +79,7 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import { type ApiKey } from '../types'
+import { type ApiKey, type SelectablePricingModel, type PricingBinding, type SelectModel } from '../types'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -84,6 +92,107 @@ type ApiKeyMutateDrawerProps = {
   currentRow?: ApiKey
   side?: 'left' | 'right'
 }
+
+// ============================================================================
+// Pricing Model Row — memoized to avoid re-rendering all rows when one changes
+// ============================================================================
+
+type PricingModelRowProps = {
+  model: SelectablePricingModel
+  fieldValue: string[]
+  onToggle: (model: string) => void
+}
+
+const PricingModelRow = memo(function PricingModelRow({
+  model,
+  fieldValue,
+  onToggle,
+}: PricingModelRowProps) {
+  const { t } = useTranslation()
+  const isSelected = fieldValue.includes(model.model)
+  const hasDiscount = model.discount_ratio > 0 && model.discount_ratio < 1
+  const inputOriginal = model.input_original_price ?? 0
+  const outputOriginal = model.output_original_price ?? 0
+  const inputDiscounted = model.input_discounted_price ?? 0
+  const outputDiscounted = model.output_discounted_price ?? 0
+  const hasPrice = inputOriginal > 0 || outputOriginal > 0
+  const isFixedPrice = model.quota_type === 1
+  const discountLabel = hasDiscount
+    ? `${(model.discount_ratio * 10).toFixed(1)}折`
+    : ''
+  const unitLabel = isFixedPrice ? t('per request') : '/ 1M tokens'
+
+  return (
+    <tr
+      className={cn(
+        'border-b last:border-0 transition-colors cursor-pointer',
+        isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'
+      )}
+      onClick={() => onToggle(model.model)}
+    >
+      <td className='px-3 py-2'>
+        <div className='flex flex-col gap-0.5'>
+          <span className='font-medium truncate max-w-[180px]'>{model.model}</span>
+          <span className='text-muted-foreground text-[10px]'>{model.vendor_type}</span>
+        </div>
+      </td>
+      <td className='px-3 py-2 text-right'>
+        <div className='flex flex-col items-end gap-0.5'>
+          {hasDiscount && (
+            <span className='inline-flex items-center rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none'>
+              {discountLabel}
+            </span>
+          )}
+          <span className='font-mono text-[11px] tabular-nums leading-tight'>
+            {hasPrice ? (
+              <>
+                {inputOriginal > 0 && (
+                  <>
+                    <span className='text-muted-foreground/40 line-through'>
+                      ${inputOriginal.toFixed(4)}
+                    </span>
+                    {outputOriginal > 0 && (
+                      <>
+                        <span className='text-muted-foreground/30 mx-0.5'>/</span>
+                        <span className='text-muted-foreground/40 line-through'>
+                          ${outputOriginal.toFixed(4)}
+                        </span>
+                      </>
+                    )}
+                  </>
+                )}
+                <span className='text-foreground mx-1'>→</span>
+                <span className='font-bold text-foreground'>
+                  ${inputDiscounted.toFixed(4)}
+                </span>
+                {outputOriginal > 0 && (
+                  <>
+                    <span className='text-muted-foreground/40 mx-0.5'>/</span>
+                    <span className='font-bold text-foreground'>
+                      ${outputDiscounted.toFixed(4)}
+                    </span>
+                  </>
+                )}
+              </>
+            ) : (
+              '—'
+            )}
+          </span>
+          <span className='text-muted-foreground/50 text-[10px] leading-tight'>
+            {unitLabel}
+          </span>
+        </div>
+      </td>
+      <td className='px-3 py-2 text-center'>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggle(model.model)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </td>
+    </tr>
+  )
+})
 
 type ApiKeyFormSectionProps = {
   title: string
@@ -125,6 +234,7 @@ export function ApiKeysMutateDrawer({
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [pendingBindingModels, setPendingBindingModels] = useState<string[]>([])
   const defaultUseAutoGroup = status?.default_use_auto_group === true
 
   // Fetch models
@@ -133,6 +243,20 @@ export function ApiKeysMutateDrawer({
     queryFn: getUserModels,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
+
+  // Fetch selectable pricing models (platform or enterprise sheet models)
+  const { data: pricingModelsData } = useQuery({
+    queryKey: ['available-pricing-models'],
+    queryFn: getAvailablePricingModels,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const selectableModels: SelectablePricingModel[] =
+    pricingModelsData?.data || []
+  const hasPricingSheet = selectableModels.length > 0
+  const pricingSheetName =
+    selectableModels[0]?.sheet_name || ''
+  const pricingSheetSource = selectableModels[0]?.source || ''
 
   // Fetch groups
   const { data: groupsData } = useQuery({
@@ -161,15 +285,47 @@ export function ApiKeysMutateDrawer({
   // Load existing data when updating
   useEffect(() => {
     if (open && isUpdate && currentRow) {
-      getApiKey(currentRow.id).then((result) => {
-        if (result.success && result.data) {
-          form.reset(transformApiKeyToFormDefaults(result.data))
+      Promise.all([
+        getApiKey(currentRow.id),
+        getTokenPricingModels(currentRow.id),
+      ]).then(([apiKeyResult, bindingsResult]) => {
+        if (apiKeyResult.success && apiKeyResult.data) {
+          form.reset(transformApiKeyToFormDefaults(apiKeyResult.data))
+        }
+        if (bindingsResult.success && bindingsResult.data?.bindings) {
+          const bindingModels = bindingsResult.data.bindings.map(
+            (b: PricingBinding) => b.model
+          )
+          setPendingBindingModels(bindingModels)
         }
       })
     } else if (open && !isUpdate) {
       form.reset(getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto))
     }
+    return () => {
+      setPendingBindingModels([])
+    }
   }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, backendHasAuto])
+
+  // Auto-expand advanced settings when pricing sheet is available (create or edit mode)
+  useEffect(() => {
+    if (open && hasPricingSheet) {
+      setAdvancedOpen(true)
+    }
+  }, [open, hasPricingSheet])
+
+  // When pricing sheet exists, force group to 'default' and disable cross_group_retry
+  // Also write pending binding models into model_limits once pricing sheet is ready
+  useEffect(() => {
+    if (hasPricingSheet) {
+      form.setValue('group', 'default')
+      form.setValue('cross_group_retry', false)
+    }
+    // Write pending binding models only after pricing sheet is available (so we know which selector to show)
+    if (hasPricingSheet && pendingBindingModels.length > 0) {
+      form.setValue('model_limits', pendingBindingModels)
+    }
+  }, [hasPricingSheet, form, pendingBindingModels])
 
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {
@@ -184,15 +340,28 @@ export function ApiKeysMutateDrawer({
     }
   }, [groups, form])
 
+  const buildSelectModels = (modelLimits: string[]): SelectModel[] =>
+    (modelLimits || [])
+      .map((model) => {
+        const pricingModel = selectableModels.find((m) => m.model === model)
+        return pricingModel
+          ? { model, pricing_sheet_id: pricingModel.sheet_id }
+          : null
+      })
+      .filter((x): x is SelectModel => x !== null)
+
   const onSubmit = async (data: ApiKeyFormValues) => {
+    console.log('[api-keys-mutate-drawer] onSubmit called, isUpdate:', isUpdate)
     setIsSubmitting(true)
     try {
       const basePayload = transformFormDataToPayload(data)
+      const selectModels = buildSelectModels(data.model_limits)
 
       if (isUpdate && currentRow) {
         const result = await updateApiKey({
           ...basePayload,
           id: currentRow.id,
+          select_models: selectModels,
         })
         if (result.success) {
           toast.success(t(SUCCESS_MESSAGES.API_KEY_UPDATED))
@@ -213,6 +382,7 @@ export function ApiKeysMutateDrawer({
               i === 0 && data.name
                 ? data.name
                 : `${data.name || 'default'}-${Math.random().toString(36).slice(2, 8)}`,
+            select_models: selectModels,
           })
           if (result.success) {
             successCount++
@@ -233,6 +403,7 @@ export function ApiKeysMutateDrawer({
         }
       }
     } catch (_error) {
+      console.error('[api-keys-mutate-drawer] onSubmit error:', _error)
       toast.error(t(ERROR_MESSAGES.UNEXPECTED))
     } finally {
       setIsSubmitting(false)
@@ -263,6 +434,14 @@ export function ApiKeysMutateDrawer({
   const selectedGroup = form.watch('group')
   const unlimitedQuota = form.watch('unlimited_quota')
 
+  // When unlimited quota is enabled, reset daily/monthly limits to 0
+  useEffect(() => {
+    if (unlimitedQuota) {
+      form.setValue('quota_limit_daily', 0, { shouldValidate: false })
+      form.setValue('quota_limit_monthly', 0, { shouldValidate: false })
+    }
+  }, [unlimitedQuota, form])
+
   return (
     <Sheet
       open={open}
@@ -270,6 +449,7 @@ export function ApiKeysMutateDrawer({
         onOpenChange(v)
         if (!v) {
           form.reset()
+          setPendingBindingModels([])
         }
       }}
     >
@@ -313,26 +493,28 @@ export function ApiKeysMutateDrawer({
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name='group'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Group')}</FormLabel>
-                    <FormControl>
-                      <ApiKeyGroupCombobox
-                        options={groups}
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        placeholder={t('Select a group')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {!hasPricingSheet && (
+                <FormField
+                  control={form.control}
+                  name='group'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Group')}</FormLabel>
+                      <FormControl>
+                        <ApiKeyGroupCombobox
+                          options={groups}
+                          value={field.value}
+                          onValueChange={field.onChange}
+                          placeholder={t('Select a group')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
-              {selectedGroup === 'auto' && (
+              {selectedGroup === 'auto' && !hasPricingSheet && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
@@ -448,66 +630,6 @@ export function ApiKeysMutateDrawer({
               )}
             </ApiKeyFormSection>
 
-            <ApiKeyFormSection
-              title={t('Quota Settings')}
-              description={t('Set quota amount and limits')}
-              icon={WalletCards}
-            >
-              {!unlimitedQuota && (
-                <FormField
-                  control={form.control}
-                  name='remain_quota_dollars'
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{quotaLabel}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          step={tokensOnly ? 1 : 0.01}
-                          placeholder={quotaPlaceholder}
-                          onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
-                          }
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        {tokensOnly
-                          ? t('Enter the quota amount in tokens')
-                          : t('Enter the quota amount in {{currency}}', {
-                              currency: currencyLabel,
-                            })}
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              <FormField
-                control={form.control}
-                name='unlimited_quota'
-                render={({ field }) => (
-                  <FormItem className='flex min-h-16 flex-row items-center justify-between gap-3 rounded-lg border px-3 py-2.5 sm:min-h-20 sm:gap-4 sm:px-4 sm:py-3'>
-                    <div className='space-y-0.5'>
-                      <FormLabel className='text-sm'>
-                        {t('Unlimited Quota')}
-                      </FormLabel>
-                      <FormDescription className='text-xs'>
-                        {t('Enable unlimited quota for this API key')}
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </ApiKeyFormSection>
-
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
               <section className='bg-card rounded-lg border'>
                 <CollapsibleTrigger
@@ -538,32 +660,101 @@ export function ApiKeysMutateDrawer({
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className='space-y-3 border-t p-3 sm:space-y-4 sm:p-4'>
-                    <FormField
-                      control={form.control}
-                      name='model_limits'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('Model Limits')}</FormLabel>
-                          <FormControl>
-                            <MultiSelect
-                              options={models.map((m) => ({
-                                label: m,
-                                value: m,
-                              }))}
-                              selected={field.value}
-                              onChange={field.onChange}
-                              placeholder={t(
-                                'Select models (empty for allow all)'
+                    {hasPricingSheet ? (
+                      <FormField
+                        control={form.control}
+                        name='model_limits'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {t('Available Models')}
+                            </FormLabel>
+                            <FormDescription>
+                              {t(
+                                'Select models from the pricing sheet. Unselected models will not be accessible with this key.'
                               )}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {t('Limit which models can be used with this key')}
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            </FormDescription>
+                            <FormControl>
+                              <div className='mt-2 overflow-hidden rounded-lg border'>
+                                <table className='w-full text-xs'>
+                                  <thead>
+                                    <tr className='border-b bg-muted/50'>
+                                      <th className='px-3 py-2 text-left font-medium'>
+                                        {t('Model')}
+                                      </th>
+                                      <th className='px-3 py-2 text-right font-medium'>
+                                        {t('Price')}
+                                      </th>
+                                      <th className='px-3 py-2 text-center font-medium w-10'>
+                                        <Checkbox
+                                          checked={field.value.length === selectableModels.length && selectableModels.length > 0}
+                                          indeterminate={field.value.length > 0 && field.value.length < selectableModels.length}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              field.onChange(selectableModels.map((m) => m.model))
+                                            } else {
+                                              field.onChange([])
+                                            }
+                                          }}
+                                          onClick={(e) => e.stopPropagation()}
+                                        />
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectableModels.map((m) => (
+                                      <PricingModelRow
+                                        key={m.model}
+                                        model={m}
+                                        fieldValue={field.value || []}
+                                        onToggle={(model) => {
+                                          const current = field.value || []
+                                          if (current.includes(model)) {
+                                            field.onChange(current.filter((v) => v !== model))
+                                          } else {
+                                            field.onChange([...current, model])
+                                          }
+                                        }}
+                                      />
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : (
+                      <FormField
+                        control={form.control}
+                        name='model_limits'
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('Model Limits')}</FormLabel>
+                            <FormControl>
+                              <MultiSelect
+                                options={models.map((m) => ({
+                                  label: m,
+                                  value: m,
+                                }))}
+                                selected={field.value}
+                                onChange={field.onChange}
+                                placeholder={t(
+                                  'Select models (empty for allow all)'
+                                )}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              {t(
+                                'Limit which models can be used with this key'
+                              )}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}
@@ -596,6 +787,131 @@ export function ApiKeysMutateDrawer({
                 </CollapsibleContent>
               </section>
             </Collapsible>
+
+            <ApiKeyFormSection
+              title={t('Quota Settings')}
+              description={t('Set quota amount and limits')}
+              icon={WalletCards}
+            >
+              {!unlimitedQuota && (
+                <FormField
+                  control={form.control}
+                  name='remain_quota_dollars'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Totle Quota Limit')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type='number'
+                          step={tokensOnly ? 1 : 0.01}
+                          placeholder={quotaPlaceholder}
+                          onChange={(e) =>
+                            field.onChange(parseFloat(e.target.value) || 0)
+                          }
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {tokensOnly
+                          ? t('Enter the quota amount in tokens')
+                          : t('Enter the quota amount in {{currency}}', {
+                              currency: currencyLabel,
+                            })}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name='quota_limit_daily'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Daily Quota Limit')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        step={1}
+                        min={0}
+                        placeholder={t('0 = unlimited')}
+                        disabled={unlimitedQuota}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Used: {{used}} / Remaining: {{remaining}}', {
+                        used: formatCurrencyUSD(form.watch('quota_used_daily') ?? 0),
+                        remaining: formatCurrencyUSD(
+                          Math.max(0, (form.watch('quota_limit_daily') ?? 0) - (form.watch('quota_used_daily') ?? 0))
+                        ),
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='quota_limit_monthly'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Monthly Quota Limit')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type='number'
+                        step={1}
+                        min={0}
+                        placeholder={t('0 = unlimited')}
+                        disabled={unlimitedQuota}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t('Used: {{used}} / Remaining: {{remaining}}', {
+                        used: formatCurrencyUSD(form.watch('quota_used_monthly') ?? 0),
+                        remaining: formatCurrencyUSD(
+                          Math.max(0, (form.watch('quota_limit_monthly') ?? 0) - (form.watch('quota_used_monthly') ?? 0))
+                        ),
+                      })}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='unlimited_quota'
+                render={({ field }) => (
+                  <FormItem className='flex min-h-16 flex-row items-center justify-between gap-3 rounded-lg border px-3 py-2.5 sm:min-h-20 sm:gap-4 sm:px-4 sm:py-3'>
+                    <div className='space-y-0.5'>
+                      <FormLabel className='text-sm'>
+                        {t('Unlimited Quota')}
+                      </FormLabel>
+                      <FormDescription className='text-xs'>
+                        {t('Enable unlimited quota for this API key')}
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </ApiKeyFormSection>
+
           </form>
         </Form>
         <SheetFooter className='bg-background grid grid-cols-2 gap-2 border-t px-3 py-3 sm:flex sm:flex-row sm:justify-end sm:px-5 sm:py-4'>
