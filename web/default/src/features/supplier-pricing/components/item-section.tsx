@@ -13,13 +13,13 @@ export function ItemSection() {
   const {
     itemDialog,
     closeItemDialog,
-    selectedSheetId,
   } = useSupplierPricing()
 
   const routeSearch = Route.useSearch()
   const currentSheetId = routeSearch.sheetId
+  const currentSupplierId = routeSearch.supplierId
 
-  const hasSelection = selectedSheetId && currentSheetId
+  const hasSelection = currentSupplierId && currentSheetId
 
   const handleDrawerOpenChange = (isOpen: boolean) => {
     if (!isOpen) closeItemDialog()

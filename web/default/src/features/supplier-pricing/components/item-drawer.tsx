@@ -49,8 +49,11 @@ import {
   type VendorType,
 } from '../constants';
 import { useSupplierPricing } from './supplier-pricing-provider';
+import { getRouteApi } from '@tanstack/react-router';
 import type { SupplierPricingItem } from '../types';
 import { z } from 'zod';
+
+const route = getRouteApi('/_authenticated/supplier-pricing/items/');
 
 const itemFormSchema = z.object({
   vendor_type: z.string().min(1, 'Vendor type is required'),
@@ -87,7 +90,10 @@ export function ItemDrawer({
   const isView = mode === 'view';
   const isUpdate = mode === 'update';
   const isCreate = mode === 'create';
-  const { selectedSupplierId, selectedSheetId, triggerItemRefresh } = useSupplierPricing();
+  const { triggerItemRefresh } = useSupplierPricing();
+  const routeSearch = route.useSearch();
+  const currentSupplierId = routeSearch.supplierId;
+  const currentSheetId = routeSearch.sheetId;
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<ItemFormValues>({
@@ -130,7 +136,7 @@ export function ItemDrawer({
   };
 
   const onSubmit = async (values: ItemFormValues) => {
-    if (!selectedSupplierId || !selectedSheetId) {
+    if (!currentSupplierId || !currentSheetId) {
       toast.error(t('No supplier or sheet selected'));
       return;
     }
@@ -139,8 +145,8 @@ export function ItemDrawer({
     try {
       if (isUpdate && item) {
         await updateSupplierPricingItem(
-          selectedSupplierId,
-          selectedSheetId,
+          currentSupplierId,
+          currentSheetId,
           item.id,
           {
             models: values.models,
@@ -153,7 +159,7 @@ export function ItemDrawer({
         onOpenChange(false);
         triggerItemRefresh();
       } else {
-        await createSupplierPricingItem(selectedSupplierId, selectedSheetId, {
+        await createSupplierPricingItem(currentSupplierId, currentSheetId, {
           vendor_type: values.vendor_type,
           models: values.models,
           discount_type: values.discount_type,
@@ -393,7 +399,7 @@ export function ItemDrawer({
                 </Button>
                 <Button
                   type='button'
-                  disabled={isSubmitting || !selectedSheetId}
+                  disabled={isSubmitting || !currentSheetId}
                   onClick={form.handleSubmit(onSubmit)}
                 >
                   {isSubmitting

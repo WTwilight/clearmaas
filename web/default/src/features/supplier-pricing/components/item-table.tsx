@@ -26,20 +26,17 @@ const route = getRouteApi('/_authenticated/supplier-pricing/items/')
 export function ItemTable() {
   const { t } = useTranslation()
   const columns = useItemColumns()
-  const {
-    itemRefreshTrigger,
-    selectedSupplierId,
-    setSelectedSupplierId,
-    selectedSheetId,
-    setSelectedSheetId,
-  } = useSupplierPricing()
+  const { itemRefreshTrigger } = useSupplierPricing()
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [rowSelection, setRowSelection] = useState({})
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
 
   const routeSearch = route.useSearch()
-  const [currentSheetId, setCurrentSheetId] = useState<number | null>(null)
+  const navigate = route.useNavigate()
+
+  const currentSupplierId = routeSearch.supplierId
+  const currentSheetId = routeSearch.sheetId ?? null
 
   const {
     pagination,
@@ -61,42 +58,26 @@ export function ItemTable() {
   })
 
   const { data: sheetsData, isLoading: isLoadingSheets } = useQuery({
-    queryKey: ['supplier-sheets', 'selector', selectedSupplierId],
+    queryKey: ['supplier-sheets', 'selector', currentSupplierId],
     queryFn: async () => {
-      if (!selectedSupplierId) return []
-      const result = await getSupplierPricingSheetsBySupplier(selectedSupplierId)
+      if (!currentSupplierId) return []
+      const result = await getSupplierPricingSheetsBySupplier(currentSupplierId)
       return result.items ?? []
     },
-    enabled: !!selectedSupplierId,
+    enabled: !!currentSupplierId,
     staleTime: 5 * 60 * 1000,
   })
 
-  useEffect(() => {
-    if (!selectedSupplierId && suppliersData && suppliersData.length > 0) {
-      setSelectedSupplierId(suppliersData[0].id)
-    }
-  }, [suppliersData, selectedSupplierId, setSelectedSupplierId])
-
-  useEffect(() => {
-    if (!selectedSheetId && sheetsData && sheetsData.length > 0) {
-      setSelectedSheetId(sheetsData[0].id)
-    }
-  }, [sheetsData, selectedSheetId, setSelectedSheetId])
-
-  useEffect(() => {
-    setCurrentSheetId(selectedSheetId)
-  }, [selectedSheetId])
-
   const { data, isLoading, isFetching } = useQuery({
     queryKey: [
-      ...supplierItemQueryKeys.bySheet(selectedSupplierId ?? 0, currentSheetId ?? 0),
+      ...supplierItemQueryKeys.bySheet(currentSupplierId ?? 0, currentSheetId ?? 0),
       pagination.pageIndex + 1,
       pagination.pageSize,
       itemRefreshTrigger,
     ],
     queryFn: async () => {
-      if (!selectedSupplierId || !currentSheetId) return { items: [], total: 0 }
-      const result = await getSupplierPricingItems(selectedSupplierId, currentSheetId, {
+      if (!currentSupplierId || !currentSheetId) return { items: [], total: 0 }
+      const result = await getSupplierPricingItems(currentSupplierId, currentSheetId, {
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
       })
@@ -109,7 +90,7 @@ export function ItemTable() {
         total: result.data?.total ?? 0,
       }
     },
-    enabled: !!selectedSupplierId && !!currentSheetId,
+    enabled: !!currentSupplierId && !!currentSheetId,
     placeholderData: (previousData) => previousData,
   })
 
@@ -152,21 +133,17 @@ export function ItemTable() {
     )
   }
 
-  const selectedSupplier = suppliersData?.find((s: { id: number }) => s.id === selectedSupplierId)
+  const selectedSupplier = suppliersData?.find((s: { id: number }) => s.id === currentSupplierId)
   const selectedSheet = sheetsData?.find((s: { id: number }) => s.id === currentSheetId)
 
   const handleSupplierChange = (v: string | null) => {
-    setSelectedSupplierId(parseInt(v ?? '0') || null)
-    setSelectedSheetId(null)
-    setCurrentSheetId(null)
-    onPaginationChange({ pageIndex: 0, pageSize: pagination.pageSize })
+    const supplierId = parseInt(v ?? '0') || undefined
+    navigate({ search: { supplierId, sheetId: undefined, page: 1, pageSize: pagination.pageSize } })
   }
 
   const handleSheetChange = (v: string | null) => {
-    const sheetId = parseInt(v ?? '0') || null
-    setSelectedSheetId(sheetId)
-    setCurrentSheetId(sheetId)
-    onPaginationChange({ pageIndex: 0, pageSize: pagination.pageSize })
+    const sheetId = parseInt(v ?? '0') || undefined
+    navigate({ search: { supplierId: currentSupplierId, sheetId, page: 1, pageSize: pagination.pageSize } })
   }
 
   const toolbar = (
@@ -174,7 +151,7 @@ export function ItemTable() {
       <div className='flex items-center gap-2'>
         <Label>{t('Supplier')}:</Label>
         <Select
-          value={String(selectedSupplierId ?? '')}
+          value={String(currentSupplierId ?? '')}
           onValueChange={handleSupplierChange}
         >
           <SelectTrigger className='w-[160px]'>
@@ -195,7 +172,7 @@ export function ItemTable() {
         <Select
           value={String(currentSheetId ?? '')}
           onValueChange={handleSheetChange}
-          disabled={!selectedSupplierId || !sheetsData?.length}
+          disabled={!currentSupplierId || !sheetsData?.length}
         >
           <SelectTrigger className='w-[160px]'>
             <SelectValue>{selectedSheet?.name ?? ''}</SelectValue>
