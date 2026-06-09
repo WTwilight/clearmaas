@@ -27,7 +27,7 @@ import { type ApiKeyFormData, type ApiKey } from '../types'
 
 export const apiKeyFormSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  remain_quota_dollars: z.number().min(0).optional(),
+  remain_quota_dollars: z.number().optional(),
   expired_time: z.date().optional(),
   unlimited_quota: z.boolean(),
   quota_limit_daily: z.number().min(0).optional().default(0),
