@@ -32,6 +32,11 @@ func GetSupplierPricingSheetItems(sheetId int) ([]*model.SupplierPricingItem, er
 	return model.GetSupplierPricingItemsBySheetId(sheetId)
 }
 
+// GetSupplierPricingSheetItemsPaginated returns pricing items for a given pricing sheet with pagination.
+func GetSupplierPricingSheetItemsPaginated(sheetId, page, pageSize int) ([]*model.SupplierPricingItem, int64, error) {
+	return model.GetSupplierPricingItemsBySheetIdPaginated(sheetId, page, pageSize)
+}
+
 // GetModelCost returns the discount value for a given pricing sheet and model.
 // Returns (discountValue, found). The discount value represents the cost based on discount type.
 func GetModelCost(sheetId int, modelName string) (float64, bool) {
