@@ -1,7 +1,10 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -325,6 +328,17 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// Detect whether select_models was explicitly sent in the request (even as []).
+	// This matters because an explicit empty array means "clear all bindings",
+	// whereas an absent field means "leave bindings as-is".
+	var hasSelectModelsInBody bool
+	if body, err := io.ReadAll(c.Request.Body); err == nil {
+		hasSelectModelsInBody = json.Valid(body) && bytes.Contains(body, []byte(`"select_models"`))
+		// Re-bind so the body can be parsed again
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		c.ShouldBindJSON(&token)
+	}
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
 		return
@@ -391,7 +405,7 @@ func UpdateToken(c *gin.Context) {
 
 	// Delete bindings when switching to unlimited model (model_limits_enabled: false),
 	// or when replacing with new select_models.
-	needsBindingCleanup := len(token.SelectModels) > 0 ||
+	needsBindingCleanup := hasSelectModelsInBody ||
 		(token.ModelLimitsEnabled == false && prevModelLimitsEnabled == true)
 
 	common.SysLog(fmt.Sprintf("DEBUG binding cleanup: selectModels=%d modelLimitsEnabled=%v prevModelLimitsEnabled=%v needsCleanup=%v cleanToken.Id=%d",
