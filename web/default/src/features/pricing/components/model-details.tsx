@@ -421,19 +421,20 @@ function PriceSection(props: {
 
     const ratio = getEffectiveRatio(props.model)
     const formattedRatio = formatDiscountRatio(ratio)
-    const hasDiscount = formattedRatio !== ''
+    const hasDiscount = props.model.discount_ratio != null && props.model.discount_ratio !== 1
+    const showOriginalPrice = props.model.discount_ratio != null && props.model.discount_ratio > 0
 
     return (
       <section>
         <div className='flex items-center gap-2'>
           <SectionTitle>{t('Base Price')}</SectionTitle>
-          {hasDiscount && (
+          {props.model.discount_ratio != null && (
             <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-3 py-1 text-xs font-bold text-white shadow-sm dark:from-amber-500 dark:to-orange-500'>
               {formattedRatio}
             </span>
           )}
         </div>
-        {hasDiscount && (
+        {showOriginalPrice ? (
           <div className='mt-3 space-y-2'>
             {dynamicSummary.primaryEntries.map((entry) => (
               <div
@@ -476,8 +477,7 @@ function PriceSection(props: {
               </div>
             ))}
           </div>
-        )}
-        {!hasDiscount && dynamicSummary.primaryEntries.length > 0 && (
+        ) : !hasDiscount && dynamicSummary.primaryEntries.length > 0 && (
           <div className='grid grid-cols-2 gap-2'>
             {dynamicSummary.primaryEntries.map((entry) => (
               <div
@@ -553,26 +553,32 @@ function PriceSection(props: {
   if (!isTokenBased) {
     const ratio = getEffectiveRatio(props.model)
     const formattedRatio = formatDiscountRatio(ratio)
-    const hasDiscount = formattedRatio !== ''
+    const hasDiscount = props.model.discount_ratio != null && props.model.discount_ratio !== 1
+    const showOriginalPrice = props.model.discount_ratio != null && props.model.discount_ratio > 0
 
     return (
       <section>
         <div className='flex items-center gap-2'>
           <SectionTitle>{t('Base Price')}</SectionTitle>
-          {hasDiscount && (
+          {props.model.discount_ratio != null && (
             <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-3 py-1 text-xs font-bold text-white shadow-sm dark:from-amber-500 dark:to-orange-500'>
               {formattedRatio}
             </span>
           )}
         </div>
-        {hasDiscount ? (
+        {showOriginalPrice ? (
           <div className='mt-3 space-y-2'>
-            <div className='flex items-center justify-between rounded-xl border-2 border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/80 p-4 shadow-sm dark:border-amber-700/50 dark:from-amber-900/30 dark:to-orange-900/30'>
+            <div className={cn(
+              'flex items-center justify-between rounded-xl border-2 p-4 shadow-sm',
+              hasDiscount
+                ? 'border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:border-amber-700/50 dark:from-amber-900/30 dark:to-orange-900/30'
+                : ''
+            )}>
               <div>
                 <div className='text-muted-foreground text-xs'>
                   {t('Per request')} ({t('Original')})
                 </div>
-                <div className='text-muted-foreground/50 font-mono text-sm tabular-nums line-through'>
+                <div className='font-mono text-sm tabular-nums line-through text-muted-foreground/50'>
                   {formatBaseFixedPrice(
                     props.model,
                     baseGroupKey,
@@ -582,24 +588,26 @@ function PriceSection(props: {
                   )}
                 </div>
               </div>
-              <div className='text-right'>
-                <div className='rounded bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white'>
-                  {formattedRatio}
+              {hasDiscount && (
+                <div className='text-right'>
+                  <div className='rounded bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white'>
+                    {formattedRatio}
+                  </div>
+                  <div className='mt-1 text-xs font-medium text-amber-600 dark:text-amber-400'>
+                    {t('Your Price')}
+                  </div>
+                  <div className='text-foreground font-mono text-xl font-bold tabular-nums'>
+                    {formatFixedPrice(
+                      props.model,
+                      baseGroupKey,
+                      props.showRechargePrice,
+                      props.priceRate,
+                      props.usdExchangeRate,
+                      effectiveRatioMap
+                    )}
+                  </div>
                 </div>
-                <div className='mt-1 text-xs font-medium text-amber-600 dark:text-amber-400'>
-                  {t('Your Price')}
-                </div>
-                <div className='text-foreground font-mono text-xl font-bold tabular-nums'>
-                  {formatFixedPrice(
-                    props.model,
-                    baseGroupKey,
-                    props.showRechargePrice,
-                    props.priceRate,
-                    props.usdExchangeRate,
-                    effectiveRatioMap
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         ) : (
@@ -626,7 +634,8 @@ function PriceSection(props: {
   const secondaryItems = secondaryPriceTypes.filter((p) => p.available)
   const ratio = getEffectiveRatio(props.model)
   const formattedRatio = formatDiscountRatio(ratio)
-  const hasDiscount = formattedRatio !== ''
+  const hasDiscount = props.model.discount_ratio != null && props.model.discount_ratio !== 1
+  const showOriginalPrice = props.model.discount_ratio != null && props.model.discount_ratio > 0
 
   const renderDiscountedPrice = (type: PriceType) => (
     <>
@@ -667,44 +676,69 @@ function PriceSection(props: {
     <section>
       <div className='flex items-center gap-2'>
         <SectionTitle>{t('Base Price')}</SectionTitle>
+        {props.model.discount_ratio != null && (
+          <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-3 py-1 text-xs font-bold text-white shadow-sm dark:from-amber-500 dark:to-orange-500'>
+            {formattedRatio}
+          </span>
+        )}
       </div>
-      {hasDiscount ? (
+      {showOriginalPrice ? (
         <div className='mt-3 space-y-2'>
           {primaryPriceTypes.map((item) => (
             <div
               key={item.type}
-              className='flex items-center justify-between rounded-xl border-2 border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/80 p-4 shadow-sm dark:border-amber-700/50 dark:from-amber-900/30 dark:to-orange-900/30'
+              className={cn(
+                'flex items-center justify-between rounded-xl border-2 p-4 shadow-sm',
+                hasDiscount
+                  ? 'border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/80 dark:border-amber-700/50 dark:from-amber-900/30 dark:to-orange-900/30'
+                  : ''
+              )}
             >
               <div>
                 <div className='text-muted-foreground text-xs'>
-                  {item.label} ({t('Original')})
+                  {item.label}{hasDiscount ? ` (${t('Original')})` : ''}
                 </div>
-                <div className='text-muted-foreground/50 font-mono text-sm tabular-nums line-through'>
-                  {formatBaseGroupPrice(
-                    props.model,
-                    baseGroupKey,
-                    item.type,
-                    props.tokenUnit,
-                    props.showRechargePrice,
-                    props.priceRate,
-                    props.usdExchangeRate
+                <div className='font-mono text-sm tabular-nums text-muted-foreground/50'>
+                  {hasDiscount ? (
+                    formatBaseGroupPrice(
+                      props.model,
+                      baseGroupKey,
+                      item.type,
+                      props.tokenUnit,
+                      props.showRechargePrice,
+                      props.priceRate,
+                      props.usdExchangeRate
+                    )
+                  ) : (
+                    formatGroupPrice(
+                      props.model,
+                      baseGroupKey,
+                      item.type,
+                      props.tokenUnit,
+                      props.showRechargePrice,
+                      props.priceRate,
+                      props.usdExchangeRate,
+                      effectiveRatioMap
+                    )
                   )}
                   <span className='text-muted-foreground/30 ml-1 text-xs'>
                     / {tokenUnitLabel}
                   </span>
                 </div>
               </div>
-              <div className='text-right'>
-                <div className='rounded bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white'>
-                  {formattedRatio}
+              {hasDiscount && (
+                <div className='text-right'>
+                  <div className='rounded bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white'>
+                    {formattedRatio}
+                  </div>
+                  <div className='mt-1 text-xs font-medium text-amber-600 dark:text-amber-400'>
+                    {t('Your Price')}
+                  </div>
+                  <div className='text-foreground font-mono text-xl font-bold tabular-nums'>
+                    {renderDiscountedPrice(item.type)}
+                  </div>
                 </div>
-                <div className='mt-1 text-xs font-medium text-amber-600 dark:text-amber-400'>
-                  {t('Your Price')}
-                </div>
-                <div className='text-foreground font-mono text-xl font-bold tabular-nums'>
-                  {renderDiscountedPrice(item.type)}
-                </div>
-              </div>
+              )}
             </div>
           ))}
         </div>
@@ -732,9 +766,9 @@ function PriceSection(props: {
                   {item.label}
                 </span>
                 <span className='text-muted-foreground font-mono text-sm tabular-nums'>
-                  {hasDiscount
-                    ? renderDiscountedPrice(item.type)
-                    : renderBasePrice(item.type)}
+                  {showOriginalPrice && !hasDiscount
+                    ? renderBasePrice(item.type)
+                    : renderDiscountedPrice(item.type)}
                 </span>
               </div>
             ))}

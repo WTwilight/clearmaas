@@ -124,9 +124,11 @@ export function transformApiKeyToFormDefaults(
       : quotaUnitsToDollars(((apiKey as any).quota_limit_monthly ?? 0)),
     quota_used_daily: quotaUnitsToDollars(((apiKey as any).quota_used_daily ?? 0)),
     quota_used_monthly: quotaUnitsToDollars(((apiKey as any).quota_used_monthly ?? 0)),
-    model_limits: apiKey.model_limits
-      ? apiKey.model_limits.split(',').filter(Boolean)
-      : [],
+    model_limits: apiKey.select_models && apiKey.select_models.length > 0
+      ? apiKey.select_models.map((b: { model: string }) => b.model)
+      : apiKey.model_limits
+        ? apiKey.model_limits.split(',').filter(Boolean)
+        : [],
     allow_ips: apiKey.allow_ips || '',
     group: apiKey.group || DEFAULT_GROUP,
     cross_group_retry: !!apiKey.cross_group_retry,

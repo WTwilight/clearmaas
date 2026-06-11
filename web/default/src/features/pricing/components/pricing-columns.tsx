@@ -201,7 +201,8 @@ export function usePricingColumns(
         const isTokenBased = isTokenBasedModel(model)
         const ratio = getEffectiveRatio(model)
         const formattedRatio = formatDiscountRatio(ratio)
-        const hasDiscount = formattedRatio !== ''
+        const hasDiscount = model.discount_ratio != null && model.discount_ratio !== 1
+        const showOriginalPrice = model.discount_ratio != null && model.discount_ratio > 0
 
         if (isTokenBased) {
           const inputPrice = stripTrailingZeros(
@@ -224,62 +225,53 @@ export function usePricingColumns(
               usdExchangeRate
             )
           )
-
-          if (hasDiscount) {
-            const baseInputPrice = stripTrailingZeros(
-              formatBasePrice(
-                model,
-                'input',
-                tokenUnit,
-                showRechargePrice,
-                priceRate,
-                usdExchangeRate
-              )
+          const baseInputPrice = stripTrailingZeros(
+            formatBasePrice(
+              model,
+              'input',
+              tokenUnit,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
             )
-            const baseOutputPrice = stripTrailingZeros(
-              formatBasePrice(
-                model,
-                'output',
-                tokenUnit,
-                showRechargePrice,
-                priceRate,
-                usdExchangeRate
-              )
+          )
+          const baseOutputPrice = stripTrailingZeros(
+            formatBasePrice(
+              model,
+              'output',
+              tokenUnit,
+              showRechargePrice,
+              priceRate,
+              usdExchangeRate
             )
+          )
+          const hasRealDiscount = hasDiscount && baseInputPrice !== inputPrice
 
-            return (
-              <div className='min-w-[200px]'>
+          return (
+            <div className='min-w-[200px]'>
+              {showOriginalPrice && (
                 <div className='mb-1 flex items-center gap-1'>
                   <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
                     {formattedRatio}
                   </span>
                 </div>
-                <span className='font-mono text-sm tabular-nums'>
-                  <span className='text-muted-foreground/40 line-through'>
-                    {baseInputPrice}
-                  </span>
-                  <span className='text-muted-foreground/40 mx-0.5'>/</span>
-                  <span className='text-muted-foreground/40 line-through'>
-                    {baseOutputPrice}
-                  </span>
-                  <span className='mx-1 text-foreground'>→</span>
-                  <span className='font-bold text-foreground'>{inputPrice}</span>
-                  <span className='text-muted-foreground/40 mx-0.5'>/</span>
-                  <span className='font-bold text-foreground'>{outputPrice}</span>
-                </span>
-                <div className='text-muted-foreground/50 text-[10px]'>
-                  / {tokenUnitLabel} tokens
-                </div>
-              </div>
-            )
-          }
-
-          return (
-            <div className='min-w-[160px]'>
+              )}
               <span className='font-mono text-sm tabular-nums'>
-                {inputPrice}
-                <span className='text-muted-foreground/40 mx-1'>/</span>
-                {outputPrice}
+                <span className={hasRealDiscount ? 'text-muted-foreground/40 line-through' : 'text-foreground font-semibold'}>
+                  {baseInputPrice}
+                </span>
+                <span className='text-muted-foreground/40 mx-0.5'>/</span>
+                <span className={hasRealDiscount ? 'text-muted-foreground/40 line-through' : 'text-foreground font-semibold'}>
+                  {baseOutputPrice}
+                </span>
+                {hasRealDiscount && (
+                  <>
+                    <span className='mx-1 text-foreground'>→</span>
+                    <span className='font-bold text-foreground'>{inputPrice}</span>
+                    <span className='text-muted-foreground/40 mx-0.5'>/</span>
+                    <span className='font-bold text-foreground'>{outputPrice}</span>
+                  </>
+                )}
               </span>
               <div className='text-muted-foreground/50 text-[10px]'>
                 / {tokenUnitLabel} tokens
@@ -296,17 +288,17 @@ export function usePricingColumns(
             usdExchangeRate
           )
         )
-
-        if (hasDiscount) {
-          const basePrice = stripTrailingZeros(
-            formatBaseRequestPrice(
-              model,
-              showRechargePrice,
-              priceRate,
-              usdExchangeRate
-            )
+        const basePrice = stripTrailingZeros(
+          formatBaseRequestPrice(
+            model,
+            showRechargePrice,
+            priceRate,
+            usdExchangeRate
           )
+        )
+        const hasRealDiscount = hasDiscount && basePrice !== price
 
+        if (showOriginalPrice) {
           return (
             <div className='min-w-[140px]'>
               <div className='mb-1 flex items-center gap-1'>
@@ -315,11 +307,15 @@ export function usePricingColumns(
                 </span>
               </div>
               <span className='font-mono text-sm tabular-nums'>
-                <span className='text-muted-foreground/40 line-through'>
+                <span className={hasRealDiscount ? 'text-muted-foreground/40 line-through' : 'text-foreground font-semibold'}>
                   {basePrice}
                 </span>
-                <span className='mx-1 text-foreground'>→</span>
-                <span className='font-bold text-foreground'>{price}</span>
+                {hasRealDiscount && (
+                  <>
+                    <span className='mx-1 text-foreground'>→</span>
+                    <span className='font-bold text-foreground'>{price}</span>
+                  </>
+                )}
               </span>
               <div className='text-muted-foreground/50 text-[10px]'>
                 / {t('request')}

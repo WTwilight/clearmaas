@@ -116,7 +116,8 @@ func GetPricing(c *gin.Context) {
 		var sheetInfo model.SheetInfo
 		var hasSheet bool
 
-		// Enterprise sheet has priority when both enterprise and platform have this model.
+		// UNION of enterprise + platform models (enterprise takes priority for overlapping models).
+		// This matches the behavior of GetSelectableModelsForUser in the API key form.
 		if hasEnterprise {
 			if esi, ok := enterpriseModelSheetMap[item.ModelName]; ok {
 				sheetInfo = esi
@@ -138,7 +139,9 @@ func GetPricing(c *gin.Context) {
 
 		item.RatioSource = "platform_pricing_sheet"
 		if hasEnterprise {
-			item.RatioSource = "enterprise_pricing_sheet"
+			if _, inEnterprise := enterpriseModelSheetMap[item.ModelName]; inEnterprise {
+				item.RatioSource = "enterprise_pricing_sheet"
+			}
 		}
 
 		// Fill DiscountRatio from the effective sheet (enterprise takes priority).

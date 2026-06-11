@@ -59,15 +59,14 @@ export function getEffectiveRatio(
 }
 
 /**
- * Format discount ratio for display (e.g., "0.85x" or "8.5折")
+ * Format discount ratio for display (e.g., "0.85x" or "8.5折" or "原价")
+ * Always returns a string when the model has a discount_ratio defined.
  */
 export function formatDiscountRatio(ratio: number): string {
-  if (ratio === 1) return ''
   if (ratio < 1) {
-    // Convert to discount (e.g., 0.85 -> 8.5折)
     return `${(ratio * 10).toFixed(1)}折`
   }
-  // Greater than 1 (e.g., 1.5 -> 1.5x)
+  if (ratio === 1) return '原价'
   return `${ratio.toFixed(2)}x`
 }
 

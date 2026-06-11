@@ -25,6 +25,22 @@ func buildMaskedTokenResponse(token *model.Token) *model.Token {
 	return &maskedToken
 }
 
+// buildMaskedTokenResponseWithBindings populates select_models from pricing bindings
+// so that the GET response includes the binding info.
+func buildMaskedTokenResponseWithBindings(token *model.Token, bindings []*model.TokenPricingModelBinding) *model.Token {
+	t := buildMaskedTokenResponse(token)
+	if t != nil && bindings != nil {
+		t.SelectModels = make([]model.TokenPricingModelBindingInput, 0, len(bindings))
+		for _, b := range bindings {
+			t.SelectModels = append(t.SelectModels, model.TokenPricingModelBindingInput{
+				Model:          b.Model,
+				PricingSheetId: b.PricingSheetId,
+			})
+		}
+	}
+	return t
+}
+
 func buildMaskedTokenResponses(tokens []*model.Token) []*model.Token {
 	maskedTokens := make([]*model.Token, 0, len(tokens))
 	for _, token := range tokens {
@@ -78,7 +94,7 @@ func GetToken(c *gin.Context) {
 	}
 	bindings, _ := model.GetTokenPricingModelBindings(token.Id)
 	common.ApiSuccess(c, gin.H{
-		"token":            buildMaskedTokenResponse(token),
+		"token":            buildMaskedTokenResponseWithBindings(token, bindings),
 		"pricing_bindings":  bindings,
 	})
 }
@@ -414,10 +430,12 @@ func UpdateToken(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	// Re-fetch bindings to include in response
+	bindings, _ := model.GetTokenPricingModelBindings(cleanToken.Id)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
-		"data":    buildMaskedTokenResponse(cleanToken),
+		"data":    buildMaskedTokenResponseWithBindings(cleanToken, bindings),
 	})
 }
 

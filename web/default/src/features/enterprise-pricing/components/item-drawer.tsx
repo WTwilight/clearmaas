@@ -117,7 +117,7 @@ export function ItemDrawer({
     queryFn: async () => {
       if (!sheetId) return []
       const result = await getPricingItems(sheetId)
-      return result.data || []
+      return result.data?.items || []
     },
     enabled: !!sheetId,
   })

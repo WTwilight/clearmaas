@@ -7,32 +7,23 @@ import (
 
 // SelectableModelInfo represents a model available for binding in the key creation/edit form.
 type SelectableModelInfo struct {
-	Model               string  `json:"model"`
-	QuotaType           int     `json:"quota_type"` // 0=ratio(per 1M tokens), 1=fixed(per request)
-	InputOriginalPrice  float64 `json:"input_original_price"`  // ratio:type=model_ratio*2($/1M), price:type=model_price($/req)
-	OutputOriginalPrice float64 `json:"output_original_price"` // ratio:type=model_ratio*2*completion_ratio, price:type=0
-	DiscountRatio       float64 `json:"discount_ratio"`
+	Model                  string  `json:"model"`
+	QuotaType              int     `json:"quota_type"` // 0=ratio(per 1M tokens), 1=fixed(per request)
+	InputOriginalPrice     float64 `json:"input_original_price"`  // ratio:type=model_ratio*2($/1M), price:type=model_price($/req)
+	OutputOriginalPrice    float64 `json:"output_original_price"` // ratio:type=model_ratio*2*completion_ratio, price:type=0
+	DiscountRatio          float64 `json:"discount_ratio"`
 	InputDiscountedPrice  float64 `json:"input_discounted_price"`  // final price after discount
-	OutputDiscountedPrice float64 `json:"output_discounted_price"` // final price after discount
-	VendorType          string  `json:"vendor_type"`
-	Source              string  `json:"source"` // "enterprise" | "platform"
-	SheetId             int     `json:"sheet_id"`
-	SheetName           string  `json:"sheet_name"`
+	OutputDiscountedPrice  float64 `json:"output_discounted_price"` // final price after discount
+	VendorType             string  `json:"vendor_type"`
+	Source                string  `json:"source"` // "enterprise" | "platform"
+	SheetId               int     `json:"sheet_id"`
+	SheetName             string  `json:"sheet_name"`
 }
 
-// GetSelectableModelsForUser returns the list of models available in the user's current effective pricing sheet
-// (used for key creation/edit form).
-// Rules:
-//   - Models must be set in a platform pricing sheet (platform sheet is the source of truth).
-//   - Enterprise sheet has priority: if a model exists in both enterprise and platform sheets,
-//     the enterprise discount is used.
-//   - Platform sheet is the fallback when a model is not in the enterprise sheet.
-//
-// Data consistency constraint:
-// Since the model list source is consistent with the binding source, there is no risk of
-// "Token binds to a platform sheet but user belongs to an enterprise" conflict.
-// That is: during auto-binding and manual binding, a Token's sheet_id can only come from
-// the user's current effective pricing sheet.
+// GetSelectableModelsForUser returns the list of models available for binding in the key creation/edit form.
+// This is the UNION of all platform pricing sheet models AND the user's enterprise pricing sheet models,
+// with enterprise discount taking priority over platform for the same model.
+// This is consistent with the model marketplace (/api/pricing) behavior.
 func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
 	// Step 1: Collect all models from all active platform pricing sheets.
 	// When the same model appears in multiple platform sheets, keep the lowest discount (best for user).
@@ -59,13 +50,9 @@ func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
 		}
 	}
 
-	// If no platform pricing sheets are configured, return nothing.
-	if len(platformModelMap) == 0 {
-		return nil
-	}
-
 	// Step 2: Collect models from the user's enterprise pricing sheet (if any).
-	// Enterprise models take priority over platform models for the same model.
+	// Models ONLY in the enterprise sheet (not in any platform sheet) are also included.
+	// This ensures the model list matches the model marketplace behavior.
 	enterpriseModelMap := make(map[string]platformModelEntry)
 	enterpriseSheet, err := model.GetFirstActivePricingSheetByEnterpriseIdByType(model.EnterpriseTypePlatform)
 	enterpriseId, hasEnterprise := model.IsUserInEnterprise(userId)
@@ -76,6 +63,7 @@ func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
 			if err == nil {
 				for _, item := range items {
 					for _, modelName := range item.Models {
+						// Enterprise always takes priority for the same model
 						enterpriseModelMap[modelName] = platformModelEntry{
 							VendorType:    item.VendorType,
 							DiscountValue: item.DiscountValue,
@@ -88,16 +76,29 @@ func GetSelectableModelsForUser(userId int) []SelectableModelInfo {
 		}
 	}
 
-	// Step 3: Build result — platform models as base, with enterprise discount applied when available.
-	// If a model is in both maps, enterprise takes priority.
-	result := make([]SelectableModelInfo, 0, len(platformModelMap))
-	for modelName, platformEntry := range platformModelMap {
-		vendorType := platformEntry.VendorType
-		discountValue := platformEntry.DiscountValue
-		sheetId := platformEntry.SheetId
-		sheetName := platformEntry.SheetName
+	// Step 3: Build union of platform + enterprise models.
+	// If neither platform nor enterprise sheet has any models, return nothing.
+	allModelMap := make(map[string]platformModelEntry)
+	for modelName, entry := range platformModelMap {
+		allModelMap[modelName] = entry
+	}
+	for modelName, entry := range enterpriseModelMap {
+		allModelMap[modelName] = entry
+	}
+	if len(allModelMap) == 0 {
+		return nil
+	}
+
+	// Step 4: Build result — enterprise discount takes priority for overlapping models.
+	result := make([]SelectableModelInfo, 0, len(allModelMap))
+	for modelName, entry := range allModelMap {
+		vendorType := entry.VendorType
+		discountValue := entry.DiscountValue
+		sheetId := entry.SheetId
+		sheetName := entry.SheetName
 		source := "platform"
 
+		// Enterprise takes priority over platform for the same model
 		if enterpriseEntry, inEnterprise := enterpriseModelMap[modelName]; inEnterprise {
 			vendorType = enterpriseEntry.VendorType
 			discountValue = enterpriseEntry.DiscountValue
@@ -150,12 +151,4 @@ type platformModelEntry struct {
 	DiscountValue float64
 	SheetId       int
 	SheetName     string
-}
-
-func mapToSlice(m map[string]SelectableModelInfo) []SelectableModelInfo {
-	result := make([]SelectableModelInfo, 0, len(m))
-	for _, v := range m {
-		result = append(result, v)
-	}
-	return result
 }

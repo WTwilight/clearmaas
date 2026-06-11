@@ -69,7 +69,6 @@ import {
   updateApiKey,
   getApiKey,
   getAvailablePricingModels,
-  getTokenPricingModels,
 } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -79,7 +78,7 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import { type ApiKey, type SelectablePricingModel, type PricingBinding, type SelectModel } from '../types'
+import { type ApiKey, type SelectablePricingModel, type SelectModel } from '../types'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -110,15 +109,22 @@ const PricingModelRow = memo(function PricingModelRow({
 }: PricingModelRowProps) {
   const { t } = useTranslation()
   const isSelected = fieldValue.includes(model.model)
-  const hasDiscount = model.discount_ratio > 0 && model.discount_ratio < 1
+  const hasRealDiscount = model.discount_ratio != null && model.discount_ratio < 1
+  const hasDiscountBadge = model.discount_ratio != null
   const inputOriginal = model.input_original_price ?? 0
   const outputOriginal = model.output_original_price ?? 0
   const inputDiscounted = model.input_discounted_price ?? 0
   const outputDiscounted = model.output_discounted_price ?? 0
   const hasPrice = inputOriginal > 0 || outputOriginal > 0
+  const showOriginalPrice =
+    model.discount_ratio != null ||
+    inputOriginal !== inputDiscounted ||
+    outputOriginal !== outputDiscounted
   const isFixedPrice = model.quota_type === 1
-  const discountLabel = hasDiscount
+  const discountLabel = hasRealDiscount
     ? `${(model.discount_ratio * 10).toFixed(1)}折`
+    : hasDiscountBadge && model.discount_ratio === 1
+    ? t('原价')
     : ''
   const unitLabel = isFixedPrice ? t('per request') : '/ 1M tokens'
 
@@ -138,7 +144,7 @@ const PricingModelRow = memo(function PricingModelRow({
       </td>
       <td className='px-3 py-2 text-right'>
         <div className='flex flex-col items-end gap-0.5'>
-          {hasDiscount && (
+          {hasDiscountBadge && discountLabel && (
             <span className='inline-flex items-center rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none'>
               {discountLabel}
             </span>
@@ -146,7 +152,7 @@ const PricingModelRow = memo(function PricingModelRow({
           <span className='font-mono text-[11px] tabular-nums leading-tight'>
             {hasPrice ? (
               <>
-                {inputOriginal > 0 && (
+                {showOriginalPrice && inputOriginal > 0 && (
                   <>
                     <span className='text-muted-foreground/40 line-through'>
                       ${inputOriginal.toFixed(4)}
@@ -161,14 +167,16 @@ const PricingModelRow = memo(function PricingModelRow({
                     )}
                   </>
                 )}
-                <span className='text-foreground mx-1'>→</span>
-                <span className='font-bold text-foreground'>
+                {showOriginalPrice && (inputOriginal !== inputDiscounted || outputOriginal !== outputDiscounted) && (
+                  <span className='text-foreground mx-1'>→</span>
+                )}
+                <span className={showOriginalPrice && inputOriginal !== inputDiscounted ? 'font-bold text-foreground' : ''}>
                   ${inputDiscounted.toFixed(4)}
                 </span>
                 {outputOriginal > 0 && (
                   <>
                     <span className='text-muted-foreground/40 mx-0.5'>/</span>
-                    <span className='font-bold text-foreground'>
+                    <span className={showOriginalPrice && outputOriginal !== outputDiscounted ? 'font-bold text-foreground' : ''}>
                       ${outputDiscounted.toFixed(4)}
                     </span>
                   </>
@@ -234,7 +242,6 @@ export function ApiKeysMutateDrawer({
   const { status } = useStatus()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [pendingBindingModels, setPendingBindingModels] = useState<string[]>([])
   const defaultUseAutoGroup = status?.default_use_auto_group === true
 
   // Fetch models
@@ -285,25 +292,13 @@ export function ApiKeysMutateDrawer({
   // Load existing data when updating
   useEffect(() => {
     if (open && isUpdate && currentRow) {
-      Promise.all([
-        getApiKey(currentRow.id),
-        getTokenPricingModels(currentRow.id),
-      ]).then(([apiKeyResult, bindingsResult]) => {
+      getApiKey(currentRow.id).then((apiKeyResult) => {
         if (apiKeyResult.success && apiKeyResult.data) {
           form.reset(transformApiKeyToFormDefaults(apiKeyResult.data))
-        }
-        if (bindingsResult.success && bindingsResult.data?.bindings) {
-          const bindingModels = bindingsResult.data.bindings.map(
-            (b: PricingBinding) => b.model
-          )
-          setPendingBindingModels(bindingModels)
         }
       })
     } else if (open && !isUpdate) {
       form.reset(getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto))
-    }
-    return () => {
-      setPendingBindingModels([])
     }
   }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, backendHasAuto])
 
@@ -315,17 +310,12 @@ export function ApiKeysMutateDrawer({
   }, [open, hasPricingSheet])
 
   // When pricing sheet exists, force group to 'default' and disable cross_group_retry
-  // Also write pending binding models into model_limits once pricing sheet is ready
   useEffect(() => {
     if (hasPricingSheet) {
       form.setValue('group', 'default')
       form.setValue('cross_group_retry', false)
     }
-    // Write pending binding models only after pricing sheet is available (so we know which selector to show)
-    if (hasPricingSheet && pendingBindingModels.length > 0) {
-      form.setValue('model_limits', pendingBindingModels)
-    }
-  }, [hasPricingSheet, form, pendingBindingModels])
+  }, [hasPricingSheet, form])
 
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {

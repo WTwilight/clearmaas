@@ -177,7 +177,7 @@ export function SheetBindChannelDialog() {
                 <Skeleton className='h-10 w-full' />
               </div>
             ) : boundChannelIds && boundChannelIds.length > 0 ? (
-              <ScrollArea className='max-h-[200px] rounded-md border'>
+              <ScrollArea className='h-[200px] rounded-md border'>
                 <div className='space-y-1 p-2'>
                   {boundChannelIds.map((channelId) => {
                     const ch = allChannels?.find((c) => c.id === channelId)

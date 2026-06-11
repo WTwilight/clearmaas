@@ -92,7 +92,8 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
 
   const ratio = getEffectiveRatio(props.model)
   const formattedRatio = formatDiscountRatio(ratio)
-  const hasDiscount = formattedRatio !== ''
+  const hasDiscount = props.model.discount_ratio != null && props.model.discount_ratio < 1
+  const showOriginalPrice = props.model.discount_ratio != null && props.model.discount_ratio === 1
 
   return (
     <div
@@ -148,12 +149,33 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                 )
               ) : isTokenBased ? (
                 <>
-                  {hasDiscount && (
-                    <div className='col-span-2 mb-1 flex items-center gap-2 rounded bg-gradient-to-r from-amber-50 to-orange-50 px-2 py-1 dark:from-amber-900/30 dark:to-orange-900/30'>
-                      <span className='text-muted-foreground whitespace-nowrap text-xs'>
-                        {t('Input')}{' '}
-                        <span className='text-muted-foreground/50 line-through'>
-                          {formatBasePrice(
+                  <div className={cn(
+                    'col-span-2 flex items-center gap-2 rounded px-2 py-1',
+                    hasDiscount || showOriginalPrice
+                      ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30'
+                      : ''
+                  )}>
+                    <span className='text-muted-foreground whitespace-nowrap text-xs'>
+                      {t('Input')}{' '}
+                      <span className={hasDiscount ? 'text-muted-foreground/50 line-through' : 'font-mono font-semibold text-foreground'}>
+                        {formatBasePrice(
+                          props.model,
+                          'input',
+                          tokenUnit,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      /{tokenUnitLabel}
+                    </span>
+                    {hasDiscount ? (
+                      <>
+                        <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
+                          {formattedRatio}
+                        </span>
+                        <span className='text-foreground font-mono font-bold'>
+                          {formatPrice(
                             props.model,
                             'input',
                             tokenUnit,
@@ -162,31 +184,26 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                             usdExchangeRate
                           )}
                         </span>
-                        /{tokenUnitLabel}
-                      </span>
+                        <span className='text-muted-foreground text-xs'>/{tokenUnitLabel}</span>
+                      </>
+                    ) : showOriginalPrice ? (
                       <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
                         {formattedRatio}
                       </span>
-                      <span className='text-foreground font-mono font-bold'>
-                        {formatPrice(
+                    ) : null}
+                  </div>
+                  <div className={cn(
+                    'col-span-2 flex items-center gap-2 rounded px-2 py-1',
+                    hasDiscount || showOriginalPrice
+                      ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30'
+                      : ''
+                  )}>
+                    <span className='text-muted-foreground whitespace-nowrap text-xs'>
+                      {t('Output')}{' '}
+                      <span className={hasDiscount ? 'text-muted-foreground/50 line-through' : 'font-mono font-semibold text-foreground'}>
+                        {formatBasePrice(
                           props.model,
-                          'input',
-                          tokenUnit,
-                          showRechargePrice,
-                          priceRate,
-                          usdExchangeRate
-                        )}
-                      </span>
-                      <span className='text-muted-foreground text-xs'>/{tokenUnitLabel}</span>
-                    </div>
-                  )}
-                  {!hasDiscount && (
-                    <span className='text-muted-foreground whitespace-nowrap'>
-                      {t('Input')}{' '}
-                      <span className='text-foreground font-mono font-semibold'>
-                        {formatPrice(
-                          props.model,
-                          'input',
+                          'output',
                           tokenUnit,
                           showRechargePrice,
                           priceRate,
@@ -195,13 +212,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                       </span>
                       /{tokenUnitLabel}
                     </span>
-                  )}
-                  {hasDiscount ? (
-                    <div className='col-span-2 flex items-center gap-2 rounded bg-gradient-to-r from-amber-50 to-orange-50 px-2 py-1 dark:from-amber-900/30 dark:to-orange-900/30'>
-                      <span className='text-muted-foreground whitespace-nowrap text-xs'>
-                        {t('Output')}{' '}
-                        <span className='text-muted-foreground/50 line-through'>
-                          {formatBasePrice(
+                    {hasDiscount ? (
+                      <>
+                        <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
+                          {formattedRatio}
+                        </span>
+                        <span className='text-foreground font-mono font-bold'>
+                          {formatPrice(
                             props.model,
                             'output',
                             tokenUnit,
@@ -210,39 +227,14 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                             usdExchangeRate
                           )}
                         </span>
-                        /{tokenUnitLabel}
-                      </span>
+                        <span className='text-muted-foreground text-xs'>/{tokenUnitLabel}</span>
+                      </>
+                    ) : showOriginalPrice ? (
                       <span className='rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white'>
                         {formattedRatio}
                       </span>
-                      <span className='text-foreground font-mono font-bold'>
-                        {formatPrice(
-                          props.model,
-                          'output',
-                          tokenUnit,
-                          showRechargePrice,
-                          priceRate,
-                          usdExchangeRate
-                        )}
-                      </span>
-                      <span className='text-muted-foreground text-xs'>/{tokenUnitLabel}</span>
-                    </div>
-                  ) : (
-                    <span className='text-muted-foreground whitespace-nowrap'>
-                      {t('Output')}{' '}
-                      <span className='text-foreground font-mono font-semibold'>
-                        {formatPrice(
-                          props.model,
-                          'output',
-                          tokenUnit,
-                          showRechargePrice,
-                          priceRate,
-                          usdExchangeRate
-                        )}
-                      </span>
-                      /{tokenUnitLabel}
-                    </span>
-                  )}
+                    ) : null}
+                  </div>
                   {hasCachedPrice && (
                     <span className='text-muted-foreground/60 col-span-2 whitespace-nowrap'>
                       {t('Cached')}{' '}
@@ -281,6 +273,20 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
                           priceRate,
                           usdExchangeRate
                         )}
+                      </span>
+                    </>
+                  ) : showOriginalPrice ? (
+                    <>
+                      <span className='text-foreground font-mono font-semibold'>
+                        {formatRequestPrice(
+                          props.model,
+                          showRechargePrice,
+                          priceRate,
+                          usdExchangeRate
+                        )}
+                      </span>
+                      <span className='ml-1 mr-1 rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1 py-0.5 text-[10px] font-bold text-white'>
+                        {formattedRatio}
                       </span>
                     </>
                   ) : (
