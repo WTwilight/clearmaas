@@ -35,31 +35,16 @@ import { CopyButton } from '@/components/copy-button'
 import { getModelSquare } from './api'
 import type { ModelSquareItem, ModelSquareVersion } from './types'
 
-const categoryChips = ['All', 'Text', 'Image', 'Audio', 'Video', 'Free Trial']
+const categoryChips = ['All', 'Text', 'Image', 'Audio', 'Video']
 const inputTypes = ['Text', 'Image', 'File', 'Audio', 'Video']
 const discountRange = { min: 0, max: 100, step: 1 }
 const defaultDiscountPercent = 100
-const fallbackContextStops = [0, 128_000, 1_000_000, 2_000_000]
-const fallbackContextRange = { min: 0, max: 2_000_000, step: 1000 }
 const inputTypeIcons: Record<string, IconName> = {
   Text: 'text',
   Image: 'image',
   File: 'file',
   Audio: 'audio',
   Video: 'video',
-}
-const protocolIcons: Record<string, IconName> = {
-  'OpenAI Chat Completions': 'chat',
-  'OpenAI Responses': 'responses',
-  'OpenAI Images': 'image',
-  'Anthropic Messages': 'anthropic',
-  'Google Gemini': 'sparkle',
-  'Google Video': 'video',
-}
-const reasoningIcons: Record<string, IconName> = {
-  'No reasoning': 'minus',
-  'Switchable reasoning': 'lines',
-  'Always-on reasoning': 'anthropic',
 }
 type IconName =
   | 'anthropic'
@@ -81,10 +66,7 @@ type IconName =
   | 'provider'
 type SidebarFilterKey =
   | 'inputType'
-  | 'developer'
   | 'vendor'
-  | 'protocol'
-  | 'reasoning'
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string
 
 const zhFallbackLabels: Record<string, string> = {
@@ -94,18 +76,13 @@ const zhFallbackLabels: Record<string, string> = {
   File: '文件',
   Audio: '音频',
   Video: '视频',
-  'Free Trial': '免费试用',
   'Model Square': '模型广场',
-  'Input type': '输入类型',
+  Type: '类型',
+  'Input type': '类型',
   'Output type': '输出类型',
-  'Context length': '上下文长度',
   Discount: '折扣',
-  Developer: '开发商',
-  Provider: '供应商',
-  'Supported parameters': '支持参数',
-  'Supported protocols': '支持协议',
+  'Model vendor': '模型厂商',
   Reasoning: '推理',
-  'Reasoning mode': '推理模式',
   Models: '模型',
   Model: '模型',
   Tags: '标签',
@@ -223,25 +200,18 @@ export function ModelSquare() {
   const [keyword, setKeyword] = useState('')
   const [category, setCategory] = useState('All')
   const [sortBy, setSortBy] = useState<'updated' | 'discount'>('updated')
-  const [contextMinTokens, setContextMinTokens] = useState(0)
   const [discountPercent, setDiscountPercent] = useState(defaultDiscountPercent)
-  const deferredContextMinTokens = useDeferredValue(contextMinTokens)
   const deferredDiscountPercent = useDeferredValue(discountPercent)
   const [activeFilters, setActiveFilters] = useState<
     Record<SidebarFilterKey, Set<string>>
   >({
     inputType: new Set(),
-    developer: new Set(),
     vendor: new Set(),
-    protocol: new Set(),
-    reasoning: new Set(),
   })
   const [expandedLists, setExpandedLists] = useState<
-    Record<'developer' | 'vendor' | 'protocol', boolean>
+    Record<'vendor', boolean>
   >({
-    developer: false,
     vendor: false,
-    protocol: false,
   })
 
   const query = useQuery({
@@ -250,22 +220,6 @@ export function ModelSquare() {
   })
 
   const data = query.data
-  const contextStops = useMemo(
-    () => buildContextStops(data?.models ?? []),
-    [data?.models]
-  )
-  const contextRange = useMemo(
-    () => buildContextRange(data?.models ?? []),
-    [data?.models]
-  )
-  const contextLabels = useMemo(
-    () => contextStops.map((value) => formatContextStopLabel(value, mt)),
-    [contextStops, mt]
-  )
-  const developers = useMemo(
-    () => uniqueValues((data?.models ?? []).map((model) => model.vendor_name)),
-    [data?.models]
-  )
   const vendorIconByName = useMemo(() => {
     const entries = new Map<string, string>()
     for (const vendor of data?.vendors ?? []) {
@@ -282,30 +236,16 @@ export function ModelSquare() {
     }
     return entries
   }, [data?.models, data?.vendors])
-  const availableProtocols = useMemo(
-    () =>
-      uniqueValues(
-        (data?.models ?? []).flatMap((model) => modelProtocols(model))
-      ),
-    [data?.models]
-  )
-  const availableReasoningModes = useMemo(
-    () =>
-      uniqueValues((data?.models ?? []).map((model) => modelReasoning(model))),
-    [data?.models]
-  )
   const categoryCounts = useMemo(
     () =>
       buildCategoryCounts(data?.models ?? [], {
         activeFilters,
-        contextMinTokens: deferredContextMinTokens,
         discountPercent: deferredDiscountPercent,
         search: keyword.trim().toLowerCase(),
       }),
     [
       activeFilters,
       data?.models,
-      deferredContextMinTokens,
       deferredDiscountPercent,
       keyword,
     ]
@@ -319,7 +259,6 @@ export function ModelSquare() {
       return modelMatchesActiveFilters(
         model,
         activeFilters,
-        deferredContextMinTokens,
         deferredDiscountPercent,
         search
       )
@@ -334,7 +273,6 @@ export function ModelSquare() {
   }, [
     activeFilters,
     category,
-    deferredContextMinTokens,
     deferredDiscountPercent,
     data?.models,
     keyword,
@@ -353,12 +291,11 @@ export function ModelSquare() {
     })
   }
 
-  const filterSummary = buildFilterSummary(
+  const filterSummary = buildFilterSummary({
     activeFilters,
-    contextMinTokens,
     discountPercent,
-    mt
-  )
+    t: mt,
+  })
 
   return (
     <div className='model-square-page model-square-root'>
@@ -373,7 +310,7 @@ export function ModelSquare() {
 
         <div className='content-shell'>
           <aside className='sidebar'>
-            <FilterGroup title={mt('Input type')}>
+            <FilterGroup title={mt('Type')}>
               {inputTypes.map((item) => (
                 <FilterButton
                   key={item}
@@ -384,17 +321,6 @@ export function ModelSquare() {
                 />
               ))}
             </FilterGroup>
-
-            <RangeFilter
-              title={mt('Context length')}
-              labels={contextLabels}
-              value={contextMinTokens}
-              min={contextRange.min}
-              max={contextRange.max}
-              step={contextRange.step}
-              formatValue={(value) => formatContextLabel(value, mt)}
-              onChange={setContextMinTokens}
-            />
 
             <RangeFilter
               title={mt('Discount')}
@@ -415,33 +341,7 @@ export function ModelSquare() {
               onChange={setDiscountPercent}
             />
 
-            <FilterGroup title={mt('Developer')}>
-              {renderExpandableFilters(
-                developers,
-                expandedLists.developer,
-                (item) => (
-                  <FilterButton
-                    key={item}
-                    active={activeFilters.developer.has(item)}
-                    label={item}
-                    iconName={toColorIconName(vendorIconByName.get(item))}
-                    onClick={() => toggleFilter('developer', item)}
-                    provider
-                  />
-                )
-              )}
-              <ExpandButton
-                expanded={expandedLists.developer}
-                onClick={() =>
-                  setExpandedLists((current) => ({
-                    ...current,
-                    developer: !current.developer,
-                  }))
-                }
-              />
-            </FilterGroup>
-
-            <FilterGroup title={mt('Provider')}>
+            <FilterGroup title={mt('Model vendor')}>
               {renderExpandableFilters(
                 (data?.vendors ?? []).map((item) => item.name),
                 expandedLists.vendor,
@@ -465,43 +365,6 @@ export function ModelSquare() {
                   }))
                 }
               />
-            </FilterGroup>
-
-            <FilterGroup title={mt('Supported protocols')}>
-              {renderExpandableFilters(
-                availableProtocols,
-                expandedLists.protocol,
-                (item) => (
-                  <FilterButton
-                    key={item}
-                    active={activeFilters.protocol.has(item)}
-                    label={mt(item)}
-                    icon={protocolIcons[item] || 'provider'}
-                    onClick={() => toggleFilter('protocol', item)}
-                  />
-                )
-              )}
-              <ExpandButton
-                expanded={expandedLists.protocol}
-                onClick={() =>
-                  setExpandedLists((current) => ({
-                    ...current,
-                    protocol: !current.protocol,
-                  }))
-                }
-              />
-            </FilterGroup>
-
-            <FilterGroup title={mt('Reasoning')}>
-              {availableReasoningModes.map((item) => (
-                <FilterButton
-                  key={item}
-                  active={activeFilters.reasoning.has(item)}
-                  label={mt(item)}
-                  icon={reasoningIcons[item] || 'provider'}
-                  onClick={() => toggleFilter('reasoning', item)}
-                />
-              ))}
             </FilterGroup>
 
             <p className='filter-summary'>{filterSummary}</p>
@@ -1556,40 +1419,20 @@ function matchesSet(values: string[], selected: Set<string>) {
 
 function matchesCategory(model: ModelSquareItem, category: string) {
   if (category === 'All') return true
-  if (category === 'Free Trial') {
-    return model.tags.some((tag) => /free|trial|免费/i.test(tag))
-  }
   return modelCategoryTypes(model).includes(category)
 }
 
 function modelMatchesActiveFilters(
   model: ModelSquareItem,
   activeFilters: Record<SidebarFilterKey, Set<string>>,
-  contextMinTokens: number,
   discountPercent: number,
   search: string
 ) {
   if (!matchesSet(modelInputTypes(model), activeFilters.inputType)) {
     return false
   }
-  if (!matchesSet([model.vendor_name || ''], activeFilters.developer)) {
-    return false
-  }
   if (!matchesSet([model.vendor_name || ''], activeFilters.vendor)) {
     return false
-  }
-  if (!matchesSet(modelProtocols(model), activeFilters.protocol)) {
-    return false
-  }
-  if (
-    activeFilters.reasoning.size > 0 &&
-    !matchesSet([modelReasoning(model)], activeFilters.reasoning)
-  ) {
-    return false
-  }
-  if (contextMinTokens > 0) {
-    const contextTokens = modelContextTokens(model)
-    if (!contextTokens || contextTokens < contextMinTokens) return false
   }
   if (!hasVersionsAtDiscount(model, discountPercent)) return false
   if (!search) return true
@@ -1619,7 +1462,6 @@ function buildCategoryCounts(
   models: ModelSquareItem[],
   filters: {
     activeFilters: Record<SidebarFilterKey, Set<string>>
-    contextMinTokens: number
     discountPercent: number
     search: string
   }
@@ -1632,7 +1474,6 @@ function buildCategoryCounts(
         modelMatchesActiveFilters(
           model,
           filters.activeFilters,
-          filters.contextMinTokens,
           filters.discountPercent,
           filters.search
         )
@@ -1822,43 +1663,6 @@ function formatModelDiscountLabel(
   return t('{{count}}% discount', { count: modelBestDiscount(model) })
 }
 
-function buildContextStops(models: ModelSquareItem[]) {
-  const values = uniqueNumberValues([
-    0,
-    ...models.map((model) => modelContextTokens(model)),
-  ])
-  if (values.length <= 1 || values[values.length - 1] <= 0) {
-    return fallbackContextStops
-  }
-  if (values.length <= 4) return values
-  return [
-    0,
-    values[Math.max(1, Math.floor((values.length - 1) / 3))],
-    values[Math.max(1, Math.floor(((values.length - 1) * 2) / 3))],
-    values[values.length - 1],
-  ]
-}
-
-function buildContextRange(models: ModelSquareItem[]) {
-  const max = Math.max(0, ...models.map((model) => modelContextTokens(model)))
-  if (max <= 0) {
-    return fallbackContextRange
-  }
-  return { min: 0, max, step: contextStep(max) }
-}
-
-function contextStep(max: number) {
-  if (max >= 100_000) return 1000
-  if (max >= 10_000) return 100
-  return 1
-}
-
-function uniqueNumberValues(values: number[]) {
-  return [...new Set(values.filter((value) => Number.isFinite(value)))].sort(
-    (a, b) => a - b
-  )
-}
-
 function formatContext(model: ModelSquareItem) {
   if (model.context_tokens && model.context_tokens > 0) {
     return formatTokenAmount(model.context_tokens)
@@ -1881,14 +1685,6 @@ function formatTokenAmount(tokens: number) {
     return `${(tokens / 1_000).toFixed(2)}K`
   }
   return `${tokens}`
-}
-
-function formatContextStopLabel(
-  tokens: number,
-  t: (key: string, options?: Record<string, unknown>) => string
-) {
-  if (tokens <= 0) return t('All')
-  return formatTokenAmount(tokens)
 }
 
 function formatLatency(value: number | undefined) {
@@ -1937,15 +1733,6 @@ function modelUptime(model: ModelSquareItem) {
   return rates.reduce((sum, value) => sum + value, 0) / rates.length
 }
 
-function formatContextLabel(
-  tokens: number,
-  t: (key: string, options?: Record<string, unknown>) => string
-) {
-  if (tokens <= 0) return t('All contexts')
-  if (tokens >= 1_000_000) return '>= 1M'
-  return `>= ${Math.round(tokens / 1_000)}K`
-}
-
 function formatDiscountSliderValue(value: number) {
   return stripTrailingZeros((value / 10).toFixed(1))
 }
@@ -1967,40 +1754,40 @@ function sortLabel(
   return t('Latest')
 }
 
-function buildFilterSummary(
+function buildFilterSummary({
+  activeFilters,
+  discountPercent,
+  t,
+}: {
   activeFilters: Record<SidebarFilterKey, Set<string>>,
-  contextMinTokens: number,
   discountPercent: number,
   t: (key: string, options?: Record<string, unknown>) => string
-) {
+}) {
+  const translate = typeof t === 'function' ? t : (key: string) => key
   const labels: string[] = []
   for (const [key, values] of Object.entries(activeFilters)) {
     if (values.size > 0) {
       labels.push(
-        `${t(filterGroupLabel(key as SidebarFilterKey))}: ${[...values].join(' / ')}`
+        `${translate(filterGroupLabel(key as SidebarFilterKey))}: ${[...values].join(' / ')}`
       )
     }
   }
-  if (contextMinTokens > 0) labels.push(formatContextLabel(contextMinTokens, t))
   if (discountPercent < defaultDiscountPercent) {
     labels.push(
-      t('Discount <= {{count}} off', {
+      translate('Discount <= {{count}} off', {
         count: formatDiscountSliderValue(discountPercent),
       })
     )
   }
   return labels.length
-    ? t('Filtered {{summary}}', { summary: labels.join(' · ') })
-    : t('No sidebar filters applied')
+    ? translate('Filtered {{summary}}', { summary: labels.join(' · ') })
+    : translate('No sidebar filters applied')
 }
 
 function filterGroupLabel(key: SidebarFilterKey) {
   const labels: Record<SidebarFilterKey, string> = {
-    inputType: 'Input type',
-    developer: 'Developer',
-    vendor: 'Provider',
-    protocol: 'Supported protocols',
-    reasoning: 'Reasoning mode',
+    inputType: 'Type',
+    vendor: 'Model vendor',
   }
   return labels[key]
 }
