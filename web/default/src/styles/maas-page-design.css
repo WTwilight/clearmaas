@@ -1854,6 +1854,27 @@
   border-radius: 12px;
 }
 
+.maas-page .close-auth-switch {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.maas-page .close-auth-switch a {
+  color: #1677ff;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.maas-page .close-auth-switch a:hover {
+  color: #0958d9;
+}
+
 .maas-page .google-register {
   display: grid;
   grid-template-columns: 36px 1fr 36px;

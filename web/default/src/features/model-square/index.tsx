@@ -48,14 +48,6 @@ const inputTypeIcons: Record<string, IconName> = {
   Audio: 'audio',
   Video: 'video',
 }
-const parameterIcons: Record<string, IconName> = {
-  max_completion_tokens: 'hash',
-  temperature: 'temperature',
-  top_p: 'top-p',
-  presence_penalty: 'plus',
-  frequency_penalty: 'lines',
-  reasoning_effort: 'sparkle',
-}
 const protocolIcons: Record<string, IconName> = {
   'OpenAI Chat Completions': 'chat',
   'OpenAI Responses': 'responses',
@@ -91,7 +83,6 @@ type SidebarFilterKey =
   | 'inputType'
   | 'developer'
   | 'vendor'
-  | 'parameter'
   | 'protocol'
   | 'reasoning'
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string
@@ -242,16 +233,14 @@ export function ModelSquare() {
     inputType: new Set(),
     developer: new Set(),
     vendor: new Set(),
-    parameter: new Set(),
     protocol: new Set(),
     reasoning: new Set(),
   })
   const [expandedLists, setExpandedLists] = useState<
-    Record<'developer' | 'vendor' | 'parameter' | 'protocol', boolean>
+    Record<'developer' | 'vendor' | 'protocol', boolean>
   >({
     developer: false,
     vendor: false,
-    parameter: false,
     protocol: false,
   })
 
@@ -293,13 +282,6 @@ export function ModelSquare() {
     }
     return entries
   }, [data?.models, data?.vendors])
-  const availableParameters = useMemo(
-    () =>
-      uniqueValues(
-        (data?.models ?? []).flatMap((model) => modelParameters(model))
-      ),
-    [data?.models]
-  )
   const availableProtocols = useMemo(
     () =>
       uniqueValues(
@@ -480,31 +462,6 @@ export function ModelSquare() {
                   setExpandedLists((current) => ({
                     ...current,
                     vendor: !current.vendor,
-                  }))
-                }
-              />
-            </FilterGroup>
-
-            <FilterGroup title={mt('Supported parameters')}>
-              {renderExpandableFilters(
-                availableParameters,
-                expandedLists.parameter,
-                (item) => (
-                  <FilterButton
-                    key={item}
-                    active={activeFilters.parameter.has(item)}
-                    label={mt(formatParameterLabel(item))}
-                    icon={parameterIcons[item] || 'provider'}
-                    onClick={() => toggleFilter('parameter', item)}
-                  />
-                )
-              )}
-              <ExpandButton
-                expanded={expandedLists.parameter}
-                onClick={() =>
-                  setExpandedLists((current) => ({
-                    ...current,
-                    parameter: !current.parameter,
                   }))
                 }
               />
@@ -1621,9 +1578,6 @@ function modelMatchesActiveFilters(
   if (!matchesSet([model.vendor_name || ''], activeFilters.vendor)) {
     return false
   }
-  if (!matchesSet(modelParameters(model), activeFilters.parameter)) {
-    return false
-  }
   if (!matchesSet(modelProtocols(model), activeFilters.protocol)) {
     return false
   }
@@ -1937,13 +1891,6 @@ function formatContextStopLabel(
   return formatTokenAmount(tokens)
 }
 
-function formatParameterLabel(value: string) {
-  return value
-    .split('_')
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join(' ')
-}
-
 function formatLatency(value: number | undefined) {
   if (typeof value !== 'number' || value <= 0) {
     return '-'
@@ -2052,7 +1999,6 @@ function filterGroupLabel(key: SidebarFilterKey) {
     inputType: 'Input type',
     developer: 'Developer',
     vendor: 'Provider',
-    parameter: 'Supported parameters',
     protocol: 'Supported protocols',
     reasoning: 'Reasoning mode',
   }

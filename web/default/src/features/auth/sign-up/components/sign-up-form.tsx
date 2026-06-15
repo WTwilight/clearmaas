@@ -20,6 +20,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -361,6 +362,11 @@ export function SignUpForm({
             variant='close'
           />
         )}
+
+        <p className='close-auth-switch'>
+          <span>{t('Already have an account?')}</span>
+          <Link to='/sign-in'>{t('Sign in')}</Link>
+        </p>
       </form>
 
       {hasWeChatLogin && (
