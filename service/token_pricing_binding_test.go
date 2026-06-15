@@ -41,6 +41,189 @@ func TestGetSelectableModelsForUser_NoEnterpriseBinding(t *testing.T) {
 	assert.Contains(t, names, "gpt-4o-mini")
 }
 
+func TestGetGroupedSelectableModelsForUser_GroupsByModelSquareParent(t *testing.T) {
+	truncateServiceTestData(t)
+
+	user := seedServiceUser(t, 1, "grouped-user")
+	platformE := seedServicePlatformEnterprise(t)
+	platformSheet := seedServicePricingSheet(t, platformE.Id, "平台默认", model.PricingSheetStatusActive, now()-86400, now()+86400)
+	seedServicePricingItem(t, platformSheet.Id, []string{"gpt-4o", "gpt-4o-alias"}, model.DiscountTypeRatio, 0.5)
+
+	vendor := seedServiceVendor(t, "OpenAI", "openai")
+	seedServiceModelMeta(t, "gpt-4o", "GPT-4o", "chat,vision", vendor.Id)
+	seedServiceChannel(t, 9001, "openai-route", "gpt-4o,gpt-4o-alias", `{"gpt-4o-alias":"gpt-4o"}`, "fast")
+	seedServiceAbility(t, "default", "gpt-4o", 9001)
+	seedServiceAbility(t, "default", "gpt-4o-alias", 9001)
+
+	data, err := GetGroupedSelectableModelsForUser(user.Id)
+	require.NoError(t, err)
+	require.Len(t, data.Models, 1)
+	assert.Equal(t, 1, data.Total)
+
+	group := data.Models[0]
+	assert.Equal(t, "gpt-4o", group.Name)
+	assert.Equal(t, "GPT 4O", group.DisplayName)
+	assert.Equal(t, "GPT-4o", group.Icon)
+	assert.Equal(t, "OpenAI", group.Vendor)
+	assert.Equal(t, "openai", group.VendorIcon)
+	assert.Contains(t, group.Tags, "chat")
+	assert.Greater(t, group.Context, int64(0))
+	assert.Greater(t, group.MaxOutput, int64(0))
+
+	require.Len(t, group.Versions, 2)
+	versionsByModel := make(map[string]dtoAvailableVersionForTest, len(group.Versions))
+	for _, version := range group.Versions {
+		versionsByModel[version.Model] = dtoAvailableVersionForTest{
+			upstreamKey:    version.UpstreamKey,
+			channelID:      version.ChannelID,
+			channelName:    version.ChannelName,
+			channelTags:    version.ChannelTags,
+			pricingSheetID: version.PricingSheetID,
+			sheetName:      version.SheetName,
+			source:         version.Source,
+			vendorType:     version.VendorType,
+			discountRatio:  version.DiscountRatio,
+			originalInput:  version.Original.Input,
+			discountInput:  version.Discounted.Input,
+		}
+	}
+
+	alias := versionsByModel["gpt-4o-alias"]
+	assert.Equal(t, "gpt-4o", alias.upstreamKey)
+	assert.Equal(t, 9001, alias.channelID)
+	assert.Equal(t, "openai-route", alias.channelName)
+	assert.Contains(t, alias.channelTags, "fast")
+	assert.Equal(t, platformSheet.Id, alias.pricingSheetID)
+	assert.Equal(t, "平台默认", alias.sheetName)
+	assert.Equal(t, "platform", alias.source)
+	assert.Equal(t, "openai", alias.vendorType)
+	assert.Equal(t, 0.5, alias.discountRatio)
+	assert.Greater(t, alias.originalInput, 0.0)
+	assert.Equal(t, alias.originalInput*0.5, alias.discountInput)
+}
+
+func TestGetGroupedSelectableModelsForUser_KeepsSelectableModelsWithoutModelSquareMeta(t *testing.T) {
+	truncateServiceTestData(t)
+
+	user := seedServiceUser(t, 1, "fallback-grouped-user")
+	platformE := seedServicePlatformEnterprise(t)
+	platformSheet := seedServicePricingSheet(t, platformE.Id, "平台默认", model.PricingSheetStatusActive, now()-86400, now()+86400)
+	seedServicePricingItem(t, platformSheet.Id, []string{"legacy-only-model"}, model.DiscountTypeRatio, 0.6)
+
+	data, err := GetGroupedSelectableModelsForUser(user.Id)
+	require.NoError(t, err)
+	require.Len(t, data.Models, 1)
+	assert.Equal(t, 1, data.Total)
+
+	group := data.Models[0]
+	assert.Equal(t, "legacy-only-model", group.Name)
+	assert.Equal(t, "legacy-only-model", group.DisplayName)
+	assert.Equal(t, "openai", group.Vendor)
+	assert.Equal(t, "openai", group.VendorName)
+	assert.Equal(t, 0.6, group.BestDiscountRatio)
+
+	require.Len(t, group.Versions, 1)
+	version := group.Versions[0]
+	assert.Equal(t, "legacy-only-model", version.Model)
+	assert.Equal(t, platformSheet.Id, version.PricingSheetID)
+	assert.Equal(t, platformSheet.Id, version.SheetID)
+	assert.Equal(t, "平台默认", version.SheetName)
+	assert.Equal(t, "platform", version.Source)
+	assert.Equal(t, "openai", version.VendorType)
+	assert.Equal(t, 0.6, version.DiscountRatio)
+	assert.Greater(t, version.InputOriginalPrice, 0.0)
+	assert.Equal(t, version.InputOriginalPrice*0.6, version.InputDiscountedPrice)
+}
+
+func TestGetGroupedSelectableModelsForUser_FallbackGroupsByChannelMapping(t *testing.T) {
+	truncateServiceTestData(t)
+
+	user := seedServiceUser(t, 1, "mapped-fallback-user")
+	platformE := seedServicePlatformEnterprise(t)
+	platformSheet := seedServicePricingSheet(t, platformE.Id, "平台默认", model.PricingSheetStatusActive, now()-86400, now()+86400)
+	seedServicePricingItem(t, platformSheet.Id, []string{"gpt-4.1-c1"}, model.DiscountTypeRatio, 0.62)
+
+	vendor := seedServiceVendor(t, "OpenAI", "OpenAI.Color")
+	seedServiceModelMeta(t, "gpt-4.1", "OpenAI.Color", "chat", vendor.Id)
+	seedServiceChannel(t, 9002, "openai-c-route", "gpt-4.1-c1", `{"gpt-4.1-c1":"gpt-4.1"}`, "官方标准版")
+
+	data, err := GetGroupedSelectableModelsForUser(user.Id)
+	require.NoError(t, err)
+	require.Len(t, data.Models, 1)
+
+	group := data.Models[0]
+	assert.Equal(t, "gpt-4.1", group.Name)
+	assert.Equal(t, "GPT 4.1", group.DisplayName)
+	assert.Equal(t, "OpenAI.Color", group.Icon)
+	assert.Equal(t, "OpenAI", group.VendorName)
+	assert.Contains(t, group.Tags, "chat")
+
+	require.Len(t, group.Versions, 1)
+	version := group.Versions[0]
+	assert.Equal(t, "gpt-4.1-c1", version.Model)
+	assert.Equal(t, "gpt-4.1", version.UpstreamKey)
+	assert.Equal(t, 9002, version.ChannelID)
+	assert.Equal(t, "openai-c-route", version.ChannelName)
+	assert.Contains(t, version.ChannelTags, "官方标准版")
+	assert.Equal(t, 0.62, version.DiscountRatio)
+}
+
+func TestGetGroupedSelectableModelsForUser_FallbackGroupsByChannelSuffix(t *testing.T) {
+	truncateServiceTestData(t)
+
+	user := seedServiceUser(t, 1, "suffix-fallback-user")
+	platformE := seedServicePlatformEnterprise(t)
+	platformSheet := seedServicePricingSheet(t, platformE.Id, "平台默认", model.PricingSheetStatusActive, now()-86400, now()+86400)
+	seedServicePricingItem(t, platformSheet.Id, []string{"gpt-5.5-pro-b1"}, model.DiscountTypeRatio, 0.8)
+
+	vendor := seedServiceVendor(t, "OpenAI", "OpenAI.Color")
+	seedServiceModelMeta(t, "gpt-5.5-pro", "OpenAI.Color", "chat", vendor.Id)
+	seedServiceChannel(t, 9003, "openai-b-route", "gpt-5.5-pro-b1", `{}`, "大额官方稳定版")
+
+	data, err := GetGroupedSelectableModelsForUser(user.Id)
+	require.NoError(t, err)
+	require.Len(t, data.Models, 1)
+
+	group := data.Models[0]
+	assert.Equal(t, "gpt-5.5-pro", group.Name)
+	assert.Equal(t, "GPT 5.5 PRO", group.DisplayName)
+	assert.Equal(t, "OpenAI", group.VendorName)
+
+	require.Len(t, group.Versions, 1)
+	version := group.Versions[0]
+	assert.Equal(t, "gpt-5.5-pro-b1", version.Model)
+	assert.Equal(t, "gpt-5.5-pro", version.UpstreamKey)
+	assert.Equal(t, 9003, version.ChannelID)
+	assert.Contains(t, version.ChannelTags, "大额官方稳定版")
+	assert.Equal(t, 0.8, version.DiscountRatio)
+}
+
+func TestGetModelSquareData_GroupsChannelSuffixAsVersion(t *testing.T) {
+	truncateServiceTestData(t)
+
+	vendor := seedServiceVendor(t, "OpenAI", "OpenAI.Color")
+	seedServiceModelMeta(t, "gpt-5.5-pro", "OpenAI.Color", "chat", vendor.Id)
+
+	platformE := seedServicePlatformEnterprise(t)
+	platformSheet := seedServicePricingSheet(t, platformE.Id, "平台默认", model.PricingSheetStatusActive, now()-86400, now()+86400)
+	seedServicePricingItem(t, platformSheet.Id, []string{"gpt-5.5-pro-b1"}, model.DiscountTypeRatio, 0.8)
+	seedServiceChannel(t, 9004, "openai-b-route", "gpt-5.5-pro-b1", `{}`, "大额官方稳定版")
+	seedServiceAbility(t, "default", "gpt-5.5-pro-b1", 9004)
+
+	data, err := GetModelSquareData(ModelSquareQuery{})
+	require.NoError(t, err)
+	require.Len(t, data.Models, 1)
+
+	item := data.Models[0]
+	assert.Equal(t, "gpt-5.5-pro", item.Name)
+	assert.Equal(t, "GPT 5.5 PRO", item.DisplayName)
+
+	require.Len(t, item.Versions, 1)
+	assert.Equal(t, "gpt-5.5-pro-b1", item.Versions[0].ModelName)
+	assert.Equal(t, "gpt-5.5-pro", item.Versions[0].UpstreamKey)
+	assert.Contains(t, item.Versions[0].ChannelTags, "大额官方稳定版")
+}
+
 func TestGetSelectableModelsForUser_WithEnterpriseBinding_HasActiveSheet(t *testing.T) {
 	truncateServiceTestData(t)
 
@@ -230,28 +413,52 @@ func modelNamesFromResult(models []SelectableModelInfo) []string {
 	return names
 }
 
+type dtoAvailableVersionForTest struct {
+	upstreamKey    string
+	channelID      int
+	channelName    string
+	channelTags    []string
+	pricingSheetID int
+	sheetName      string
+	source         string
+	vendorType     string
+	discountRatio  float64
+	originalInput  float64
+	discountInput  float64
+}
+
 func truncateServiceTestData(t *testing.T) {
 	t.Helper()
+	model.InvalidatePricingCache()
 	// Truncate BEFORE the test runs so each test starts with a clean slate.
 	// t.Cleanup is still registered so the DB is cleaned after all tests finish.
+	model.DB.Exec("DELETE FROM abilities")
+	model.DB.Exec("DELETE FROM channels")
+	model.DB.Exec("DELETE FROM models")
+	model.DB.Exec("DELETE FROM vendors")
 	model.DB.Exec("DELETE FROM token_pricing_model_bindings")
 	model.DB.Exec("DELETE FROM tokens")
 	model.DB.Exec("DELETE FROM enterprise_user_bindings")
 	model.DB.Exec("DELETE FROM enterprise_pricing_sheet_channels")
 	model.DB.Exec("DELETE FROM enterprise_pricing_items")
 	model.DB.Exec("DELETE FROM enterprise_pricing_sheets")
-	model.DB.Exec("DELETE FROM enterprises WHERE `ent_type` != ?", model.EnterpriseTypePlatform)
+	model.DB.Where("ent_type <> ?", model.EnterpriseTypePlatform).Delete(&model.Enterprise{})
 	model.DB.Exec("DELETE FROM users")
 	// Ensure platform enterprise exists for all tests.
 	ensurePlatformEnterprise(t)
 	t.Cleanup(func() {
+		model.InvalidatePricingCache()
+		model.DB.Exec("DELETE FROM abilities")
+		model.DB.Exec("DELETE FROM channels")
+		model.DB.Exec("DELETE FROM models")
+		model.DB.Exec("DELETE FROM vendors")
 		model.DB.Exec("DELETE FROM token_pricing_model_bindings")
 		model.DB.Exec("DELETE FROM tokens")
 		model.DB.Exec("DELETE FROM enterprise_user_bindings")
 		model.DB.Exec("DELETE FROM enterprise_pricing_sheet_channels")
 		model.DB.Exec("DELETE FROM enterprise_pricing_items")
 		model.DB.Exec("DELETE FROM enterprise_pricing_sheets")
-		model.DB.Exec("DELETE FROM enterprises WHERE `ent_type` != ?", model.EnterpriseTypePlatform)
+		model.DB.Where("ent_type <> ?", model.EnterpriseTypePlatform).Delete(&model.Enterprise{})
 		model.DB.Exec("DELETE FROM users")
 	})
 }
@@ -285,19 +492,28 @@ func seedServiceEnterprise(t *testing.T, name string, status int) *model.Enterpr
 
 func ensurePlatformEnterprise(t *testing.T) {
 	t.Helper()
-	// Platform enterprise is identified by type='platform', not by id=-1.
-	// Use REPLACE to upsert: insert if not exists, or update if exists.
-	model.DB.Exec(
-		"INSERT OR REPLACE INTO enterprises (name, type, status, created_at, updated_at) VALUES ('平台', ?, 1, ?, ?)",
-		model.EnterpriseTypePlatform, now(), now(),
-	)
+	platform := &model.Enterprise{EntType: model.EnterpriseTypePlatform}
+	err := model.DB.Where("ent_type = ?", model.EnterpriseTypePlatform).
+		Assign(model.Enterprise{
+			Name:      "平台",
+			Status:    model.EnterpriseStatusEnabled,
+			UpdatedAt: now(),
+		}).
+		FirstOrCreate(platform, model.Enterprise{
+			Name:      "平台",
+			EntType:   model.EnterpriseTypePlatform,
+			Status:    model.EnterpriseStatusEnabled,
+			CreatedAt: now(),
+			UpdatedAt: now(),
+		}).Error
+	require.NoError(t, err)
 }
 
 func seedServicePlatformEnterprise(t *testing.T) *model.Enterprise {
 	t.Helper()
 	ensurePlatformEnterprise(t)
 	var e model.Enterprise
-	err := model.DB.Where("type = ?", model.EnterpriseTypePlatform).First(&e).Error
+	err := model.DB.Where("ent_type = ?", model.EnterpriseTypePlatform).First(&e).Error
 	require.NoError(t, err)
 	return &e
 }
@@ -314,10 +530,10 @@ func seedServicePricingSheet(t *testing.T, enterpriseId int, name string, status
 	t.Helper()
 	s := &model.EnterprisePricingSheet{
 		EnterpriseId: enterpriseId,
-		Name:        name,
-		Status:      status,
-		StartTime:   startTime,
-		EndTime:     endTime,
+		Name:         name,
+		Status:       status,
+		StartTime:    startTime,
+		EndTime:      endTime,
 	}
 	s.CreatedAt = now()
 	s.UpdatedAt = now()
@@ -336,4 +552,67 @@ func seedServicePricingItem(t *testing.T, sheetId int, models []string, discount
 	}
 	require.NoError(t, model.DB.Create(item).Error)
 	return item
+}
+
+func seedServiceVendor(t *testing.T, name string, icon string) *model.Vendor {
+	t.Helper()
+	vendor := &model.Vendor{
+		Name:   name,
+		Icon:   icon,
+		Status: 1,
+	}
+	vendor.CreatedTime = now()
+	vendor.UpdatedTime = now()
+	require.NoError(t, model.DB.Create(vendor).Error)
+	return vendor
+}
+
+func seedServiceModelMeta(t *testing.T, modelName string, icon string, tags string, vendorId int) *model.Model {
+	t.Helper()
+	meta := &model.Model{
+		ModelName:   modelName,
+		Icon:        icon,
+		Tags:        tags,
+		VendorID:    vendorId,
+		Status:      1,
+		NameRule:    model.NameRuleExact,
+		CreatedTime: now(),
+		UpdatedTime: now(),
+	}
+	require.NoError(t, model.DB.Create(meta).Error)
+	return meta
+}
+
+func seedServiceChannel(t *testing.T, id int, name string, models string, mapping string, tag string) *model.Channel {
+	t.Helper()
+	priority := int64(10)
+	channel := &model.Channel{
+		Id:           id,
+		Type:         1,
+		Key:          "sk-test",
+		Status:       1,
+		Name:         name,
+		Models:       models,
+		ModelMapping: &mapping,
+		Priority:     &priority,
+		Tag:          &tag,
+	}
+	channel.CreatedTime = now()
+	require.NoError(t, model.DB.Create(channel).Error)
+	return channel
+}
+
+func seedServiceAbility(t *testing.T, group string, modelName string, channelId int) *model.Ability {
+	t.Helper()
+	priority := int64(10)
+	ability := &model.Ability{
+		Group:     group,
+		Model:     modelName,
+		ChannelId: channelId,
+		Enabled:   true,
+		Priority:  &priority,
+		Weight:    1,
+	}
+	require.NoError(t, model.DB.Create(ability).Error)
+	return ability
 }

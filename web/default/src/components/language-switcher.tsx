@@ -65,7 +65,12 @@ export function LanguageSwitcher() {
         <Languages className='size-[1.2rem]' />
         <span className='sr-only'>{t('Change language')}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end'>
+      <DropdownMenuContent
+        align='end'
+        sideOffset={24}
+        positionerClassName='z-[120]'
+        className='z-[120] w-40 bg-white text-slate-900 shadow-[0_18px_40px_rgba(15,23,42,0.16)] ring-slate-200 dark:bg-white dark:text-slate-900 dark:ring-slate-200'
+      >
         {languages.map((lang) => (
           <DropdownMenuItem
             key={lang.code}

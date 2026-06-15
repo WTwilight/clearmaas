@@ -21,6 +21,8 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { useStatus } from '@/hooks/use-status'
 
+const CLEARMAAS_DOCS_URL = 'https://docs.clearmaas.com/introduction'
+
 export type TopNavLink = {
   title: string
   href: string
@@ -33,9 +35,7 @@ const DEFAULT_HEADER_NAV_MODULES = {
   home: true,
   console: true,
   pricing: { enabled: true, requireAuth: false },
-  rankings: { enabled: true, requireAuth: false },
   docs: true,
-  about: true,
 }
 
 function parseAccessModule(
@@ -81,10 +81,6 @@ function parseHeaderNavModules(
         parsed.pricing,
         DEFAULT_HEADER_NAV_MODULES.pricing
       ),
-      rankings: parseAccessModule(
-        parsed.rankings,
-        DEFAULT_HEADER_NAV_MODULES.rankings
-      ),
     }
   } catch {
     return DEFAULT_HEADER_NAV_MODULES
@@ -98,9 +94,7 @@ function parseHeaderNavModules(
  *   home: true,
  *   console: true,
  *   pricing: { enabled: true, requireAuth: false },
- *   rankings: { enabled: true, requireAuth: false },
- *   docs: true,
- *   about: true
+ *   docs: true
  * }
  */
 export function useTopNavLinks(): TopNavLink[] {
@@ -113,9 +107,6 @@ export function useTopNavLinks(): TopNavLink[] {
     return parseHeaderNavModules(status?.HeaderNavModules)
   }, [status?.HeaderNavModules])
 
-  // Documentation link (may be external)
-  const docsLink: string | undefined = status?.docs_link as string | undefined
-
   const isAuthed = !!auth?.user
 
   const links: TopNavLink[] = []
@@ -125,37 +116,21 @@ export function useTopNavLinks(): TopNavLink[] {
     links.push({ title: t('Home'), href: '/' })
   }
 
-  // Console -> /dashboard (new console path)
-  if (modules?.console !== false) {
-    links.push({ title: t('Console'), href: '/dashboard' })
-  }
-
-  // Pricing
+  // Model Square
   const pricing = modules?.pricing
   if (pricing && typeof pricing === 'object' && pricing.enabled) {
     const disabled = pricing.requireAuth && !isAuthed
-    links.push({ title: t('Model Square'), href: '/pricing', disabled })
-  }
-
-  // Rankings
-  const rankings = modules?.rankings
-  if (rankings && typeof rankings === 'object' && rankings.enabled) {
-    const disabled = rankings.requireAuth && !isAuthed
-    links.push({ title: t('Rankings'), href: '/rankings', disabled })
+    links.push({ title: t('Model Square'), href: '/model-square', disabled })
   }
 
   // Docs (supports external links)
   if (modules?.docs !== false) {
-    if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
-    } else {
-      links.push({ title: t('Docs'), href: '/docs' })
-    }
+    links.push({ title: t('Docs'), href: CLEARMAAS_DOCS_URL, external: true })
   }
 
-  // About
-  if (modules?.about !== false) {
-    links.push({ title: t('About'), href: '/about' })
+  // Console -> /dashboard (new console path)
+  if (modules?.console !== false) {
+    links.push({ title: t('Console'), href: '/dashboard' })
   }
 
   return links

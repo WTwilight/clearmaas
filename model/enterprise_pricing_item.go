@@ -2,10 +2,11 @@ package model
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
 )
 
@@ -16,7 +17,7 @@ func (m ModelsSlice) Value() (driver.Value, error) {
 	if len(m) == 0 {
 		return nil, nil
 	}
-	return json.Marshal(m)
+	return common.Marshal(m)
 }
 
 func (m *ModelsSlice) Scan(value interface{}) error {
@@ -24,29 +25,38 @@ func (m *ModelsSlice) Scan(value interface{}) error {
 		*m = nil
 		return nil
 	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to scan ModelsSlice: expected []byte, got %T", value)
+	var bytes []byte
+	switch v := value.(type) {
+	case []byte:
+		bytes = v
+	case string:
+		bytes = []byte(v)
+	default:
+		return fmt.Errorf("failed to scan ModelsSlice: expected []byte or string, got %T", value)
 	}
-	return json.Unmarshal(bytes, m)
+	if strings.TrimSpace(string(bytes)) == "" {
+		*m = nil
+		return nil
+	}
+	return common.Unmarshal(bytes, m)
 }
 
 // Discount type constants
 const (
 	DiscountTypeRatio      = "ratio"
 	DiscountTypeFixedPrice = "fixed_price"
-	DiscountTypePerCall   = "per_call"
+	DiscountTypePerCall    = "per_call"
 )
 
 // EnterprisePricingItem represents a pricing item (batch of models with same discount) within a pricing sheet.
 type EnterprisePricingItem struct {
-	Id             int          `json:"id" gorm:"primaryKey;autoIncrement"`
-	PricingSheetId int          `json:"pricing_sheet_id"`
-	VendorType     string       `json:"vendor_type"`
-	Models         ModelsSlice  `json:"models" gorm:"type:json"`
-	DiscountType   string       `json:"discount_type"`
-	DiscountValue  float64      `json:"discount_value"`
-	Remark         string       `json:"remark"`
+	Id             int         `json:"id" gorm:"primaryKey;autoIncrement"`
+	PricingSheetId int         `json:"pricing_sheet_id"`
+	VendorType     string      `json:"vendor_type"`
+	Models         ModelsSlice `json:"models" gorm:"type:json"`
+	DiscountType   string      `json:"discount_type"`
+	DiscountValue  float64     `json:"discount_value"`
+	Remark         string      `json:"remark"`
 }
 
 func (e *EnterprisePricingItem) TableName() string {

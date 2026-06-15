@@ -33,8 +33,12 @@ type OAuthProvidersProps = {
   status: SystemStatus | null
   disabled?: boolean
   className?: string
+  beforeLogin?: () => boolean
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
+  variant?: 'default' | 'close'
+  allowedProviders?: string[]
+  labelOverrides?: Record<string, string>
 }
 
 type ProviderButton = {
@@ -49,8 +53,12 @@ export function OAuthProviders({
   status,
   disabled = false,
   className,
+  beforeLogin,
   onWeChatLogin,
   isWeChatLoading = false,
+  variant = 'default',
+  allowedProviders,
+  labelOverrides,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -61,79 +69,115 @@ export function OAuthProviders({
     handleDiscordLogin,
     handleOIDCLogin,
     handleLinuxDOLogin,
-    handleTelegramLogin,
     handleCustomOAuthLogin,
   } = useOAuthLogin(status)
+  const statusData = status?.data ?? status
 
   const providerButtons: ProviderButton[] = []
+  const runBeforeLogin = () => beforeLogin?.() ?? true
+  const withBeforeLogin = (onClick: () => void) => () => {
+    if (!runBeforeLogin()) return
+    onClick()
+  }
 
-  if (status?.wechat_login && onWeChatLogin) {
+  if (statusData?.wechat_login && onWeChatLogin) {
     providerButtons.push({
       key: 'wechat',
       label: t('Continue with WeChat'),
-      onClick: onWeChatLogin,
+      onClick: withBeforeLogin(onWeChatLogin),
       icon: <IconWeChat className='h-4 w-4' />,
       disabled: isWeChatLoading,
     })
   }
 
-  if (status?.github_oauth) {
+  if (statusData?.github_oauth && statusData?.github_client_id) {
     providerButtons.push({
       key: 'github',
       label: githubButtonText || t('Continue with GitHub'),
-      onClick: handleGitHubLogin,
+      onClick: withBeforeLogin(handleGitHubLogin),
       icon: <IconGithub className='h-4 w-4' />,
       disabled: githubButtonDisabled,
     })
   }
 
-  if (status?.discord_oauth) {
+  if (statusData?.discord_oauth && statusData?.discord_client_id) {
     providerButtons.push({
       key: 'discord',
       label: t('Continue with Discord'),
-      onClick: handleDiscordLogin,
+      onClick: withBeforeLogin(handleDiscordLogin),
       icon: <IconDiscord className='h-4 w-4' />,
     })
   }
 
-  if (status?.oidc_enabled) {
+  if (
+    statusData?.oidc_enabled &&
+    statusData?.oidc_client_id &&
+    statusData?.oidc_authorization_endpoint
+  ) {
     providerButtons.push({
       key: 'oidc',
       label: t('Continue with OIDC'),
-      onClick: handleOIDCLogin,
+      onClick: withBeforeLogin(handleOIDCLogin),
     })
   }
 
-  if (status?.linuxdo_oauth) {
+  if (statusData?.linuxdo_oauth && statusData?.linuxdo_client_id) {
     providerButtons.push({
       key: 'linuxdo',
       label: t('Continue with LinuxDO'),
-      onClick: handleLinuxDOLogin,
+      onClick: withBeforeLogin(handleLinuxDOLogin),
       icon: <IconLinuxDo className='h-4 w-4' />,
     })
   }
 
-  if (status?.telegram_oauth) {
-    providerButtons.push({
-      key: 'telegram',
-      label: t('Continue with Telegram'),
-      onClick: handleTelegramLogin,
-    })
-  }
-
   // Custom OAuth providers
-  const customProviders = status?.custom_oauth_providers
+  const customProviders = statusData?.custom_oauth_providers
   if (customProviders && customProviders.length > 0) {
     for (const provider of customProviders) {
+      if (!provider.client_id || !provider.authorization_endpoint) continue
       providerButtons.push({
         key: `custom-${provider.slug}`,
         label: t('Continue with {{name}}', { name: provider.name }),
-        onClick: () => handleCustomOAuthLogin(provider),
+        onClick: withBeforeLogin(() => handleCustomOAuthLogin(provider)),
       })
     }
   }
 
   if (providerButtons.length === 0) return null
+
+  const visibleProviderButtons = allowedProviders
+    ? providerButtons.filter((providerButton) =>
+        allowedProviders.includes(providerButton.key)
+      )
+    : providerButtons
+
+  if (visibleProviderButtons.length === 0) return null
+
+  if (variant === 'close') {
+    return (
+      <div className={cn('grid gap-2', className)}>
+        {visibleProviderButtons.map(
+          ({ key, label, onClick, icon, disabled: extraDisabled }) => {
+            const displayLabel = labelOverrides?.[key] ?? label
+            return (
+              <button
+                key={key}
+                type='button'
+                disabled={disabled || isLoading || extraDisabled}
+                onClick={onClick}
+                className='google-register'
+              >
+                <span className='google-g'>
+                  {icon || displayLabel.slice(0, 1)}
+                </span>
+                <span>{displayLabel}</span>
+              </button>
+            )
+          }
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className={cn('space-y-3', className)}>
@@ -149,7 +193,7 @@ export function OAuthProviders({
       </div>
 
       <div className='flex flex-col gap-2'>
-        {providerButtons.map(
+        {visibleProviderButtons.map(
           ({ key, label, onClick, icon, disabled: extraDisabled }) => (
             <Button
               key={key}
@@ -160,7 +204,7 @@ export function OAuthProviders({
               className='h-11 w-full justify-center gap-2 rounded-lg'
             >
               {icon}
-              {label}
+              {labelOverrides?.[key] ?? label}
             </Button>
           )
         )}

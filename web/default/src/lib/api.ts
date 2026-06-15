@@ -225,6 +225,52 @@ export async function getAvailablePricingModels(): Promise<{
   return { success: payload.success, message: payload.message, data: payload.data?.models }
 }
 
+export async function getGroupedAvailablePricingModels(): Promise<{
+  success: boolean
+  message?: string
+  data?: {
+    models: Array<{
+      name: string
+      display_name: string
+      icon?: string
+      vendor_id?: number
+      vendor_name?: string
+      vendor_icon?: string
+      tags?: string[]
+      context_tokens?: number
+      max_output?: number
+      best_discount_ratio?: number
+      versions: Array<{
+        model: string
+        upstream_key?: string
+        channel_id?: number
+        channel_name?: string
+        channel_tags?: string[]
+        pricing_sheet_id?: number
+        quota_type: number
+        input_original_price: number
+        output_original_price: number
+        discount_ratio: number
+        input_discounted_price: number
+        output_discounted_price: number
+        vendor_type: string
+        source: 'enterprise' | 'platform'
+        sheet_id: number
+        sheet_name: string
+      }>
+    }>
+  }
+}> {
+  const res = await api.get('/api/pricing-sheets/available/grouped', {
+    headers: {
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    },
+    params: { _t: Date.now() },
+  })
+  return res.data
+}
+
 // Get token pricing model bindings
 export async function getTokenPricingModels(
   tokenId: number

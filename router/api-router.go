@@ -32,6 +32,15 @@ func SetApiRouter(router *gin.Engine) {
 		//apiRouter.GET("/midjourney", controller.GetMidjourney)
 		apiRouter.GET("/home_page_content", controller.GetHomePageContent)
 		apiRouter.GET("/pricing", middleware.TryUserAuth(), controller.GetPricing)
+		v2Route := apiRouter.Group("/v2")
+		v2Route.Use(middleware.CORS())
+		v2Route.Use(middleware.TryUserAuth())
+		{
+			v2Route.GET("/model-square", controller.GetModelSquare)
+			v2Route.GET("/model-square/:model_name", controller.GetModelSquareDetail)
+			v2Route.GET("/model_square", controller.GetModelSquare)
+			v2Route.GET("/model_square/:model_name", controller.GetModelSquareDetail)
+		}
 		perfMetricsRoute := apiRouter.Group("/perf-metrics")
 		perfMetricsRoute.Use(middleware.TryUserAuth())
 		{
@@ -278,9 +287,11 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		pricingRoute := apiRouter.Group("/pricing-sheets")
+		pricingRoute.Use(middleware.DisableCache())
 		pricingRoute.Use(middleware.UserAuth())
 		{
 			pricingRoute.GET("/available", controller.GetAvailablePricingSheets)
+			pricingRoute.GET("/available/grouped", controller.GetGroupedAvailablePricingSheets)
 		}
 
 		usageRoute := apiRouter.Group("/usage")
@@ -339,9 +350,9 @@ func SetApiRouter(router *gin.Engine) {
 			enterpriseRoute.DELETE("/:id", controller.DeleteEnterprise)
 			enterpriseRoute.POST("/:id/users", controller.BindUsers)
 			enterpriseRoute.DELETE("/:id/users/:userId", controller.UnbindUser)
-		enterpriseRoute.GET("/:id/users", controller.ListEnterpriseUsers)
-		enterpriseRoute.GET("/bindings/all", controller.ListAllUserBindings)
-		enterpriseRoute.POST("/:id/pricing-sheet", controller.CreatePricingSheet)
+			enterpriseRoute.GET("/:id/users", controller.ListEnterpriseUsers)
+			enterpriseRoute.GET("/bindings/all", controller.ListAllUserBindings)
+			enterpriseRoute.POST("/:id/pricing-sheet", controller.CreatePricingSheet)
 			enterpriseRoute.GET("/:id/pricing-sheet", controller.ListPricingSheet)
 			enterpriseRoute.GET("/:id/pricing-sheet/:sheetId", controller.GetPricingSheet)
 			enterpriseRoute.PUT("/:id/pricing-sheet/:sheetId", controller.UpdatePricingSheet)
@@ -361,7 +372,7 @@ func SetApiRouter(router *gin.Engine) {
 			pricingItemRoute.POST("/:sheetId/channels", controller.BindPricingSheetChannels)
 			pricingItemRoute.DELETE("/:sheetId/channels/:channelId", controller.UnbindPricingSheetChannel)
 			pricingItemRoute.GET("/:sheetId/token-bindings", controller.ListPricingSheetTokenBindings)
-		apiRouter.GET("/models/by-channels", controller.GetModelsByChannelIds)
+			apiRouter.GET("/models/by-channels", controller.GetModelsByChannelIds)
 		}
 
 		// Supplier Pricing routes

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { memo, useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
@@ -32,6 +32,7 @@ import { toast } from 'sonner'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { formatCurrencyUSD } from '@/lib/format'
+import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
 import { useStatus } from '@/hooks/use-status'
 import { Button } from '@/components/ui/button'
@@ -59,6 +60,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { DateTimePicker } from '@/components/datetime-picker'
@@ -69,6 +77,7 @@ import {
   updateApiKey,
   getApiKey,
   getAvailablePricingModels,
+  getGroupedAvailablePricingModels,
 } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -78,7 +87,13 @@ import {
   transformFormDataToPayload,
   transformApiKeyToFormDefaults,
 } from '../lib'
-import { type ApiKey, type SelectablePricingModel, type SelectModel } from '../types'
+import {
+  type ApiKey,
+  type SelectablePricingModel,
+  type SelectablePricingModelGroup,
+  type SelectablePricingModelVersion,
+  type SelectModel,
+} from '../types'
 import {
   ApiKeyGroupCombobox,
   type ApiKeyGroupOption,
@@ -109,6 +124,36 @@ const PricingModelRow = memo(function PricingModelRow({
 }: PricingModelRowProps) {
   const { t } = useTranslation()
   const isSelected = fieldValue.includes(model.model)
+  return (
+    <tr
+      className={cn(
+        'border-b last:border-0 transition-colors cursor-pointer',
+        isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'
+      )}
+      onClick={() => onToggle(model.model)}
+    >
+      <td className='px-3 py-2'>
+        <div className='flex flex-col gap-0.5'>
+          <span className='font-medium truncate max-w-[180px]'>{model.model}</span>
+          <span className='text-muted-foreground text-[10px]'>{model.vendor_type}</span>
+        </div>
+      </td>
+      <td className='px-3 py-2 text-right'>
+        <PricingModelPrice model={model} />
+      </td>
+      <td className='px-3 py-2 text-center'>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggle(model.model)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      </td>
+    </tr>
+  )
+})
+
+function PricingModelPrice({ model }: { model: SelectablePricingModel }) {
+  const { t } = useTranslation()
   const hasRealDiscount = model.discount_ratio != null && model.discount_ratio < 1
   const hasDiscountBadge = model.discount_ratio != null
   const inputOriginal = model.input_original_price ?? 0
@@ -129,78 +174,508 @@ const PricingModelRow = memo(function PricingModelRow({
   const unitLabel = isFixedPrice ? t('per request') : '/ 1M tokens'
 
   return (
-    <tr
-      className={cn(
-        'border-b last:border-0 transition-colors cursor-pointer',
-        isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'
+    <div className='flex flex-col items-end gap-0.5'>
+      {hasDiscountBadge && discountLabel && (
+        <span className='inline-flex items-center rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none'>
+          {discountLabel}
+        </span>
       )}
-      onClick={() => onToggle(model.model)}
-    >
-      <td className='px-3 py-2'>
-        <div className='flex flex-col gap-0.5'>
-          <span className='font-medium truncate max-w-[180px]'>{model.model}</span>
-          <span className='text-muted-foreground text-[10px]'>{model.vendor_type}</span>
-        </div>
-      </td>
-      <td className='px-3 py-2 text-right'>
-        <div className='flex flex-col items-end gap-0.5'>
-          {hasDiscountBadge && discountLabel && (
-            <span className='inline-flex items-center rounded bg-gradient-to-r from-amber-400 to-orange-400 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none'>
-              {discountLabel}
-            </span>
-          )}
-          <span className='font-mono text-[11px] tabular-nums leading-tight'>
-            {hasPrice ? (
+      <span className='font-mono text-[11px] tabular-nums leading-tight'>
+        {hasPrice ? (
+          <>
+            {showOriginalPrice && inputOriginal > 0 && (
               <>
-                {showOriginalPrice && inputOriginal > 0 && (
-                  <>
-                    <span className='text-muted-foreground/40 line-through'>
-                      ${inputOriginal.toFixed(4)}
-                    </span>
-                    {outputOriginal > 0 && (
-                      <>
-                        <span className='text-muted-foreground/30 mx-0.5'>/</span>
-                        <span className='text-muted-foreground/40 line-through'>
-                          ${outputOriginal.toFixed(4)}
-                        </span>
-                      </>
-                    )}
-                  </>
-                )}
-                {showOriginalPrice && (inputOriginal !== inputDiscounted || outputOriginal !== outputDiscounted) && (
-                  <span className='text-foreground mx-1'>→</span>
-                )}
-                <span className={showOriginalPrice && inputOriginal !== inputDiscounted ? 'font-bold text-foreground' : ''}>
-                  ${inputDiscounted.toFixed(4)}
+                <span className='text-muted-foreground/40 line-through'>
+                  ${inputOriginal.toFixed(4)}
                 </span>
                 {outputOriginal > 0 && (
                   <>
-                    <span className='text-muted-foreground/40 mx-0.5'>/</span>
-                    <span className={showOriginalPrice && outputOriginal !== outputDiscounted ? 'font-bold text-foreground' : ''}>
-                      ${outputDiscounted.toFixed(4)}
+                    <span className='text-muted-foreground/30 mx-0.5'>/</span>
+                    <span className='text-muted-foreground/40 line-through'>
+                      ${outputOriginal.toFixed(4)}
                     </span>
                   </>
                 )}
               </>
-            ) : (
-              '—'
             )}
-          </span>
-          <span className='text-muted-foreground/50 text-[10px] leading-tight'>
-            {unitLabel}
-          </span>
-        </div>
-      </td>
-      <td className='px-3 py-2 text-center'>
-        <Checkbox
-          checked={isSelected}
-          onCheckedChange={() => onToggle(model.model)}
-          onClick={(e) => e.stopPropagation()}
-        />
-      </td>
-    </tr>
+            {showOriginalPrice &&
+              (inputOriginal !== inputDiscounted ||
+                outputOriginal !== outputDiscounted) && (
+                <span className='text-foreground mx-1'>→</span>
+              )}
+            <span
+              className={
+                showOriginalPrice && inputOriginal !== inputDiscounted
+                  ? 'font-bold text-foreground'
+                  : ''
+              }
+            >
+              ${inputDiscounted.toFixed(4)}
+            </span>
+            {outputOriginal > 0 && (
+              <>
+                <span className='text-muted-foreground/40 mx-0.5'>/</span>
+                <span
+                  className={
+                    showOriginalPrice && outputOriginal !== outputDiscounted
+                      ? 'font-bold text-foreground'
+                      : ''
+                  }
+                >
+                  ${outputDiscounted.toFixed(4)}
+                </span>
+              </>
+            )}
+          </>
+        ) : (
+          '—'
+        )}
+      </span>
+      <span className='text-muted-foreground/50 text-[10px] leading-tight'>
+        {unitLabel}
+      </span>
+    </div>
   )
-})
+}
+
+function toColorIconName(iconName?: string) {
+  if (!iconName) return undefined
+  return iconName.includes('.') ? iconName : `${iconName}.Color`
+}
+
+type GroupedPricingModelSelectorProps = {
+  groups: SelectablePricingModelGroup[]
+  selected: string[]
+  onChange: (models: string[]) => void
+}
+
+function GroupedPricingModelSelector({
+  groups,
+  selected,
+  onChange,
+}: GroupedPricingModelSelectorProps) {
+  const { t } = useTranslation()
+  const [keyword, setKeyword] = useState('')
+  const [vendorFilter, setVendorFilter] = useState('all')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const selectedSet = useMemo(() => new Set(selected), [selected])
+  const normalizedKeyword = keyword.trim().toLowerCase()
+  const vendorOptions = useMemo(() => {
+    const vendors = new Map<string, string>()
+    for (const group of groups) {
+      const vendor = getPricingModelGroupVendor(group)
+      if (!vendor) continue
+      const key = vendor.toLowerCase()
+      if (!vendors.has(key)) vendors.set(key, vendor)
+    }
+    return [...vendors.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [groups])
+  const sortedGroups = useMemo(
+    () =>
+      [...groups]
+        .map((group) => ({
+          ...group,
+          versions: [...group.versions].sort(comparePricingModelVersions),
+        }))
+        .sort(comparePricingModelGroups),
+    [groups]
+  )
+  const filteredGroups = useMemo(() => {
+    const vendorFilteredGroups =
+      vendorFilter === 'all'
+        ? sortedGroups
+        : sortedGroups.filter(
+            (group) =>
+              getPricingModelGroupVendor(group).toLowerCase() === vendorFilter
+          )
+    if (!normalizedKeyword) return vendorFilteredGroups
+    return vendorFilteredGroups
+      .map((group) => {
+        const groupMatched = [
+          group.name,
+          group.display_name,
+          group.vendor_name ?? '',
+          ...(group.tags ?? []),
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(normalizedKeyword)
+        const versions = group.versions.filter((version) =>
+          [
+            version.model,
+            version.upstream_key ?? '',
+            version.channel_name ?? '',
+            version.vendor_type,
+            ...(version.channel_tags ?? []),
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(normalizedKeyword)
+        )
+        return groupMatched ? group : { ...group, versions }
+      })
+      .filter((group) => group.versions.length > 0)
+  }, [normalizedKeyword, sortedGroups, vendorFilter])
+
+  useEffect(() => {
+    if (normalizedKeyword) {
+      setExpanded(new Set(filteredGroups.map((group) => group.name)))
+    }
+  }, [filteredGroups, normalizedKeyword])
+
+  const allModels = uniquePricingModelNames(
+    groups.flatMap((group) => group.versions.map((version) => version.model))
+  )
+  const filteredModels = uniquePricingModelNames(
+    filteredGroups.flatMap((group) =>
+      group.versions.map((version) => version.model)
+    )
+  )
+  const filteredSelectedCount = filteredModels.filter((model) =>
+    selectedSet.has(model)
+  ).length
+  const allSelected =
+    filteredModels.length > 0 && filteredSelectedCount === filteredModels.length
+  const partiallySelected = filteredSelectedCount > 0 && !allSelected
+
+  const toggleAll = (checked: boolean) => {
+    const modelSet = new Set(selected)
+    for (const model of filteredModels) {
+      if (checked) {
+        modelSet.add(model)
+      } else {
+        modelSet.delete(model)
+      }
+    }
+    onChange([...modelSet])
+  }
+
+  const toggleGroup = (group: SelectablePricingModelGroup, checked: boolean) => {
+    const modelSet = new Set(selected)
+    for (const version of group.versions) {
+      if (checked) {
+        modelSet.add(version.model)
+      } else {
+        modelSet.delete(version.model)
+      }
+    }
+    onChange([...modelSet])
+  }
+
+  const toggleVersion = (model: string) => {
+    const modelSet = new Set(selected)
+    if (modelSet.has(model)) {
+      modelSet.delete(model)
+    } else {
+      modelSet.add(model)
+    }
+    onChange([...modelSet])
+  }
+
+  const toggleExpanded = (name: string) => {
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(name)) {
+        next.delete(name)
+      } else {
+        next.add(name)
+      }
+      return next
+    })
+  }
+
+  return (
+    <div className='mt-2 overflow-hidden rounded-xl border'>
+      <div className='flex flex-col gap-2 border-b bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between'>
+        <div className='min-w-0'>
+          <div className='text-sm font-medium'>
+            {t('{{selected}} / {{total}} selected', {
+              selected: selected.length,
+              total: allModels.length,
+            })}
+          </div>
+          <div className='text-muted-foreground text-xs'>
+            {t('Grouped by model with version and channel tags')}
+          </div>
+        </div>
+        <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center'>
+          <Select value={vendorFilter} onValueChange={setVendorFilter}>
+            <SelectTrigger className='h-8 w-full sm:w-40' aria-label={t('Select vendor')}>
+              <SelectValue placeholder={t('Select vendor')} />
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              <SelectItem value='all'>{t('All providers')}</SelectItem>
+              {vendorOptions.map((vendor) => (
+                <SelectItem key={vendor.value} value={vendor.value}>
+                  {vendor.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder={t('Search model, version, or channel tag')}
+            className='h-8 w-full sm:w-72'
+          />
+          <div className='flex h-8 items-center justify-end sm:w-8'>
+            <Checkbox
+              checked={allSelected ? true : partiallySelected ? 'indeterminate' : false}
+              onCheckedChange={(checked) => toggleAll(checked === true)}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={t('Select all models')}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className='max-h-[460px] overflow-y-auto'>
+        {filteredGroups.length === 0 ? (
+          <div className='text-muted-foreground p-6 text-center text-sm'>
+            {t('No models match your search')}
+          </div>
+        ) : (
+          filteredGroups.map((group) => {
+            const versionModels = uniquePricingModelNames(
+              group.versions.map((version) => version.model)
+            )
+            const selectedCount = versionModels.filter((model) =>
+              selectedSet.has(model)
+            ).length
+            const groupSelected =
+              versionModels.length > 0 && selectedCount === versionModels.length
+            const groupPartial = selectedCount > 0 && !groupSelected
+            const isExpanded = expanded.has(group.name) || normalizedKeyword !== ''
+            const bestRatio = bestGroupDiscountRatio(group)
+            const iconNode = getLobeIcon(
+              toColorIconName(group.icon || group.vendor_icon) || 'Bot',
+              22
+            )
+
+            return (
+              <div key={group.name} className='border-b last:border-0'>
+                <div className='flex items-center gap-3 bg-background px-3 py-2.5'>
+                  <Checkbox
+                    checked={groupSelected ? true : groupPartial ? 'indeterminate' : false}
+                    onCheckedChange={(checked) => toggleGroup(group, checked === true)}
+                    onClick={(event) => event.stopPropagation()}
+                    aria-label={t('Select model group')}
+                  />
+                  <button
+                    type='button'
+                    className='hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 flex size-7 shrink-0 items-center justify-center rounded-md border border-transparent p-0 outline-none transition-colors focus-visible:ring-3'
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? t('Collapse') : t('Expand')}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      toggleExpanded(group.name)
+                    }}
+                  >
+                    <ChevronDown
+                      className={cn(
+                        'text-muted-foreground size-4 shrink-0 transition-transform',
+                        !isExpanded && '-rotate-90'
+                      )}
+                    />
+                  </button>
+                  <div className='flex min-w-0 flex-1 items-center gap-2'>
+                    <span className='flex size-8 shrink-0 items-center justify-center rounded-md border bg-background'>
+                      {iconNode}
+                    </span>
+                    <div className='min-w-0 flex-1'>
+                      <div className='flex min-w-0 flex-wrap items-center gap-2'>
+                        <span className='truncate text-sm font-semibold'>
+                          {group.display_name || group.name}
+                        </span>
+                        {group.vendor_name && (
+                          <span className='text-muted-foreground text-[11px]'>
+                            {group.vendor_name}
+                          </span>
+                        )}
+                        <span className='rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground'>
+                          {t('{{count}} versions', {
+                            count: group.versions.length,
+                          })}
+                        </span>
+                        {bestRatio && bestRatio < 1 && (
+                          <span className='rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'>
+                            {(bestRatio * 10).toFixed(1)}折
+                          </span>
+                        )}
+                      </div>
+                      <div className='text-muted-foreground mt-0.5 truncate text-[11px]'>
+                        {group.name}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div className='divide-y bg-muted/10'>
+                    {group.versions.map((version) => {
+                      const checked = selectedSet.has(version.model)
+                      return (
+                        <div
+                          key={version.model}
+                          role='button'
+                          tabIndex={0}
+                          className={cn(
+                            'grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none sm:grid-cols-[auto_minmax(0,1fr)_minmax(150px,auto)]',
+                            checked && 'bg-primary/5'
+                          )}
+                          onClick={() => toggleVersion(version.model)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              toggleVersion(version.model)
+                            }
+                          }}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(nextChecked) => {
+                              const modelSet = new Set(selected)
+                              if (nextChecked === true) {
+                                modelSet.add(version.model)
+                              } else {
+                                modelSet.delete(version.model)
+                              }
+                              onChange([...modelSet])
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={version.model}
+                          />
+                          <div className='min-w-0'>
+                            <div className='truncate font-mono text-xs'>
+                              {version.model}
+                            </div>
+                            <div className='mt-1 flex flex-wrap gap-1'>
+                              {(version.channel_tags?.length
+                                ? version.channel_tags
+                                : version.channel_name
+                                  ? [version.channel_name]
+                                  : []
+                              ).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className='rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className='hidden sm:block'>
+                            <PricingModelPrice model={version} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+}
+
+function bestGroupDiscountRatio(group: SelectablePricingModelGroup) {
+  const ratios = group.versions
+    .map((version) => version.discount_ratio)
+    .filter((value): value is number => typeof value === 'number' && value > 0)
+  if (ratios.length === 0) return undefined
+  return Math.min(...ratios)
+}
+
+function uniquePricingModelNames(models: string[]) {
+  return [...new Set(models.filter(Boolean))]
+}
+
+function getPricingModelGroupVendor(group: SelectablePricingModelGroup) {
+  return (group.vendor_name || group.vendor || '').trim()
+}
+
+function comparePricingModelGroups(
+  a: SelectablePricingModelGroup,
+  b: SelectablePricingModelGroup
+) {
+  const vendorCompare = pricingModelVendorSortKey(a).localeCompare(
+    pricingModelVendorSortKey(b)
+  )
+  if (vendorCompare !== 0) return vendorCompare
+
+  const releaseCompare =
+    pricingModelReleaseSortValue(b) - pricingModelReleaseSortValue(a)
+  if (releaseCompare !== 0) return releaseCompare
+
+  return (a.display_name || a.name).localeCompare(b.display_name || b.name)
+}
+
+function pricingModelVendorSortKey(group: SelectablePricingModelGroup) {
+  return (
+    getPricingModelGroupVendor(group).toLowerCase() ||
+    (group.vendor_id ? String(group.vendor_id).padStart(8, '0') : '') ||
+    group.name.toLowerCase()
+  )
+}
+
+function comparePricingModelVersions(
+  a: SelectablePricingModelVersion,
+  b: SelectablePricingModelVersion
+) {
+  const releaseCompare =
+    pricingModelNameReleaseSortValue(b.model) -
+    pricingModelNameReleaseSortValue(a.model)
+  if (releaseCompare !== 0) return releaseCompare
+  return a.model.localeCompare(b.model)
+}
+
+function pricingModelReleaseSortValue(group: SelectablePricingModelGroup) {
+  const names = [
+    group.name,
+    group.display_name,
+    ...group.versions.map((version) => version.model),
+  ]
+  return Math.max(...names.map(pricingModelNameReleaseSortValue), 0)
+}
+
+const pricingModelDatePattern =
+  /(?:^|[^0-9])((?:20\d{2})(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?:[^0-9]|$)/
+const pricingModelVersionPattern =
+  /(?:^|[^0-9])(\d+)(?:[-_.](\d+))?(?:[-_.](\d+))?(?:[-_.](\d+))?(?:[^0-9]|$)/g
+
+function pricingModelNameReleaseSortValue(name: string) {
+  const dateMatch = name.match(pricingModelDatePattern)
+  if (dateMatch?.[1]) {
+    return Number(dateMatch[1])
+  }
+
+  let best = 0
+  for (const match of name.toLowerCase().matchAll(pricingModelVersionPattern)) {
+    let value = 0
+    for (let index = 1; index <= 4; index++) {
+      const rawPart = match[index]
+      const part = rawPart ? Number(rawPart) : 0
+      if (index > 1 && rawPart && rawPart.length > 2) {
+        value = 0
+        break
+      }
+      if (index === 1 && part >= 2000) {
+        value = 0
+        break
+      }
+      value = value * 1000 + part
+    }
+    best = Math.max(best, value)
+  }
+
+  return best > 0 ? 10_000_000_000 + best : 0
+}
 
 type ApiKeyFormSectionProps = {
   title: string
@@ -258,8 +733,19 @@ export function ApiKeysMutateDrawer({
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: groupedPricingModelsData } = useQuery({
+    queryKey: ['available-pricing-models-grouped'],
+    queryFn: getGroupedAvailablePricingModels,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+
   const selectableModels: SelectablePricingModel[] =
     pricingModelsData?.data || []
+  const groupedSelectableModels: SelectablePricingModelGroup[] =
+    groupedPricingModelsData?.data?.models || []
+  const hasGroupedPricingModels =
+    groupedPricingModelsData?.success === true && groupedSelectableModels.length > 0
   const hasPricingSheet = selectableModels.length > 0
   const pricingSheetName =
     selectableModels[0]?.sheet_name || ''
@@ -334,9 +820,15 @@ export function ApiKeysMutateDrawer({
     (modelLimits || [])
       .map((model) => {
         const pricingModel = selectableModels.find((m) => m.model === model)
-        return pricingModel
-          ? { model, pricing_sheet_id: pricingModel.sheet_id }
-          : null
+        if (pricingModel) {
+          return { model, pricing_sheet_id: pricingModel.sheet_id }
+        }
+        const groupedVersion = groupedSelectableModels
+          .flatMap((group) => group.versions)
+          .find((version) => version.model === model)
+        const sheetId =
+          groupedVersion?.pricing_sheet_id ?? groupedVersion?.sheet_id
+        return sheetId ? { model, pricing_sheet_id: sheetId } : null
       })
       .filter((x): x is SelectModel => x !== null)
 
@@ -445,7 +937,7 @@ export function ApiKeysMutateDrawer({
     >
       <SheetContent
         side={side}
-        className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[620px]'
+        className='bg-background flex !h-dvh !w-screen max-w-none gap-0 overflow-hidden p-0 sm:!w-full sm:!max-w-[860px] xl:!max-w-[980px]'
       >
         <SheetHeader className='bg-background border-b px-4 py-3 text-start sm:px-5 sm:py-4'>
           <SheetTitle className='text-base sm:text-lg'>
@@ -665,51 +1157,68 @@ export function ApiKeysMutateDrawer({
                               )}
                             </FormDescription>
                             <FormControl>
-                              <div className='mt-2 overflow-hidden rounded-lg border'>
-                                <table className='w-full text-xs'>
-                                  <thead>
-                                    <tr className='border-b bg-muted/50'>
-                                      <th className='px-3 py-2 text-left font-medium'>
-                                        {t('Model')}
-                                      </th>
-                                      <th className='px-3 py-2 text-right font-medium'>
-                                        {t('Price')}
-                                      </th>
-                                      <th className='px-3 py-2 text-center font-medium w-10'>
-                                        <Checkbox
-                                          checked={field.value.length === selectableModels.length && selectableModels.length > 0}
-                                          indeterminate={field.value.length > 0 && field.value.length < selectableModels.length}
-                                          onCheckedChange={(checked) => {
-                                            if (checked) {
-                                              field.onChange(selectableModels.map((m) => m.model))
+                              {hasGroupedPricingModels ? (
+                                <GroupedPricingModelSelector
+                                  groups={groupedSelectableModels}
+                                  selected={field.value || []}
+                                  onChange={field.onChange}
+                                />
+                              ) : (
+                                <div className='mt-2 overflow-hidden rounded-lg border'>
+                                  <table className='w-full text-xs'>
+                                    <thead>
+                                      <tr className='border-b bg-muted/50'>
+                                        <th className='px-3 py-2 text-left font-medium'>
+                                          {t('Model')}
+                                        </th>
+                                        <th className='px-3 py-2 text-right font-medium'>
+                                          {t('Price')}
+                                        </th>
+                                        <th className='w-10 px-3 py-2 text-center font-medium'>
+                                          <Checkbox
+                                            checked={
+                                              field.value.length === selectableModels.length &&
+                                              selectableModels.length > 0
+                                                ? true
+                                                : field.value.length > 0 &&
+                                                    field.value.length < selectableModels.length
+                                                  ? 'indeterminate'
+                                                  : false
+                                            }
+                                            onCheckedChange={(checked) => {
+                                              field.onChange(
+                                                checked === true
+                                                  ? selectableModels.map((m) => m.model)
+                                                  : []
+                                              )
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectableModels.map((m) => (
+                                        <PricingModelRow
+                                          key={m.model}
+                                          model={m}
+                                          fieldValue={field.value || []}
+                                          onToggle={(model) => {
+                                            const current = field.value || []
+                                            if (current.includes(model)) {
+                                              field.onChange(
+                                                current.filter((v) => v !== model)
+                                              )
                                             } else {
-                                              field.onChange([])
+                                              field.onChange([...current, model])
                                             }
                                           }}
-                                          onClick={(e) => e.stopPropagation()}
                                         />
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {selectableModels.map((m) => (
-                                      <PricingModelRow
-                                        key={m.model}
-                                        model={m}
-                                        fieldValue={field.value || []}
-                                        onToggle={(model) => {
-                                          const current = field.value || []
-                                          if (current.includes(model)) {
-                                            field.onChange(current.filter((v) => v !== model))
-                                          } else {
-                                            field.onChange([...current, model])
-                                          }
-                                        }}
-                                      />
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
                             </FormControl>
                             <FormMessage />
                           </FormItem>

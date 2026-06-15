@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -35,14 +36,14 @@ func GetTokenPricingModels(c *gin.Context) {
 
 	// Enrich bindings with pricing sheet info
 	type BindingWithSheet struct {
-		Id            int    `json:"id"`
-		TokenId       int    `json:"token_id"`
-		Model         string `json:"model"`
-		PricingSheetId int   `json:"pricing_sheet_id"`
-		SheetName     string `json:"sheet_name"`
-		DiscountType  string `json:"discount_type"`
-		DiscountValue float64 `json:"discount_value"`
-		CreatedAt     int64  `json:"created_at"`
+		Id             int     `json:"id"`
+		TokenId        int     `json:"token_id"`
+		Model          string  `json:"model"`
+		PricingSheetId int     `json:"pricing_sheet_id"`
+		SheetName      string  `json:"sheet_name"`
+		DiscountType   string  `json:"discount_type"`
+		DiscountValue  float64 `json:"discount_value"`
+		CreatedAt      int64   `json:"created_at"`
 	}
 
 	result := make([]BindingWithSheet, 0, len(bindings))
@@ -72,14 +73,14 @@ func GetTokenPricingModels(c *gin.Context) {
 	}
 
 	common.ApiSuccess(c, gin.H{
-		"token":      token,
-		"bindings":   result,
+		"token":    token,
+		"bindings": result,
 	})
 }
 
 // BindTokenPricingModelsRequest is the request body for binding pricing models to a token.
 type BindTokenPricingModelsRequest struct {
-	ModelLimitsEnabled bool `json:"model_limits_enabled"`
+	ModelLimitsEnabled bool   `json:"model_limits_enabled"`
 	ModelLimits        string `json:"model_limits"`
 	Bindings           []struct {
 		SheetId int    `json:"sheet_id"`
@@ -107,6 +108,23 @@ func BindTokenPricingModels(c *gin.Context) {
 	token, err := model.GetTokenByIds(tokenId, userId)
 	if err != nil {
 		common.ApiError(c, err)
+		return
+	}
+
+	if req.ModelLimitsEnabled {
+		bindings := make([]model.TokenPricingModelBindingInput, 0, len(req.Bindings))
+		for _, b := range req.Bindings {
+			bindings = append(bindings, model.TokenPricingModelBindingInput{
+				Model:          b.Model,
+				PricingSheetId: b.SheetId,
+			})
+		}
+		if err := service.ValidateTokenPricingModelBindings(userId, req.ModelLimits, bindings); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	} else if len(req.Bindings) > 0 {
+		common.ApiError(c, fmt.Errorf("pricing bindings require model limits to be enabled"))
 		return
 	}
 
@@ -205,4 +223,17 @@ func GetAvailablePricingSheets(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{
 		"models": models,
 	})
+}
+
+// GetGroupedAvailablePricingSheets returns selectable models grouped by model-square parent models.
+func GetGroupedAvailablePricingSheets(c *gin.Context) {
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, private, max-age=0")
+	c.Header("Pragma", "no-cache")
+	userId := c.GetInt("id")
+	data, err := service.GetGroupedSelectableModelsForUser(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, data)
 }

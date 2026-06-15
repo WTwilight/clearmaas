@@ -98,7 +98,7 @@ func GetToken(c *gin.Context) {
 	bindings, _ := model.GetTokenPricingModelBindings(token.Id)
 	common.ApiSuccess(c, gin.H{
 		"token":            buildMaskedTokenResponseWithBindings(token, bindings),
-		"pricing_bindings":  bindings,
+		"pricing_bindings": bindings,
 	})
 }
 
@@ -209,6 +209,21 @@ func AddToken(c *gin.Context) {
 		maxQuotaValue := int((1000000000 * common.QuotaPerUnit))
 		if token.RemainQuota > maxQuotaValue {
 			common.ApiErrorI18n(c, i18n.MsgTokenQuotaExceedMax, map[string]any{"Max": maxQuotaValue})
+			return
+		}
+	}
+	if len(token.SelectModels) > 0 {
+		if !token.ModelLimitsEnabled {
+			common.ApiError(c, fmt.Errorf("pricing bindings require model limits to be enabled"))
+			return
+		}
+		if err := service.ValidateTokenPricingModelBindings(c.GetInt("id"), token.ModelLimits, token.SelectModels); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	} else if token.ModelLimitsEnabled && token.ModelLimits != "" && len(service.GetSelectableModelsForUser(c.GetInt("id"))) > 0 {
+		if err := service.ValidateTokenPricingModelBindings(c.GetInt("id"), token.ModelLimits, token.SelectModels); err != nil {
+			common.ApiError(c, err)
 			return
 		}
 	}
@@ -323,11 +338,6 @@ func UpdateToken(c *gin.Context) {
 	userId := c.GetInt("id")
 	statusOnly := c.Query("status_only")
 	token := model.Token{}
-	err := c.ShouldBindJSON(&token)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
 
 	// Detect whether select_models was explicitly sent in the request (even as []).
 	// This matters because an explicit empty array means "clear all bindings",
@@ -337,7 +347,11 @@ func UpdateToken(c *gin.Context) {
 		hasSelectModelsInBody = json.Valid(body) && bytes.Contains(body, []byte(`"select_models"`))
 		// Re-bind so the body can be parsed again
 		c.Request.Body = io.NopCloser(bytes.NewReader(body))
-		c.ShouldBindJSON(&token)
+	}
+	err := c.ShouldBindJSON(&token)
+	if err != nil {
+		common.ApiError(c, err)
+		return
 	}
 	if len(token.Name) > 50 {
 		common.ApiErrorI18n(c, i18n.MsgTokenNameTooLong)
@@ -390,9 +404,24 @@ func UpdateToken(c *gin.Context) {
 
 	// statusOnly does not support select_models (they are not updated by UpdateWithTx Select list).
 	// Reject the combination to avoid inconsistency.
-	if statusOnly != "" && len(token.SelectModels) > 0 {
+	if statusOnly != "" && hasSelectModelsInBody {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
+	}
+	if hasSelectModelsInBody {
+		if len(token.SelectModels) > 0 {
+			if !cleanToken.ModelLimitsEnabled {
+				common.ApiError(c, fmt.Errorf("pricing bindings require model limits to be enabled"))
+				return
+			}
+			if err := service.ValidateTokenPricingModelBindings(userId, cleanToken.ModelLimits, token.SelectModels); err != nil {
+				common.ApiError(c, err)
+				return
+			}
+		} else if cleanToken.ModelLimitsEnabled && cleanToken.ModelLimits != "" {
+			common.ApiError(c, fmt.Errorf("model limits and pricing bindings are inconsistent"))
+			return
+		}
 	}
 
 	// Wrap token update and binding sync in a single transaction for atomicity.

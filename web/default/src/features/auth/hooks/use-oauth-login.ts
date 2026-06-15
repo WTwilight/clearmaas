@@ -45,6 +45,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
   const [githubButtonDisabled, setGithubButtonDisabled] = useState(false)
   const githubTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const { auth } = useAuthStore()
+  const statusData = status?.data ?? status
 
   useEffect(() => {
     setGithubButtonText(t('Continue with GitHub'))
@@ -72,7 +73,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
   }
 
   const handleGitHubLogin = async () => {
-    if (!status?.github_client_id) return
+    if (!statusData?.github_client_id) return
     if (githubButtonDisabled) return
 
     setIsLoading(true)
@@ -105,7 +106,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
         return
       }
 
-      const url = buildGitHubOAuthUrl(status.github_client_id, state)
+      const url = buildGitHubOAuthUrl(statusData.github_client_id, state)
       window.open(url, '_self')
     } catch (_error) {
       toast.error(t('Failed to start GitHub login'))
@@ -119,7 +120,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
   }
 
   const handleDiscordLogin = async () => {
-    if (!status?.discord_client_id) return
+    if (!statusData?.discord_client_id) return
 
     setIsLoading(true)
     try {
@@ -130,7 +131,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
         return
       }
 
-      const url = buildDiscordOAuthUrl(status.discord_client_id, state)
+      const url = buildDiscordOAuthUrl(statusData.discord_client_id, state)
       window.open(url, '_self')
     } catch (_error) {
       toast.error(t('Failed to start Discord login'))
@@ -140,7 +141,8 @@ export function useOAuthLogin(status: SystemStatus | null) {
   }
 
   const handleOIDCLogin = async () => {
-    if (!status?.oidc_authorization_endpoint || !status?.oidc_client_id) return
+    if (!statusData?.oidc_authorization_endpoint || !statusData?.oidc_client_id)
+      return
 
     setIsLoading(true)
     try {
@@ -152,8 +154,8 @@ export function useOAuthLogin(status: SystemStatus | null) {
       }
 
       const url = buildOIDCOAuthUrl(
-        status.oidc_authorization_endpoint,
-        status.oidc_client_id,
+        statusData.oidc_authorization_endpoint,
+        statusData.oidc_client_id,
         state
       )
       window.open(url, '_self')
@@ -165,7 +167,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
   }
 
   const handleLinuxDOLogin = async () => {
-    if (!status?.linuxdo_client_id) return
+    if (!statusData?.linuxdo_client_id) return
 
     setIsLoading(true)
     try {
@@ -176,7 +178,7 @@ export function useOAuthLogin(status: SystemStatus | null) {
         return
       }
 
-      const url = buildLinuxDOOAuthUrl(status.linuxdo_client_id, state)
+      const url = buildLinuxDOOAuthUrl(statusData.linuxdo_client_id, state)
       window.open(url, '_self')
     } catch (_error) {
       toast.error(t('Failed to start LinuxDO login'))

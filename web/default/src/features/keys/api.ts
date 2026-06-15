@@ -122,6 +122,6 @@ export async function fetchTokenKeysBatch(ids: number[]): Promise<{
 // Pricing Model Binding
 // ============================================================================
 
-import { getAvailablePricingModels, getTokenPricingModels, bindTokenPricingModels, unbindTokenPricingModels } from '@/lib/api'
+import { getAvailablePricingModels, getGroupedAvailablePricingModels, getTokenPricingModels, bindTokenPricingModels, unbindTokenPricingModels } from '@/lib/api'
 
-export { getAvailablePricingModels, getTokenPricingModels, bindTokenPricingModels, unbindTokenPricingModels }
+export { getAvailablePricingModels, getGroupedAvailablePricingModels, getTokenPricingModels, bindTokenPricingModels, unbindTokenPricingModels }

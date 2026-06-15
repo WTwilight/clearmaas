@@ -1,0 +1,4654 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Model Square Mock</title>
+    <style>
+      :root {
+        --bg: #f7f8fb;
+        --panel: rgba(255, 255, 255, 0.8);
+        --panel-strong: rgba(255, 255, 255, 0.94);
+        --panel-soft: rgba(255, 255, 255, 0.64);
+        --line: rgba(15, 23, 42, 0.09);
+        --line-strong: rgba(15, 23, 42, 0.14);
+        --text: #0f172a;
+        --text-soft: #475569;
+        --text-muted: #64748b;
+        --chip: rgba(255, 255, 255, 0.75);
+        --chip-active: rgba(15, 23, 42, 0.06);
+        --primary: #111827;
+        --primary-soft: rgba(15, 23, 42, 0.08);
+        --accent: #4f46e5;
+        --green: #16a34a;
+        --shadow: 0 24px 64px rgba(15, 23, 42, 0.08);
+        --shadow-soft: 0 12px 36px rgba(15, 23, 42, 0.06);
+        --radius-xl: 28px;
+        --radius-lg: 20px;
+        --radius-md: 16px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+
+      body {
+        background:
+          radial-gradient(
+            ellipse 60% 50% at 18% 10%,
+            rgba(95, 126, 255, 0.15) 0%,
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 46% 36% at 84% 14%,
+            rgba(76, 180, 231, 0.14) 0%,
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 36% 32% at 52% 62%,
+            rgba(139, 92, 246, 0.08) 0%,
+            transparent 70%
+          ),
+          linear-gradient(180deg, #fbfcff 0%, #f7f8fb 45%, #f5f7fa 100%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .page {
+        position: relative;
+        min-height: 100vh;
+      }
+
+      .page::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 28%),
+          radial-gradient(
+            circle at top,
+            rgba(255, 255, 255, 0.55),
+            transparent 36%
+          );
+      }
+
+      .header-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 55;
+        padding: 12px 16px;
+      }
+
+      .top-nav {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        max-width: 1320px;
+        margin: 0 auto;
+        min-height: 58px;
+        padding: 10px 14px 10px 18px;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow:
+          0 2px 16px -6px rgba(0, 0, 0, 0.08),
+          0 0 0 0.5px rgba(0, 0, 0, 0.02);
+        backdrop-filter: blur(24px);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .brand-mark {
+        position: relative;
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        background:
+          radial-gradient(
+            circle at 30% 30%,
+            rgba(255, 255, 255, 0.9),
+            transparent 34%
+          ),
+          linear-gradient(135deg, #0f172a, #334155 52%, #64748b);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+      }
+
+      .brand-mark::after {
+        content: "";
+        position: absolute;
+        inset: 7px;
+        border-radius: 8px;
+        border: 1.6px solid rgba(255, 255, 255, 0.75);
+      }
+
+      .brand-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+
+      .brand-copy strong {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+      }
+
+      .brand-copy span {
+        color: var(--text-muted);
+        font-size: 11px;
+      }
+
+      .nav-links,
+      .nav-tools {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .nav-links a {
+        padding: 8px 12px;
+        border-radius: 12px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 500;
+        transition:
+          color 140ms ease,
+          background 140ms ease;
+      }
+
+      .nav-links a:hover,
+      .nav-links a.active {
+        color: var(--text);
+        background: rgba(15, 23, 42, 0.05);
+      }
+
+      .divider {
+        width: 1px;
+        height: 16px;
+        margin: 0 4px;
+        background: rgba(15, 23, 42, 0.09);
+      }
+
+      .icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 12px;
+        background: transparent;
+        color: #475569;
+        cursor: pointer;
+        transition:
+          color 140ms ease,
+          background 140ms ease;
+      }
+
+      .icon-button:hover {
+        color: var(--text);
+        background: rgba(15, 23, 42, 0.05);
+      }
+
+      .icon-button svg,
+      .check-icon svg,
+      .provider-icon svg,
+      .mini-icon svg,
+      .search-box svg,
+      .sort-button svg,
+      .floating-actions button svg,
+      .tiny-square svg,
+      .toggle-caret svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .login-button {
+        min-width: 80px;
+        height: 36px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 12px;
+        background: #0f172a;
+        color: #fff;
+        font-weight: 650;
+        cursor: pointer;
+      }
+
+      .language-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        height: 32px;
+        padding: 0 4px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .language-toggle span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 24px;
+        border-radius: 999px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .language-toggle span.active {
+        background: #0f172a;
+        color: #fff;
+      }
+
+      .notification-button {
+        position: relative;
+      }
+
+      .notification-button::after {
+        content: "";
+        position: absolute;
+        right: 8px;
+        top: 8px;
+        width: 6px;
+        height: 6px;
+        border: 1.5px solid #fff;
+        border-radius: 999px;
+        background: #ef4444;
+      }
+
+      .user-entry {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        height: 36px;
+        padding: 0 12px 0 6px;
+        border: 0;
+        border-radius: 999px;
+        background: #0f172a;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      .user-avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #93c5fd, #6366f1);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .user-entry span:last-child {
+        font-size: 12px;
+        font-weight: 740;
+      }
+
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        margin: 0 auto;
+        padding: 18px 18px 48px;
+      }
+
+      .content-shell {
+        display: grid;
+        grid-template-columns: 312px minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 90px;
+        max-height: calc(100vh - 110px);
+        overflow: auto;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: blur(18px);
+      }
+
+      .sidebar::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .sidebar::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(100, 116, 139, 0.3);
+      }
+
+      .filter-group + .filter-group {
+        margin-top: 26px;
+      }
+
+      .filter-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .filter-header span:last-child {
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      .filter-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .check-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 36px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--text-soft);
+        font-size: 14px;
+        text-align: left;
+        cursor: pointer;
+        transition: color 120ms ease;
+      }
+
+      .check-item:hover {
+        color: var(--text);
+      }
+
+      .check-item.active {
+        color: var(--text);
+        font-weight: 600;
+      }
+
+      .check-item.active .check-icon,
+      .check-item.active .provider-icon {
+        border-color: #0f172a;
+        background: #0f172a;
+        color: #fff;
+      }
+
+      .check-icon,
+      .provider-icon {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border: 1px solid rgba(100, 116, 139, 0.24);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.92);
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .range-track {
+        margin-top: 8px;
+      }
+
+      .range-rail {
+        position: relative;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.28);
+        cursor: pointer;
+      }
+
+      .range-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #0f172a, #475569);
+      }
+
+      .range-thumb {
+        position: absolute;
+        left: 0;
+        top: 50%;
+        width: 22px;
+        height: 22px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        transform: translateY(-50%);
+        cursor: grab;
+      }
+
+      .range-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 10px;
+        padding: 0 1px;
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+
+      .range-value {
+        margin-top: 10px;
+        color: var(--text-soft);
+        font-size: 12px;
+      }
+
+      .expand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        min-height: 30px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        appearance: none;
+      }
+
+      .expand-link::after {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: rotate(45deg) translateY(-1px);
+      }
+
+      .expand-link.is-open::after {
+        transform: rotate(-135deg) translate(-2px, -1px);
+      }
+
+      .filter-list.collapsed .expandable-item {
+        display: none;
+      }
+
+      .filter-summary {
+        margin-top: 18px;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+
+      .main {
+        min-width: 0;
+      }
+
+      .heading-panel {
+        margin-bottom: 16px;
+        padding: 18px 20px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 26px;
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: blur(16px);
+      }
+
+      .heading-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .page-title h2 {
+        margin: 0;
+        font-size: 30px;
+        line-height: 1.06;
+        letter-spacing: -0.05em;
+      }
+
+      .page-title p {
+        margin: 6px 0 0;
+        color: var(--text-soft);
+        font-size: 14px;
+      }
+
+      .search-tools {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .search-box,
+      .sort-button {
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.36);
+      }
+
+      .search-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 236px;
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 14px;
+        color: var(--text-muted);
+      }
+
+      .search-box input {
+        width: 100%;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+      }
+
+      .search-box input::placeholder {
+        color: var(--text-muted);
+      }
+
+      .sort-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        height: 38px;
+        min-width: 86px;
+        padding: 0 15px;
+        border-radius: 14px;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 36px;
+        padding: 0 14px;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--text-soft);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .chip.active {
+        background: rgba(15, 23, 42, 0.08);
+        color: var(--text);
+      }
+
+      .chip .count {
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .model-stream {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .model-stream + .model-stream {
+        margin-top: 18px;
+      }
+
+      .hero-card,
+      .model-card {
+        position: relative;
+        min-width: 0;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 28px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.9),
+          rgba(255, 255, 255, 0.76)
+        );
+        box-shadow: var(--shadow-soft);
+        backdrop-filter: blur(16px);
+      }
+
+      .hero-card {
+        overflow: hidden;
+        min-height: 340px;
+      }
+
+      .hero-inner {
+        display: grid;
+        grid-template-columns: minmax(0, 1.04fr) minmax(280px, 0.96fr);
+        height: 100%;
+      }
+
+      .hero-copy-block {
+        position: relative;
+        padding: 30px;
+        background:
+          radial-gradient(
+              circle at 16% 12%,
+              rgba(15, 23, 42, 0.04) 0 1px,
+              transparent 1px
+            )
+            0 0 / 10px 10px,
+          linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.94),
+            rgba(248, 250, 252, 0.78)
+          );
+      }
+
+      .promo-pill {
+        display: inline-flex;
+        align-items: center;
+        height: 28px;
+        padding: 0 11px;
+        border-radius: 999px;
+        background: rgba(22, 163, 74, 0.1);
+        color: #15803d;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .hero-copy-block h3 {
+        margin: 20px 0 12px;
+        max-width: 320px;
+        font-size: 30px;
+        line-height: 1;
+        letter-spacing: -0.06em;
+      }
+
+      .hero-copy-block p {
+        max-width: 320px;
+        margin: 0 0 18px;
+        color: var(--text-soft);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      .cta-secondary,
+      .cta-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 118px;
+        height: 38px;
+        padding: 0 18px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .cta-secondary {
+        background: rgba(15, 23, 42, 0.05);
+        color: var(--text);
+      }
+
+      .cta-primary {
+        min-width: 74px;
+        background: #0f172a;
+        color: #fff;
+      }
+
+      .hero-art {
+        position: relative;
+        min-height: 100%;
+        background:
+          radial-gradient(
+            circle at 50% 50%,
+            rgba(15, 23, 42, 0.96) 0 8.2%,
+            transparent 9.2%
+          ),
+          radial-gradient(
+            circle at 50% 16%,
+            rgba(15, 23, 42, 0.54) 0 4%,
+            transparent 4.9%
+          ),
+          radial-gradient(
+            circle at 82% 36%,
+            rgba(15, 23, 42, 0.44) 0 4%,
+            transparent 4.9%
+          ),
+          radial-gradient(
+            circle at 78% 72%,
+            rgba(15, 23, 42, 0.44) 0 4%,
+            transparent 4.9%
+          ),
+          radial-gradient(
+            circle at 20% 70%,
+            rgba(15, 23, 42, 0.44) 0 4%,
+            transparent 4.9%
+          ),
+          radial-gradient(
+            circle at 16% 34%,
+            rgba(15, 23, 42, 0.44) 0 4%,
+            transparent 4.9%
+          ),
+          linear-gradient(
+            180deg,
+            rgba(244, 247, 255, 0.98),
+            rgba(255, 255, 255, 0.88)
+          );
+      }
+
+      .hero-art::before,
+      .hero-art::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-repeat: no-repeat;
+      }
+
+      .hero-art::before {
+        background-image:
+          linear-gradient(
+            90deg,
+            transparent 49%,
+            rgba(15, 23, 42, 0.28) 50%,
+            transparent 51%
+          ),
+          linear-gradient(
+            180deg,
+            transparent 49%,
+            rgba(15, 23, 42, 0.28) 50%,
+            transparent 51%
+          ),
+          linear-gradient(
+            30deg,
+            transparent 49%,
+            rgba(15, 23, 42, 0.28) 50%,
+            transparent 51%
+          ),
+          linear-gradient(
+            60deg,
+            transparent 49%,
+            rgba(15, 23, 42, 0.28) 50%,
+            transparent 51%
+          ),
+          linear-gradient(
+            120deg,
+            transparent 49%,
+            rgba(15, 23, 42, 0.28) 50%,
+            transparent 51%
+          ),
+          linear-gradient(
+            150deg,
+            transparent 49%,
+            rgba(15, 23, 42, 0.28) 50%,
+            transparent 51%
+          );
+        background-size:
+          100% 5px,
+          5px 100%,
+          100% 5px,
+          100% 5px,
+          100% 5px,
+          100% 5px;
+        background-position: center center;
+        filter: blur(1.2px);
+      }
+
+      .hero-art::after {
+        inset: 50%;
+        width: 144px;
+        height: 144px;
+        margin: -72px 0 0 -72px;
+        border-radius: 999px;
+        background:
+          radial-gradient(circle at center, #0f172a 0 17%, transparent 18%),
+          conic-gradient(
+            from 0deg,
+            rgba(15, 23, 42, 0.88) 0 8deg,
+            transparent 8deg 32deg,
+            rgba(15, 23, 42, 0.88) 32deg 40deg,
+            transparent 40deg 62deg,
+            rgba(15, 23, 42, 0.88) 62deg 70deg,
+            transparent 70deg 94deg,
+            rgba(15, 23, 42, 0.88) 94deg 102deg,
+            transparent 102deg 125deg,
+            rgba(15, 23, 42, 0.88) 125deg 133deg,
+            transparent 133deg 156deg,
+            rgba(15, 23, 42, 0.88) 156deg 164deg,
+            transparent 164deg 186deg,
+            rgba(15, 23, 42, 0.88) 186deg 194deg,
+            transparent 194deg 218deg,
+            rgba(15, 23, 42, 0.88) 218deg 226deg,
+            transparent 226deg 249deg,
+            rgba(15, 23, 42, 0.88) 249deg 257deg,
+            transparent 257deg 280deg,
+            rgba(15, 23, 42, 0.88) 280deg 288deg,
+            transparent 288deg 311deg,
+            rgba(15, 23, 42, 0.88) 311deg 319deg,
+            transparent 319deg 343deg,
+            rgba(15, 23, 42, 0.88) 343deg 351deg,
+            transparent 351deg 360deg
+          );
+        filter: blur(2.6px);
+        opacity: 0.96;
+      }
+
+      .hero-art .hero-orbit {
+        position: absolute;
+        inset: 0;
+      }
+
+      .hero-art .hero-orbit::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 212px;
+        height: 212px;
+        margin: -106px 0 0 -106px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 999px;
+      }
+
+      .model-card {
+        display: flex;
+        flex-direction: column;
+        height: 586px;
+        padding: 18px;
+      }
+
+      .featured-card {
+        padding: 18px;
+      }
+
+      .card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .card-name {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .logo-orb {
+        position: relative;
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        flex: 0 0 auto;
+        overflow: hidden;
+      }
+
+      .logo-orb::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background:
+          radial-gradient(
+            circle at 30% 30%,
+            rgba(255, 255, 255, 0.95),
+            transparent 30%
+          ),
+          linear-gradient(135deg, var(--accent-a), var(--accent-b));
+      }
+
+      .logo-orb::after {
+        content: "";
+        position: absolute;
+        inset: 1px;
+        border-radius: inherit;
+        border: 1px solid rgba(255, 255, 255, 0.45);
+      }
+
+      .name-block {
+        min-width: 0;
+      }
+
+      .name-block h3 {
+        margin: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 17px;
+        line-height: 1.2;
+        letter-spacing: -0.03em;
+      }
+
+      .slug-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .slug-row code {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .mini-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border: 1px solid rgba(100, 116, 139, 0.2);
+        border-radius: 5px;
+        color: #64748b;
+        background: rgba(255, 255, 255, 0.84);
+      }
+
+      .traffic {
+        margin: 3px 0 10px;
+        color: var(--text);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .traffic span {
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      .badge-stack {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 6px;
+        margin-left: auto;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 10px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.05);
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .status-badge.free {
+        background: rgba(22, 163, 74, 0.1);
+        color: #15803d;
+      }
+
+      .status-badge.discount {
+        background: rgba(249, 115, 22, 0.12);
+        color: #c2410c;
+      }
+
+      .status-badge.sunset {
+        background: rgba(239, 68, 68, 0.1);
+        color: #b91c1c;
+      }
+
+      .card-desc {
+        min-height: 64px;
+        margin: 0 0 12px;
+        color: var(--text-soft);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .featured-card .card-desc {
+        min-height: 58px;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px 16px;
+        margin-bottom: 14px;
+      }
+
+      .meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .meta-item strong {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+
+      .meta-item span {
+        color: var(--text);
+        font-size: 14px;
+      }
+
+      .input-tags {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .tiny-square {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border: 1px solid rgba(100, 116, 139, 0.22);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #64748b;
+      }
+
+      .version-panel {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        margin-top: 6px;
+        height: 238px;
+        padding: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.07);
+        border-radius: 20px;
+        background: linear-gradient(
+          180deg,
+          rgba(248, 250, 252, 0.92),
+          rgba(255, 255, 255, 0.82)
+        );
+      }
+
+      .version-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .version-head strong {
+        display: block;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .version-head span {
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+
+      .version-list {
+        display: grid;
+        gap: 8px;
+        min-height: 0;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+
+      .version-list::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .version-list::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(100, 116, 139, 0.24);
+      }
+
+      .version-columns {
+        display: grid;
+        grid-template-columns:
+          minmax(0, 1.25fr) 92px minmax(0, 1fr) minmax(72px, 0.58fr)
+          minmax(104px, 0.72fr) minmax(96px, 0.72fr);
+        gap: 10px;
+        align-items: center;
+        padding: 0 12px 2px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .version-row {
+        display: grid;
+        grid-template-columns:
+          minmax(0, 1.25fr) 92px minmax(0, 1fr) minmax(72px, 0.58fr)
+          minmax(104px, 0.72fr) minmax(96px, 0.72fr);
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .version-id {
+        min-width: 0;
+      }
+
+      .version-id code {
+        display: block;
+        overflow: hidden;
+        color: #0f172a;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .version-discount {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        width: fit-content;
+        padding: 0 10px 0 20px;
+        border-radius: 999px;
+        background:
+          radial-gradient(
+            circle at 12px 50%,
+            rgba(255, 255, 255, 0.95) 0 2px,
+            transparent 2.5px
+          ),
+          linear-gradient(135deg, #f97316, #dc2626);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        box-shadow:
+          0 8px 18px rgba(220, 38, 38, 0.18),
+          inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+      }
+
+      .version-discount::after {
+        content: "OFF";
+        margin-left: 4px;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        opacity: 0.86;
+      }
+
+      .version-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .version-tag {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: rgba(79, 70, 229, 0.08);
+        color: #4338ca;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .metric-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: rgba(248, 250, 252, 0.92);
+      }
+
+      .metric-cell strong {
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .card-footer {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 14px;
+        margin-top: auto;
+        padding-top: 12px;
+        border-top: 1px solid rgba(15, 23, 42, 0.07);
+      }
+
+      .footer-left {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .provider-avatars {
+        display: flex;
+        align-items: center;
+      }
+
+      .provider-avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        margin-left: -5px;
+        border: 1.5px solid #fff;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--avatar-a), var(--avatar-b));
+        color: #fff;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .provider-avatar:first-child {
+        margin-left: 0;
+      }
+
+      .footer-right {
+        display: grid;
+        gap: 5px;
+        min-width: 174px;
+      }
+
+      .uptime-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 560;
+        line-height: 1;
+      }
+
+      .uptime-header strong {
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .uptime-graph {
+        display: grid;
+        grid-template-columns: repeat(32, 1fr);
+        gap: 2px;
+        height: 12px;
+        overflow: hidden;
+      }
+
+      .uptime-bar {
+        min-width: 3px;
+        height: 12px;
+        border-radius: 2px;
+        background: #e8ecf2;
+      }
+
+      .uptime-bar.active {
+        background: linear-gradient(180deg, #22c55e, #16a34a);
+      }
+
+      .floating-actions {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .floating-actions button {
+        width: 42px;
+        height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow: var(--shadow-soft);
+        cursor: pointer;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* Visual refinement layer: flatter hierarchy, tighter density, smoother state changes. */
+      :root {
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --panel-strong: #ffffff;
+        --panel-soft: #f8fafc;
+        --line: #e5e7eb;
+        --line-strong: #d9dee7;
+        --text: #101418;
+        --text-soft: #4b5563;
+        --text-muted: #7a8491;
+        --chip: #f4f5f7;
+        --chip-active: #111827;
+        --accent: #2563eb;
+        --shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+        --shadow-soft: 0 2px 10px rgba(16, 24, 40, 0.045);
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background: linear-gradient(
+          180deg,
+          #fbfcfd 0%,
+          #f7f8fa 260px,
+          #f7f8fa 100%
+        );
+      }
+
+      .page::before {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.72),
+          rgba(255, 255, 255, 0) 220px
+        );
+      }
+
+      .header-wrap {
+        padding: 10px 16px;
+      }
+
+      .top-nav {
+        min-height: 54px;
+        max-width: none;
+        border-color: rgba(229, 231, 235, 0.92);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 1px 10px rgba(16, 24, 40, 0.05);
+      }
+
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #111827, #3b4655);
+      }
+
+      .brand-mark::after {
+        inset: 7px;
+        border-radius: 5px;
+      }
+
+      .brand-copy strong,
+      .name-block h3,
+      .hero-copy-block h3,
+      .page-title h2 {
+        letter-spacing: 0;
+      }
+
+      .nav-links a,
+      .icon-button,
+      .login-button,
+      .sort-button,
+      .chip,
+      .check-item,
+      .expand-link,
+      .version-row,
+      .model-card,
+      .hero-card {
+        transition:
+          background-color 180ms ease,
+          border-color 180ms ease,
+          box-shadow 180ms ease,
+          color 180ms ease,
+          transform 180ms ease,
+          opacity 180ms ease;
+      }
+
+      .shell {
+        padding: 10px 16px 40px;
+      }
+
+      .content-shell {
+        grid-template-columns: 292px minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .sidebar,
+      .heading-panel,
+      .hero-card,
+      .model-card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+
+      .sidebar {
+        top: 84px;
+        max-height: calc(100vh - 100px);
+        padding: 16px;
+      }
+
+      .filter-group + .filter-group {
+        margin-top: 22px;
+      }
+
+      .filter-header {
+        margin-bottom: 10px;
+        font-size: 13px;
+      }
+
+      .filter-list {
+        gap: 8px;
+      }
+
+      .check-item {
+        min-height: 30px;
+        color: #5c6673;
+        font-size: 13px;
+      }
+
+      .check-icon,
+      .provider-icon {
+        width: 17px;
+        height: 17px;
+        border-radius: 5px;
+      }
+
+      .range-thumb {
+        width: 18px;
+        height: 18px;
+        box-shadow: 0 2px 8px rgba(16, 24, 40, 0.16);
+      }
+
+      .heading-panel {
+        margin-bottom: 14px;
+        padding: 14px 16px;
+      }
+
+      .page-title h2 {
+        font-size: 25px;
+        line-height: 1.15;
+      }
+
+      .page-title p {
+        margin-top: 4px;
+        font-size: 13px;
+      }
+
+      .search-box,
+      .sort-button {
+        height: 34px;
+        border-color: var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: none;
+      }
+
+      .sort-button:hover,
+      .search-box:focus-within {
+        border-color: #c8ced8;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+      }
+
+      .chips {
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .chip {
+        min-height: 31px;
+        padding: 0 11px;
+        border-color: var(--line);
+        border-radius: 8px;
+        background: var(--chip);
+        font-size: 12px;
+      }
+
+      .chip.active {
+        border-color: #111827;
+        background: var(--chip-active);
+        color: #fff;
+      }
+
+      .chip.active .count {
+        color: rgba(255, 255, 255, 0.72);
+      }
+
+      .model-stream {
+        gap: 14px;
+      }
+
+      .model-stream + .model-stream {
+        margin-top: 14px;
+      }
+
+      .hero-card,
+      .model-card {
+        overflow: hidden;
+      }
+
+      .model-card {
+        height: 560px;
+        padding: 16px;
+      }
+
+      .model-card:hover,
+      .hero-card:hover {
+        border-color: #d1d7e0;
+        box-shadow: 0 10px 28px rgba(16, 24, 40, 0.07);
+        transform: translateY(-1px);
+      }
+
+      .hero-card {
+        min-height: 320px;
+      }
+
+      .hero-copy-block {
+        padding: 26px;
+        background: #fff;
+      }
+
+      .hero-copy-block h3 {
+        font-size: 28px;
+      }
+
+      .hero-art {
+        background:
+          radial-gradient(
+            circle at 50% 50%,
+            rgba(17, 24, 39, 0.92) 0 8.2%,
+            transparent 9.2%
+          ),
+          linear-gradient(180deg, #f7f8fa, #fff);
+      }
+
+      .card-top {
+        margin-bottom: 6px;
+      }
+
+      .logo-orb {
+        width: 28px;
+        height: 28px;
+      }
+
+      .name-block h3 {
+        font-size: 16px;
+      }
+
+      .slug-row {
+        margin-top: 3px;
+        gap: 6px;
+        font-size: 12px;
+      }
+
+      .mini-icon,
+      .tiny-square {
+        width: 15px;
+        height: 15px;
+        border-radius: 4px;
+      }
+
+      .traffic {
+        margin: 2px 0 8px;
+        font-size: 13px;
+      }
+
+      .status-badge {
+        height: 22px;
+        padding: 0 8px;
+        border-radius: 7px;
+        font-size: 11px;
+      }
+
+      .card-desc {
+        min-height: 52px;
+        margin-bottom: 10px;
+        color: #525c68;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .featured-card .card-desc {
+        min-height: 52px;
+      }
+
+      .meta-grid {
+        gap: 8px 14px;
+        margin-bottom: 11px;
+      }
+
+      .meta-item {
+        gap: 3px;
+      }
+
+      .meta-item strong {
+        color: #8a94a3;
+        font-size: 10px;
+        letter-spacing: 0;
+      }
+
+      .meta-item span {
+        font-size: 13px;
+      }
+
+      .version-panel {
+        height: 218px;
+        margin-top: 4px;
+        padding: 10px;
+        border-color: var(--line);
+        border-radius: 8px;
+        background: #fafbfc;
+      }
+
+      .version-head {
+        margin-bottom: 8px;
+      }
+
+      .version-head span {
+        color: #7d8794;
+        font-size: 11px;
+      }
+
+      .version-columns {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        grid-template-columns:
+          minmax(0, 1.18fr) 86px minmax(0, 0.9fr) minmax(68px, 0.56fr)
+          minmax(82px, 0.58fr) minmax(82px, 0.58fr);
+        gap: 8px;
+        margin: 0 -2px 6px;
+        padding: 6px 10px;
+        border: 1px solid #eef0f3;
+        border-radius: 7px;
+        background: #f4f6f8;
+        font-size: 10px;
+        letter-spacing: 0;
+      }
+
+      .version-list {
+        gap: 6px;
+        padding-right: 2px;
+      }
+
+      .version-row {
+        grid-template-columns:
+          minmax(0, 1.18fr) 86px minmax(0, 0.9fr) minmax(68px, 0.56fr)
+          minmax(82px, 0.58fr) minmax(82px, 0.58fr);
+        gap: 8px;
+        min-height: 38px;
+        padding: 7px 10px;
+        border-color: #edf0f4;
+        border-radius: 7px;
+        background: #fff;
+      }
+
+      .version-row:hover {
+        border-color: #dbe2ea;
+        background: #fbfcfd;
+      }
+
+      .version-id code,
+      .metric-cell strong {
+        font-size: 11px;
+      }
+
+      .version-discount {
+        min-height: 24px;
+        padding: 0 8px 0 18px;
+        border-radius: 6px;
+        font-size: 11px;
+        box-shadow: none;
+      }
+
+      .version-discount::after {
+        font-size: 8px;
+      }
+
+      .version-tags {
+        gap: 4px;
+      }
+
+      .version-tag {
+        height: 21px;
+        padding: 0 7px;
+        border-radius: 6px;
+        font-size: 10px;
+      }
+
+      .metric-cell {
+        justify-content: center;
+        min-height: 24px;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+
+      .floating-actions button {
+        border-radius: 8px;
+        box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+      }
+
+      .sidebar,
+      .heading-panel,
+      .hero-card,
+      .model-card {
+        animation: none;
+      }
+
+      /* Polish pass: typography hierarchy, flatter card sections, transparent scrollbars. */
+      :root {
+        --font-sans:
+          "Inter", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+        --font-mono:
+          "SFMono-Regular", "JetBrains Mono", "Cascadia Code", monospace;
+        --fs-hero: 28px;
+        --fs-page-title: 24px;
+        --fs-card-title: 15px;
+        --fs-body: 13px;
+        --fs-caption: 12px;
+        --fs-micro: 10px;
+        --fw-title: 740;
+        --fw-label: 700;
+        --fw-body: 450;
+        --fw-value: 660;
+      }
+
+      body {
+        font-family: var(--font-sans);
+        font-size: var(--fs-body);
+        font-weight: var(--fw-body);
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      code {
+        font-family: var(--font-mono);
+      }
+
+      .brand-copy strong {
+        color: #111827;
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      .brand-copy span {
+        color: #89919d;
+        font-size: 10px;
+        font-weight: 500;
+      }
+
+      .nav-links a {
+        font-size: 12px;
+        font-weight: 560;
+      }
+
+      .login-button {
+        height: 34px;
+        border-radius: 9px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .language-toggle {
+        height: 30px;
+        border-color: var(--line);
+        background: #fff;
+        box-shadow: none;
+      }
+
+      .language-toggle span {
+        min-width: 27px;
+        height: 22px;
+        color: #667085;
+        font-size: 10px;
+        font-weight: 760;
+      }
+
+      .language-toggle span.active {
+        background: #111827;
+        color: #fff;
+      }
+
+      .user-entry {
+        height: 34px;
+        padding-right: 12px;
+        background: #111827;
+      }
+
+      .user-entry:hover {
+        background: #020617;
+      }
+
+      .user-avatar {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+      }
+
+      .user-entry span:last-child {
+        font-size: 12px;
+      }
+
+      .sidebar {
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+      }
+
+      .sidebar:hover {
+        scrollbar-color: rgba(100, 116, 139, 0.28) transparent;
+      }
+
+      .sidebar::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .sidebar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .sidebar::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background: transparent;
+        background-clip: padding-box;
+      }
+
+      .sidebar:hover::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.28);
+        background-clip: padding-box;
+      }
+
+      .filter-group + .filter-group {
+        margin-top: 20px;
+      }
+
+      .filter-header {
+        color: #111827;
+        font-size: var(--fs-caption);
+        font-weight: 760;
+      }
+
+      .filter-header span:last-child {
+        color: #a1a9b4;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .filter-list {
+        gap: 6px;
+      }
+
+      .check-item {
+        min-height: 29px;
+        color: #5c6673;
+        font-size: var(--fs-caption);
+        font-weight: 520;
+      }
+
+      .check-item:hover {
+        transform: translateX(1px);
+      }
+
+      .check-item.active {
+        color: #111827;
+        font-weight: 680;
+      }
+
+      .range-labels,
+      .range-value,
+      .filter-summary {
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      .expand-link {
+        min-height: 28px;
+        color: #667085;
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .expand-link:hover {
+        color: #111827;
+      }
+
+      .page-title h2 {
+        color: #0f172a;
+        font-size: var(--fs-page-title);
+        font-weight: 760;
+        line-height: 1.16;
+      }
+
+      .page-title p {
+        color: #687383;
+        font-size: var(--fs-caption);
+        font-weight: 480;
+      }
+
+      .chip {
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .model-card {
+        height: 586px;
+      }
+
+      .hero-card {
+        min-height: 312px;
+      }
+
+      .hero-copy-block {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        background:
+          radial-gradient(
+              circle at 18% 24%,
+              rgba(17, 24, 39, 0.035) 0 1px,
+              transparent 1.5px
+            )
+            0 0 / 14px 14px,
+          linear-gradient(180deg, #fff, #fbfcfd);
+      }
+
+      .hero-copy-block h3 {
+        font-size: var(--fs-hero);
+        font-weight: 780;
+      }
+
+      .hero-copy-block p {
+        color: #566170;
+        font-size: var(--fs-body);
+        font-weight: 460;
+      }
+
+      .hero-actions {
+        margin-top: 2px;
+      }
+
+      .cta-secondary,
+      .cta-primary {
+        height: 36px;
+        border-radius: 9px;
+        font-size: 13px;
+      }
+
+      .hero-art {
+        border-left: 1px solid #eef1f5;
+      }
+
+      .promo-pill {
+        height: 24px;
+        border-radius: 7px;
+        font-size: 11px;
+        font-weight: 760;
+      }
+
+      .name-block h3 {
+        color: #111827;
+        font-size: var(--fs-card-title);
+        font-weight: var(--fw-title);
+        line-height: 1.25;
+      }
+
+      .slug-row {
+        color: #8a94a3;
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      .slug-row code {
+        font-weight: 540;
+      }
+
+      .traffic {
+        color: #111827;
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      .traffic span {
+        color: #8a94a3;
+        font-size: 11px;
+        font-weight: 520;
+      }
+
+      .status-badge {
+        font-size: 10px;
+        font-weight: 760;
+      }
+
+      .card-desc {
+        min-height: 50px;
+        color: #525c68;
+        font-size: var(--fs-caption);
+        font-weight: 440;
+        line-height: 1.55;
+      }
+
+      .featured-card .card-desc {
+        min-height: 50px;
+      }
+
+      .meta-grid {
+        padding: 10px 0 11px;
+        border-top: 1px solid #f0f2f5;
+        border-bottom: 1px solid #f0f2f5;
+      }
+
+      .meta-item strong {
+        color: #8a94a3;
+        font-size: var(--fs-micro);
+        font-weight: 720;
+      }
+
+      .meta-item span {
+        color: #252c35;
+        font-size: 12px;
+        font-weight: 560;
+      }
+
+      .version-panel {
+        height: 196px;
+        margin-top: 2px;
+        padding: 9px;
+      }
+
+      .card-footer {
+        min-height: 43px;
+        padding-top: 9px;
+      }
+
+      .footer-left {
+        font-size: 11px;
+      }
+
+      .footer-right {
+        min-width: 190px;
+      }
+
+      .uptime-graph {
+        height: 10px;
+      }
+
+      .uptime-bar {
+        height: 10px;
+      }
+
+      .version-head span {
+        font-size: 11px;
+        font-weight: 560;
+      }
+
+      .version-columns {
+        font-size: var(--fs-micro);
+        font-weight: 760;
+        text-transform: none;
+      }
+
+      .version-list {
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+      }
+
+      .version-list:hover {
+        scrollbar-color: rgba(100, 116, 139, 0.22) transparent;
+      }
+
+      .version-list::-webkit-scrollbar {
+        width: 5px;
+      }
+
+      .version-list::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .version-list::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: transparent;
+      }
+
+      .version-list:hover::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.22);
+      }
+
+      .version-row:hover {
+        transform: translateX(1px);
+      }
+
+      .version-row {
+        animation: row-enter 220ms ease both;
+      }
+
+      @keyframes row-enter {
+        from {
+          opacity: 0;
+          transform: translateY(3px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .version-id code {
+        color: #1f2937;
+        font-weight: 680;
+      }
+
+      .version-discount {
+        font-weight: 840;
+      }
+
+      .version-tag {
+        font-weight: 680;
+      }
+
+      .metric-cell strong {
+        color: #27313d;
+        font-weight: 680;
+      }
+
+      .promo-banner {
+        margin-bottom: 14px;
+      }
+
+      .promo-banner .hero-card {
+        position: relative;
+        min-height: 128px;
+        border: 1px solid rgba(59, 130, 246, 0.18);
+        border-radius: 12px;
+        background:
+          radial-gradient(
+            circle at 12% 20%,
+            rgba(96, 165, 250, 0.26),
+            transparent 28%
+          ),
+          radial-gradient(
+            circle at 82% 30%,
+            rgba(45, 212, 191, 0.18),
+            transparent 26%
+          ),
+          linear-gradient(110deg, #f8fbff 0%, #eef6ff 45%, #f9fbff 100%);
+        box-shadow: 0 14px 34px rgba(37, 99, 235, 0.08);
+        isolation: isolate;
+      }
+
+      .promo-slider {
+        position: relative;
+        z-index: 1;
+        min-height: 128px;
+      }
+
+      .promo-slide {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        transform: translateX(18px);
+        transition:
+          opacity 520ms ease,
+          transform 520ms ease;
+        pointer-events: none;
+      }
+
+      .promo-slide.active {
+        opacity: 1;
+        transform: translateX(0);
+        pointer-events: auto;
+      }
+
+      .promo-banner .hero-card::before,
+      .promo-banner .hero-card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .promo-banner .hero-card::before {
+        background:
+          linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.72),
+            transparent
+          ),
+          radial-gradient(
+              circle,
+              rgba(37, 99, 235, 0.18) 0 1px,
+              transparent 1.5px
+            )
+            0 0 / 18px 18px;
+        opacity: 0.22;
+        transform: none;
+      }
+
+      .promo-banner .hero-card::after {
+        background:
+          linear-gradient(
+            115deg,
+            transparent 0 18%,
+            rgba(37, 99, 235, 0.16) 18.4%,
+            transparent 19% 64%,
+            rgba(20, 184, 166, 0.14) 64.4%,
+            transparent 65%
+          ),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent);
+        mix-blend-mode: multiply;
+        opacity: 0.68;
+      }
+
+      .promo-banner .hero-inner {
+        position: relative;
+        z-index: 1;
+        grid-template-columns: minmax(0, 1fr) 220px;
+      }
+
+      .promo-banner .hero-copy-block {
+        min-height: 126px;
+        padding: 18px 24px;
+        display: grid;
+        grid-template-columns: auto minmax(180px, 260px) minmax(320px, 1fr) auto;
+        align-items: center;
+        gap: 18px;
+        background:
+          linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.34),
+            rgba(255, 255, 255, 0.08)
+          ),
+          radial-gradient(
+            circle at 22% 50%,
+            rgba(59, 130, 246, 0.08),
+            transparent 34%
+          );
+      }
+
+      .promo-banner .promo-pill {
+        margin: 0;
+        border: 1px solid rgba(34, 197, 94, 0.18);
+        background: rgba(220, 252, 231, 0.82);
+        box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.06);
+      }
+
+      .promo-banner .hero-copy-block h3 {
+        margin: 0;
+        max-width: none;
+        font-size: 22px;
+        line-height: 1.1;
+        color: #0f172a;
+      }
+
+      .promo-banner .hero-copy-block p {
+        max-width: 560px;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .banner-copy {
+        display: grid;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .banner-proof {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .banner-proof span {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 9px;
+        border: 1px solid rgba(37, 99, 235, 0.13);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.58);
+        color: #2563eb;
+        font-size: 10px;
+        font-weight: 760;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+      }
+
+      .promo-banner .hero-actions {
+        margin: 0;
+        justify-content: flex-end;
+      }
+
+      .promo-dots {
+        position: absolute;
+        left: 24px;
+        bottom: 11px;
+        z-index: 3;
+        display: flex;
+        gap: 7px;
+      }
+
+      .promo-dot {
+        width: 18px;
+        height: 3px;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(37, 99, 235, 0.2);
+        cursor: pointer;
+        transition:
+          width 180ms ease,
+          background 180ms ease;
+      }
+
+      .promo-dot.active {
+        width: 28px;
+        background: #2563eb;
+      }
+
+      .promo-banner .hero-art {
+        min-height: 126px;
+        overflow: hidden;
+        border-left: 1px solid rgba(37, 99, 235, 0.12);
+        background:
+          radial-gradient(
+            circle at 50% 50%,
+            rgba(37, 99, 235, 0.16),
+            transparent 36%
+          ),
+          linear-gradient(
+            180deg,
+            rgba(239, 246, 255, 0.5),
+            rgba(255, 255, 255, 0.16)
+          );
+      }
+
+      .promo-banner .hero-art::before {
+        background:
+          conic-gradient(
+            from 0deg,
+            rgba(37, 99, 235, 0.48),
+            transparent 16%,
+            rgba(20, 184, 166, 0.42),
+            transparent 42%,
+            rgba(96, 165, 250, 0.46),
+            transparent 72%,
+            rgba(37, 99, 235, 0.48)
+          ),
+          radial-gradient(
+            circle at center,
+            rgba(255, 255, 255, 0.78) 0 34%,
+            transparent 35%
+          );
+        opacity: 0.18;
+        filter: blur(4px);
+      }
+
+      .promo-banner .hero-art::after {
+        width: 88px;
+        height: 88px;
+        margin: -44px 0 0 -44px;
+        background:
+          radial-gradient(circle at center, #0f172a 0 15%, transparent 16%),
+          conic-gradient(
+            from 0deg,
+            rgba(37, 99, 235, 0.86) 0 7deg,
+            transparent 7deg 27deg,
+            rgba(20, 184, 166, 0.8) 27deg 35deg,
+            transparent 35deg 62deg,
+            rgba(59, 130, 246, 0.82) 62deg 70deg,
+            transparent 70deg 96deg,
+            rgba(15, 23, 42, 0.62) 96deg 104deg,
+            transparent 104deg 360deg
+          );
+        filter: blur(0.6px);
+        opacity: 0.92;
+      }
+
+      .promo-banner .hero-art .hero-orbit::before {
+        width: 132px;
+        height: 132px;
+        margin: -66px 0 0 -66px;
+        border-color: rgba(37, 99, 235, 0.14);
+        box-shadow:
+          0 0 0 16px rgba(37, 99, 235, 0.035),
+          0 0 36px rgba(37, 99, 235, 0.18);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .promo-banner .hero-card::before,
+        .promo-banner .hero-art::before,
+        .promo-banner .hero-art::after,
+        .promo-slide {
+          animation: none;
+          transition: none;
+        }
+      }
+
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 280px;
+        padding: 32px 24px;
+        border: 1px dashed var(--line-strong);
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fcfdff, #f8fafc);
+        text-align: center;
+      }
+
+      .empty-state strong {
+        color: #111827;
+        font-size: 16px;
+        font-weight: 760;
+      }
+
+      .empty-state p {
+        max-width: 360px;
+        margin: 8px 0 0;
+        color: #687383;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      /*
+        Model card height budget:
+        32px vertical padding + 37px header + 18px traffic + 50px description
+        + 139px specs + 196px versions + 43px footer + 49px fixed vertical rhythm.
+      */
+      :root {
+        --model-card-padding-y: 32px;
+        --model-card-header-h: 37px;
+        --model-card-traffic-h: 18px;
+        --model-card-desc-h: 50px;
+        --model-card-meta-h: 139px;
+        --model-card-version-h: 196px;
+        --model-card-footer-h: 43px;
+        --model-card-rhythm-y: 49px;
+        --model-card-h: calc(
+          var(--model-card-padding-y) + var(--model-card-header-h) +
+            var(--model-card-traffic-h) + var(--model-card-desc-h) +
+            var(--model-card-meta-h) + var(--model-card-version-h) +
+            var(--model-card-footer-h) + var(--model-card-rhythm-y)
+        );
+      }
+
+      .model-card {
+        height: var(--model-card-h);
+      }
+
+      .card-footer {
+        margin-top: 10px;
+      }
+
+      /* Button color balance: avoid making every active action look equally heavy. */
+      .nav-links a.active {
+        background: #eef4ff;
+        color: #2563eb;
+      }
+
+      .language-toggle span.active {
+        background: #2563eb;
+        color: #fff;
+      }
+
+      .chip.active {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+
+      .chip.active .count {
+        color: #3b82f6;
+      }
+
+      .cta-primary {
+        background: #2563eb;
+        color: #fff;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.16);
+      }
+
+      .cta-primary:hover {
+        background: #1d4ed8;
+      }
+
+      .user-entry {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: #111827;
+      }
+
+      .user-entry:hover {
+        border-color: #c8ced8;
+        background: #f8fafc;
+      }
+
+      .user-avatar {
+        background: linear-gradient(135deg, #60a5fa, #2563eb);
+      }
+
+      @media (max-width: 1240px) {
+        .content-shell {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          position: relative;
+          top: 0;
+          max-height: none;
+        }
+
+        .version-columns,
+        .version-row {
+          grid-template-columns: minmax(0, 1fr) 86px minmax(0, 0.9fr) repeat(
+              3,
+              minmax(72px, 0.6fr)
+            );
+        }
+
+        .metric-cell {
+          grid-column: auto;
+        }
+
+        .promo-banner .hero-copy-block {
+          grid-template-columns: auto minmax(180px, 240px) minmax(260px, 1fr);
+        }
+
+        .promo-banner .hero-actions {
+          grid-column: 2 / -1;
+          justify-content: flex-start;
+        }
+      }
+
+      @media (max-width: 1080px) {
+        .model-stream,
+        .hero-inner {
+          grid-template-columns: 1fr;
+        }
+
+        .hero-art {
+          min-height: 280px;
+        }
+
+        .promo-banner .hero-inner {
+          grid-template-columns: 1fr;
+        }
+
+        .promo-banner .hero-art {
+          display: none;
+        }
+
+        .promo-banner .hero-copy-block {
+          grid-template-columns: auto minmax(0, 1fr) auto;
+        }
+
+        .promo-banner .hero-actions {
+          grid-column: auto;
+          justify-content: flex-end;
+        }
+
+        .version-columns,
+        .version-row {
+          grid-template-columns: minmax(0, 1fr) 84px minmax(0, 0.85fr);
+        }
+
+        .metric-cell {
+          grid-column: auto;
+        }
+      }
+
+      @media (max-width: 880px) {
+        .nav-links {
+          display: none;
+        }
+
+        .heading-row {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .search-tools {
+          width: 100%;
+        }
+
+        .search-box {
+          flex: 1;
+          width: auto;
+        }
+
+        .promo-banner .hero-copy-block {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .promo-banner .hero-actions {
+          justify-content: flex-start;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .header-wrap,
+        .shell {
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        .top-nav {
+          padding-left: 12px;
+          padding-right: 10px;
+        }
+
+        .brand-copy span,
+        .divider {
+          display: none;
+        }
+
+        .language-toggle {
+          display: none;
+        }
+
+        .user-entry span:last-child {
+          display: none;
+        }
+
+        .user-entry {
+          width: 34px;
+          padding: 0;
+          justify-content: center;
+        }
+
+        .heading-panel,
+        .sidebar,
+        .model-card,
+        .featured-card {
+          border-radius: 8px;
+        }
+
+        .page-title h2 {
+          font-size: 28px;
+        }
+
+        .meta-grid,
+        .version-columns,
+        .version-row {
+          grid-template-columns: 1fr;
+        }
+
+        .version-columns {
+          display: none;
+        }
+
+        .version-row {
+          gap: 6px;
+        }
+
+        .version-id,
+        .version-discount,
+        .version-tags,
+        .metric-cell {
+          position: relative;
+          padding-left: 72px;
+        }
+
+        .version-id::before,
+        .version-discount::before,
+        .version-tags::before,
+        .metric-cell::before {
+          content: attr(data-label);
+          position: absolute;
+          left: 0;
+          top: 0;
+          color: #8a94a3;
+          font-size: 10px;
+          font-weight: 720;
+          line-height: 24px;
+          text-transform: uppercase;
+        }
+
+        .metric-cell {
+          grid-column: auto;
+          min-height: 24px;
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header-wrap">
+        <header class="top-nav">
+          <a class="brand" href="#">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-copy">
+              <strong>Model Square</strong>
+              <span>Project Public Header Mock</span>
+            </span>
+          </a>
+          <nav class="nav-links" aria-label="Primary">
+            <a href="#">主页</a>
+            <a href="#">控制台</a>
+            <a class="active" href="#">模型广场</a>
+            <a href="#">文档</a>
+          </nav>
+          <div class="nav-tools">
+            <button
+              class="language-toggle"
+              type="button"
+              aria-label="中英文切换"
+            >
+              <span class="active">中</span>
+              <span>EN</span>
+            </button>
+            <span class="divider" aria-hidden="true"></span>
+            <button class="icon-button" type="button" aria-label="主题切换">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.5"></circle>
+                <path d="M12 2.5v2.5"></path>
+                <path d="M12 19v2.5"></path>
+                <path d="m4.9 4.9 1.8 1.8"></path>
+                <path d="m17.3 17.3 1.8 1.8"></path>
+                <path d="M2.5 12H5"></path>
+                <path d="M19 12h2.5"></path>
+                <path d="m4.9 19.1 1.8-1.8"></path>
+                <path d="m17.3 6.7 1.8-1.8"></path>
+              </svg>
+            </button>
+            <button
+              class="icon-button notification-button"
+              type="button"
+              aria-label="通知"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"
+                ></path>
+                <path d="M10 21h4"></path>
+              </svg>
+            </button>
+            <button
+              class="user-entry"
+              type="button"
+              aria-label="登录或用户信息"
+            >
+              <span class="user-avatar">K</span>
+              <span>登录</span>
+            </button>
+          </div>
+        </header>
+      </div>
+
+      <div class="shell">
+        <section class="promo-banner">
+          <article class="hero-card">
+            <div class="promo-slider" id="promo-slider">
+              <div class="promo-slide active" data-promo-slide="0">
+                <div class="hero-inner">
+                  <div class="hero-copy-block">
+                    <span class="promo-pill">Free Trial</span>
+                    <h3>Claude Fable 5</h3>
+                    <div class="banner-copy">
+                      <p>
+                        Claude Fable 5
+                        是本周热门模型，适合长周期自治任务与复杂工具编排。
+                      </p>
+                      <div class="banner-proof">
+                        <span>1000K Context</span>
+                        <span>Tool Orchestration</span>
+                        <span>Free Trial</span>
+                      </div>
+                    </div>
+                    <div class="hero-actions">
+                      <a class="cta-secondary" href="#">API Request</a>
+                      <a class="cta-primary" href="#">Chat</a>
+                    </div>
+                  </div>
+                  <div class="hero-art" aria-hidden="true">
+                    <span class="hero-orbit"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="promo-slide" data-promo-slide="1">
+                <div class="hero-inner">
+                  <div class="hero-copy-block">
+                    <span class="promo-pill">限时折扣</span>
+                    <h3>GPT-4o 多渠道版本</h3>
+                    <div class="banner-copy">
+                      <p>
+                        同一基础模型聚合原厂满血、逆向与号池版本，快速比较折扣、TPS、延迟和成功率。
+                      </p>
+                      <div class="banner-proof">
+                        <span>85% OFF</span>
+                        <span>72.1 t/s</span>
+                        <span>100% Success</span>
+                      </div>
+                    </div>
+                    <div class="hero-actions">
+                      <a class="cta-secondary" href="#">查看版本</a>
+                      <a class="cta-primary" href="#">立即接入</a>
+                    </div>
+                  </div>
+                  <div class="hero-art" aria-hidden="true">
+                    <span class="hero-orbit"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="promo-dots" aria-label="广告切换">
+              <button class="promo-dot active" type="button" data-promo-dot="0" aria-label="显示 Claude Fable 5 广告"></button>
+              <button class="promo-dot" type="button" data-promo-dot="1" aria-label="显示 GPT-4o 广告"></button>
+            </div>
+          </article>
+        </section>
+
+        <div class="content-shell">
+          <aside class="sidebar">
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>输入类型</span>
+                <span>⌃</span>
+              </div>
+              <div class="filter-list">
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="inputType"
+                  data-filter-value="文本"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M5 6.5h14"></path>
+                      <path d="M12 6.5v11"></path>
+                      <path d="M8 17.5h8"></path></svg></span
+                  >文本
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="inputType"
+                  data-filter-value="图片"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <rect x="4" y="5" width="16" height="14" rx="2"></rect>
+                      <circle cx="9" cy="10" r="1.5"></circle>
+                      <path
+                        d="m7 16 3.5-3.5 2.5 2.5 2-2 2.5 3"
+                      ></path></svg></span
+                  >图片
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="inputType"
+                  data-filter-value="文件"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M8 3.5h6l4 4V20H8z"></path>
+                      <path d="M14 3.5V8h4"></path></svg></span
+                  >文件
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="inputType"
+                  data-filter-value="音频"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M10 8v8"></path>
+                      <path d="M14 6v12"></path>
+                      <path d="M7 10v4"></path>
+                      <path d="M17 10v4"></path></svg></span
+                  >音频
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="inputType"
+                  data-filter-value="视频"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <rect x="4" y="6" width="11" height="12" rx="2"></rect>
+                      <path d="m15 10 5-3v10l-5-3z"></path></svg></span
+                  >视频
+                </button>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>上下文长度</span>
+                <span>⌃</span>
+              </div>
+              <div class="range-track">
+                <div
+                  class="range-rail"
+                  id="context-range"
+                  data-range-key="context"
+                >
+                  <div class="range-fill" id="context-range-fill"></div>
+                  <div class="range-thumb" id="context-range-thumb"></div>
+                </div>
+                <div class="range-labels">
+                  <span>全部</span>
+                  <span>4K</span>
+                  <span>64K</span>
+                  <span>1M</span>
+                </div>
+                <div class="range-value" id="context-range-value">
+                  全部上下文
+                </div>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>优惠折扣</span>
+                <span>⌃</span>
+              </div>
+              <div class="range-track">
+                <div
+                  class="range-rail"
+                  id="discount-range"
+                  data-range-key="discount"
+                >
+                  <div class="range-fill" id="discount-range-fill"></div>
+                  <div class="range-thumb" id="discount-range-thumb"></div>
+                </div>
+                <div class="range-labels">
+                  <span>0%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                </div>
+                <div class="range-value" id="discount-range-value">
+                  全部折扣
+                </div>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>开发者</span>
+                <span>⌃</span>
+              </div>
+              <div class="filter-list collapsed" data-expand-list="developer">
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="developer"
+                  data-filter-value="Alibaba"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M6 16 12 5l6 11"></path>
+                      <path d="M8.5 12.5h7"></path></svg></span
+                  >Alibaba
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="developer"
+                  data-filter-value="Anthropic"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M6 18 12 5l6 13"></path>
+                      <path d="M8.5 13h7"></path></svg></span
+                  >Anthropic
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="developer"
+                  data-filter-value="Baidu"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 6h6a4 4 0 0 1 0 8H7z"></path>
+                      <path d="M7 14h7a3.5 3.5 0 1 1 0 7H7z"></path></svg></span
+                  >Baidu
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="developer"
+                  data-filter-value="Google"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path
+                        d="M12 4.5 14 10l5.5 2-5.5 2L12 19.5 10 14 4.5 12 10 10z"
+                      ></path></svg></span
+                  >Google
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="developer"
+                  data-filter-value="MiniMax"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 7h10v4H7z"></path>
+                      <path d="M9 11v6"></path>
+                      <path d="M15 11v6"></path></svg></span
+                  >MiniMax
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="developer"
+                  data-filter-value="OpenAI"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path
+                        d="M12 4.5a4 4 0 0 1 3.8 2.8 4 4 0 0 1 3.3 5.3 4 4 0 0 1-2.5 6.6 4 4 0 0 1-7.2 0 4 4 0 0 1-4.8-5.5A4 4 0 0 1 8.2 7.3 4 4 0 0 1 12 4.5Z"
+                      ></path></svg></span
+                  >OpenAI
+                </button>
+                <button
+                  class="expand-link"
+                  type="button"
+                  data-expand-toggle="developer"
+                >
+                  展开更多
+                </button>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>供应商</span>
+                <span>⌃</span>
+              </div>
+              <div class="filter-list collapsed" data-expand-list="vendor">
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="vendor"
+                  data-filter-value="OpenAI"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path
+                        d="M12 4.5a4 4 0 0 1 3.8 2.8 4 4 0 0 1 3.3 5.3 4 4 0 0 1-2.5 6.6 4 4 0 0 1-7.2 0 4 4 0 0 1-4.8-5.5A4 4 0 0 1 8.2 7.3 4 4 0 0 1 12 4.5Z"
+                      ></path></svg></span
+                  >OpenAI
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="vendor"
+                  data-filter-value="Anthropic"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M6 18 12 5l6 13"></path>
+                      <path d="M9 13h6"></path></svg></span
+                  >Anthropic
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="vendor"
+                  data-filter-value="Tbox"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <rect x="5" y="6" width="14" height="12" rx="2"></rect>
+                      <path d="M12 6v12"></path>
+                      <path d="M8.5 10h7"></path></svg></span
+                  >Tbox
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="vendor"
+                  data-filter-value="Google"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path
+                        d="M12 4.5 14 10l5.5 2-5.5 2L12 19.5 10 14 4.5 12 10 10z"
+                      ></path></svg></span
+                  >Google
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="vendor"
+                  data-filter-value="Baidu"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 6h6a4 4 0 0 1 0 8H7z"></path>
+                      <path d="M7 14h7a3.5 3.5 0 1 1 0 7H7z"></path></svg></span
+                  >Baidu
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="vendor"
+                  data-filter-value="StepFun"
+                >
+                  <span class="provider-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 7h10v4H7z"></path>
+                      <path d="M9 11v6"></path>
+                      <path d="M15 11v6"></path></svg></span
+                  >StepFun
+                </button>
+                <button
+                  class="expand-link"
+                  type="button"
+                  data-expand-toggle="vendor"
+                >
+                  展开更多
+                </button>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>支持的参数</span>
+                <span>⌃</span>
+              </div>
+              <div class="filter-list collapsed" data-expand-list="parameter">
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="parameter"
+                  data-filter-value="max_completion_tokens"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M9 4 7 20"></path>
+                      <path d="M17 4 15 20"></path>
+                      <path d="M4 9h16"></path>
+                      <path d="M3 15h16"></path></svg></span
+                  >max_completion_tokens
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="parameter"
+                  data-filter-value="temperature"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M12 5v9"></path>
+                      <path d="M9 8V5a3 3 0 1 1 6 0v3"></path>
+                      <path
+                        d="M8.5 15.5a3.5 3.5 0 1 0 7 0c0-1.4-.8-2.4-1.5-3.2V10"
+                      ></path></svg></span
+                  >temperature
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="parameter"
+                  data-filter-value="top_p"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 16c2.2-4.8 7.8-4.8 10 0"></path>
+                      <path d="M7 12c2.2-3 7.8-3 10 0"></path>
+                      <path d="M12 6v12"></path></svg></span
+                  >top_p
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="parameter"
+                  data-filter-value="presence_penalty"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M12 5v14"></path>
+                      <path d="M5 12h14"></path></svg></span
+                  >presence_penalty
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="parameter"
+                  data-filter-value="frequency_penalty"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M6 8h12"></path>
+                      <path d="M6 12h8"></path>
+                      <path d="M6 16h12"></path></svg></span
+                  >frequency_penalty
+                </button>
+                <button
+                  class="expand-link"
+                  type="button"
+                  data-expand-toggle="parameter"
+                >
+                  展开更多
+                </button>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>支持的协议</span>
+                <span>⌃</span>
+              </div>
+              <div class="filter-list collapsed" data-expand-list="protocol">
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="protocol"
+                  data-filter-value="OpenAI Chat Completions"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M5 7h14v8H9l-4 4z"></path></svg></span
+                  >OpenAI Chat Completions
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="protocol"
+                  data-filter-value="OpenAI Responses"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M6 7h12v10H8l-2 2z"></path>
+                      <path d="M9 11h6"></path>
+                      <path d="M9 14h4"></path></svg></span
+                  >OpenAI Responses
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="protocol"
+                  data-filter-value="OpenAI Images"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <rect x="4" y="5" width="16" height="14" rx="2"></rect>
+                      <circle cx="9" cy="10" r="1.5"></circle>
+                      <path
+                        d="m7 16 3.5-3.5 2.5 2.5 2-2 2.5 3"
+                      ></path></svg></span
+                  >OpenAI Images
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="protocol"
+                  data-filter-value="Anthropic Messages"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M6 18 12 5l6 13"></path>
+                      <path d="M9 13h6"></path></svg></span
+                  >Anthropic Messages
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="protocol"
+                  data-filter-value="Google Gemini"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path
+                        d="M12 4.5 14 10l5.5 2-5.5 2L12 19.5 10 14 4.5 12 10 10z"
+                      ></path></svg></span
+                  >Google Gemini
+                </button>
+                <button
+                  class="check-item expandable-item"
+                  type="button"
+                  data-filter-group="protocol"
+                  data-filter-value="Google Video"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <rect x="4" y="6" width="11" height="12" rx="2"></rect>
+                      <path d="m15 10 5-3v10l-5-3z"></path></svg></span
+                  >Google Video
+                </button>
+                <button
+                  class="expand-link"
+                  type="button"
+                  data-expand-toggle="protocol"
+                >
+                  展开更多
+                </button>
+              </div>
+            </section>
+
+            <section class="filter-group">
+              <div class="filter-header">
+                <span>推理</span>
+                <span>⌃</span>
+              </div>
+              <div class="filter-list">
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="reasoning"
+                  data-filter-value="无推理"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 12h10"></path></svg></span
+                  >无推理
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="reasoning"
+                  data-filter-value="可切换推理"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="M7 8h10"></path>
+                      <path d="M7 12h10"></path>
+                      <path d="M7 16h10"></path></svg></span
+                  >可切换推理
+                </button>
+                <button
+                  class="check-item"
+                  type="button"
+                  data-filter-group="reasoning"
+                  data-filter-value="始终开启推理"
+                >
+                  <span class="check-icon"
+                    ><svg viewBox="0 0 24 24">
+                      <path d="m6 17 6-10 6 10"></path>
+                      <path d="M9.5 13h5"></path></svg></span
+                  >始终开启推理
+                </button>
+              </div>
+            </section>
+
+            <p class="filter-summary" id="filter-summary">当前未应用左侧筛选</p>
+          </aside>
+
+          <main class="main">
+            <section class="heading-panel">
+              <div class="heading-row">
+                <div class="page-title">
+                  <h2>模型</h2>
+                  <p>
+                    <span id="model-count">152</span>
+                    个模型，已按项目风格重制版本视图
+                  </p>
+                </div>
+                <div class="search-tools">
+                  <label class="search-box" aria-label="Search models">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="11" cy="11" r="5"></circle>
+                      <path d="m20 20-4.2-4.2"></path>
+                    </svg>
+                    <input
+                      id="search-input"
+                      type="text"
+                      placeholder="搜索模型名、模型 ID 或版本 ID"
+                    />
+                  </label>
+                  <button
+                    class="sort-button"
+                    id="sort-button"
+                    type="button"
+                    aria-label="切换排序方式"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 6v12"></path>
+                      <path d="m5.5 8.5 2.5-2.5 2.5 2.5"></path>
+                      <path d="M16 18V6"></path>
+                      <path d="m13.5 15.5 2.5 2.5 2.5-2.5"></path>
+                    </svg>
+                    <span id="sort-label">最新</span>
+                  </button>
+                </div>
+              </div>
+              <div class="chips" id="category-chips"></div>
+            </section>
+
+            <section class="model-stream" id="card-grid"></section>
+          </main>
+        </div>
+      </div>
+
+      <div class="floating-actions">
+        <button type="button" data-floating-action="top" aria-label="回到顶部">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 17V7"></path>
+            <path d="m8.5 10.5 3.5-3.5 3.5 3.5"></path>
+          </svg>
+        </button>
+        <button
+          type="button"
+          data-floating-action="home"
+          aria-label="回到模型广场首页"
+        >
+          <svg viewBox="0 0 24 24">
+            <path d="m5 11 7-6 7 6"></path>
+            <path d="M7.5 10.5V19h9v-8.5"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      const mockModels = [
+        {
+          title: "OpenAI: GPT-4o",
+          slug: "openai/gpt-4o",
+          traffic: "18.72B",
+          description:
+            "GPT-4o 是高频通用主力模型，支持文本、图像与文件输入，适合统一聚合多渠道别名版本进行价格与性能对比。",
+          inputPrice: "$1.8-6/百万 token",
+          outputPrice: "$7.2-22/百万 token",
+          context: "128.00K",
+          maxOutput: "32.00K",
+          reasoning: "无推理",
+          discountPercent: 85,
+          vendors: ["openai", "anthropic", "google"],
+          developer: "OpenAI",
+          vendorLabels: ["OpenAI", "Anthropic", "Google"],
+          inputTypes: ["文本", "图片", "文件"],
+          protocols: ["OpenAI Chat Completions", "OpenAI Responses"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: ["85% 折扣起", "多版本"],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "文本",
+          accentA: "#8ed8ff",
+          accentB: "#6678ff",
+          typeIcons: 3,
+          versions: [
+            {
+              id: "gpt-4o-a1",
+              discount: "85%",
+              label: "原厂满血",
+              tags: ["官方", "高稳定"],
+              tps: "72.1 t/s",
+              latency: "21.92s",
+              successRate: "100.00%",
+            },
+            {
+              id: "gpt-4o-b1",
+              discount: "68%",
+              label: "逆向版本",
+              tags: ["逆向", "高性价比"],
+              tps: "69.3 t/s",
+              latency: "24.18s",
+              successRate: "99.98%",
+            },
+            {
+              id: "gpt-4o-c1",
+              discount: "55%",
+              label: "号池版本",
+              tags: ["号池", "弹性"],
+              tps: "63.7 t/s",
+              latency: "25.41s",
+              successRate: "99.92%",
+            },
+            {
+              id: "gpt-4o-a2",
+              discount: "82%",
+              label: "原厂满血",
+              tags: ["官方", "低延迟"],
+              tps: "74.5 t/s",
+              latency: "20.76s",
+              successRate: "100.00%",
+            },
+            {
+              id: "gpt-4o-b2",
+              discount: "64%",
+              label: "逆向版本",
+              tags: ["逆向", "高吞吐"],
+              tps: "70.2 t/s",
+              latency: "22.87s",
+              successRate: "99.97%",
+            },
+            {
+              id: "gpt-4o-c2",
+              discount: "58%",
+              label: "号池版本",
+              tags: ["号池", "成本优先"],
+              tps: "61.9 t/s",
+              latency: "26.34s",
+              successRate: "99.90%",
+            },
+          ],
+        },
+        {
+          title: "Anthropic: Claude Fable 5",
+          slug: "anthropic/claude-fable-5",
+          traffic: "14.02B",
+          description:
+            "Claude Fable 5 面向长周期自治知识工作和编程协作，适合在统一卡片中映射不同稳定性与价格层次的版本。",
+          inputPrice: "$10/百万 token",
+          outputPrice: "$50/百万 token",
+          context: "1000.00K",
+          maxOutput: "128.00K",
+          reasoning: "始终开启推理",
+          discountPercent: 42,
+          vendors: ["anthropic", "openai"],
+          developer: "Anthropic",
+          vendorLabels: ["Anthropic", "OpenAI"],
+          inputTypes: ["文本", "图片", "文件"],
+          protocols: ["Anthropic Messages", "OpenAI Chat Completions"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: ["Free Trial"],
+          uptime: "99.95%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "文本",
+          accentA: "#f9b17c",
+          accentB: "#cf5e2a",
+          typeIcons: 4,
+          versions: [
+            {
+              id: "claude-fable-5-a1",
+              discount: "42%",
+              label: "",
+              tags: ["官方", "长上下文"],
+              tps: "38.4 t/s",
+              latency: "28.71s",
+              successRate: "99.95%",
+            },
+            {
+              id: "claude-fable-5-b1",
+              discount: "35%",
+              label: "逆向版本",
+              tags: ["逆向", "工具调用"],
+              tps: "40.2 t/s",
+              latency: "27.18s",
+              successRate: "99.81%",
+            },
+            {
+              id: "claude-fable-5-c1",
+              discount: "31%",
+              label: "低价渠道",
+              tags: ["号池", "成本优先"],
+              tps: "34.7 t/s",
+              latency: "29.96s",
+              successRate: "99.74%",
+            },
+          ],
+        },
+        {
+          title: "Qwen: Qwen3.7-Plus",
+          slug: "qwen/qwen3.7-plus",
+          traffic: "2.95B",
+          description:
+            "Qwen3.7-Plus 支持文本、图像和视频输入及文本输出，适合展示不同渠道下的性价比与吞吐表现差异。",
+          inputPrice: "$0.4-1.2/百万 token",
+          outputPrice: "$1.6-4.8/百万 token",
+          context: "1000.00K",
+          maxOutput: "64.00K",
+          reasoning: "可切换推理",
+          discountPercent: 63,
+          vendors: ["qwen"],
+          developer: "Alibaba",
+          vendorLabels: ["Tbox"],
+          inputTypes: ["文本", "图片", "视频"],
+          protocols: ["OpenAI Chat Completions"],
+          parameters: ["max_completion_tokens", "temperature"],
+          badges: ["63% 折扣"],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "文本",
+          accentA: "#9b8dff",
+          accentB: "#5f4fff",
+          typeIcons: 4,
+          versions: [
+            {
+              id: "qwen3.7-plus-a1",
+              discount: "63%",
+              label: "官方直连",
+              tags: ["官方", "高速"],
+              tps: "81.4 t/s",
+              latency: "14.42s",
+              successRate: "100.00%",
+            },
+            {
+              id: "qwen3.7-plus-b1",
+              discount: "52%",
+              label: "兼容版本",
+              tags: ["兼容", "高并发"],
+              tps: "78.2 t/s",
+              latency: "15.30s",
+              successRate: "99.97%",
+            },
+            {
+              id: "qwen3.7-plus-c1",
+              discount: "48%",
+              label: "成本优化",
+              tags: ["成本优先", "混合"],
+              tps: "73.6 t/s",
+              latency: "16.84s",
+              successRate: "99.93%",
+            },
+          ],
+        },
+        {
+          title: "MiniMax: MiniMax M3",
+          slug: "minimax/minimax-m3",
+          traffic: "11.26B",
+          description:
+            "MiniMax M3 兼顾代码、推理、百万级上下文和原生多模态，适合复杂自主任务与长上下文理解。",
+          inputPrice: "$0.3/百万 token",
+          outputPrice: "$1.2/百万 token",
+          context: "512.00K",
+          maxOutput: "512.00K",
+          reasoning: "可切换推理",
+          discountPercent: 50,
+          vendors: ["minimax"],
+          developer: "MiniMax",
+          vendorLabels: ["Tbox"],
+          inputTypes: ["文本", "图片"],
+          protocols: ["OpenAI Chat Completions"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: ["50% 折扣"],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "文本",
+          accentA: "#ffcf73",
+          accentB: "#f08a20",
+          typeIcons: 4,
+          versions: [
+            {
+              id: "minimax-m3-a1",
+              discount: "50%",
+              label: "标准通道",
+              tags: ["标准", "均衡"],
+              tps: "66.8 t/s",
+              latency: "18.74s",
+              successRate: "100.00%",
+            },
+            {
+              id: "minimax-m3-b1",
+              discount: "44%",
+              label: "极速通道",
+              tags: ["高速", "峰值"],
+              tps: "71.6 t/s",
+              latency: "17.05s",
+              successRate: "99.98%",
+            },
+            {
+              id: "minimax-m3-c1",
+              discount: "39%",
+              label: "低价通道",
+              tags: ["低价", "弹性"],
+              tps: "60.4 t/s",
+              latency: "19.88s",
+              successRate: "99.95%",
+            },
+          ],
+        },
+        {
+          title: "StepFun: Step 3.7 Flash",
+          slug: "stepfun/step-3.7-flash",
+          traffic: "323.73M",
+          description:
+            "Step 3.7 Flash 是最新高效多模态混合专家模型，兼顾原生图像和视频理解，并支持可选推理级别。",
+          inputPrice: "$0.2/百万 token",
+          outputPrice: "$1.15/百万 token",
+          context: "256.00K",
+          maxOutput: "256.00K",
+          reasoning: "可切换推理",
+          discountPercent: 72,
+          vendors: ["stepfun"],
+          developer: "StepFun",
+          vendorLabels: ["Tbox"],
+          inputTypes: ["文本", "图片", "视频", "音频"],
+          protocols: ["OpenAI Chat Completions"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: [],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "音频",
+          accentA: "#3cd4bb",
+          accentB: "#116f62",
+          typeIcons: 4,
+          versions: [
+            {
+              id: "step-3.7-flash-a1",
+              discount: "72%",
+              label: "直连",
+              tags: ["高速", "低延迟"],
+              tps: "92.2 t/s",
+              latency: "11.42s",
+              successRate: "100.00%",
+            },
+            {
+              id: "step-3.7-flash-b1",
+              discount: "64%",
+              label: "混合",
+              tags: ["高并发", "稳定"],
+              tps: "88.9 t/s",
+              latency: "12.33s",
+              successRate: "99.97%",
+            },
+            {
+              id: "step-3.7-flash-c1",
+              discount: "58%",
+              label: "低价",
+              tags: ["低价", "弹性"],
+              tps: "80.7 t/s",
+              latency: "13.28s",
+              successRate: "99.91%",
+            },
+          ],
+        },
+        {
+          title: "OpenAI: Chat Latest (GPT-5.5 Instant)",
+          slug: "openai/chat-latest",
+          traffic: "315.22M",
+          description:
+            "Chat Latest 指向当前最新 Instant 模型，适合测试聊天场景下的最新改进，也适合大多数通用 API 用例。",
+          inputPrice: "$5/百万 token",
+          outputPrice: "$30/百万 token",
+          context: "400.00K",
+          maxOutput: "128.00K",
+          reasoning: "无推理",
+          discountPercent: 37,
+          vendors: ["openai", "anthropic"],
+          developer: "OpenAI",
+          vendorLabels: ["OpenAI", "Anthropic"],
+          inputTypes: ["文本"],
+          protocols: ["OpenAI Chat Completions", "OpenAI Responses"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: [],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "文本",
+          accentA: "#7f7f7f",
+          accentB: "#111111",
+          typeIcons: 2,
+          versions: [
+            {
+              id: "chat-latest-a1",
+              discount: "37%",
+              label: "标准",
+              tags: ["最新", "均衡"],
+              tps: "54.8 t/s",
+              latency: "18.66s",
+              successRate: "100.00%",
+            },
+            {
+              id: "chat-latest-b1",
+              discount: "29%",
+              label: "兼容",
+              tags: ["兼容", "稳定"],
+              tps: "50.1 t/s",
+              latency: "19.74s",
+              successRate: "99.98%",
+            },
+            {
+              id: "chat-latest-c1",
+              discount: "24%",
+              label: "经济",
+              tags: ["低价", "共享"],
+              tps: "46.9 t/s",
+              latency: "21.03s",
+              successRate: "99.93%",
+            },
+          ],
+        },
+        {
+          title: "Baidu: ERNIE 5.1",
+          slug: "baidu/ernie-5.1",
+          traffic: "647.16M",
+          description:
+            "ERNIE 5.1 采用原生统一多模态建模方法，联合建模文本、图像、音频和视频，提供全面多模态能力。",
+          inputPrice: "$0.588-0.882/百万 token",
+          outputPrice: "$2.646-3.235/百万 token",
+          context: "128.00K",
+          maxOutput: "64.00K",
+          reasoning: "可切换推理",
+          discountPercent: 46,
+          vendors: ["baidu"],
+          developer: "Baidu",
+          vendorLabels: ["Baidu"],
+          inputTypes: ["文本", "图片", "音频", "视频"],
+          protocols: ["OpenAI Chat Completions"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: [],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "视频",
+          accentA: "#7db4ff",
+          accentB: "#225cff",
+          typeIcons: 4,
+          versions: [
+            {
+              id: "ernie-5.1-a1",
+              discount: "46%",
+              label: "官方",
+              tags: ["官方", "中文强"],
+              tps: "52.7 t/s",
+              latency: "17.61s",
+              successRate: "100.00%",
+            },
+            {
+              id: "ernie-5.1-b1",
+              discount: "39%",
+              label: "兼容",
+              tags: ["兼容", "高可用"],
+              tps: "49.8 t/s",
+              latency: "18.40s",
+              successRate: "99.98%",
+            },
+            {
+              id: "ernie-5.1-c1",
+              discount: "31%",
+              label: "成本版",
+              tags: ["成本优先", "弹性"],
+              tps: "44.5 t/s",
+              latency: "20.13s",
+              successRate: "99.91%",
+            },
+          ],
+        },
+        {
+          title: "Google: Gemini 3.5 Flash",
+          slug: "google/gemini-3.5-flash",
+          traffic: "17.41B",
+          description:
+            "Gemini 3.5 Flash 强调高速、高性价比和复杂开发者工作流，在多步推理与海量推理循环上非常高效。",
+          inputPrice: "$1.5/百万 token",
+          outputPrice: "$9/百万 token",
+          context: "1.05M",
+          maxOutput: "65.53K",
+          reasoning: "可切换推理",
+          discountPercent: 61,
+          vendors: ["google"],
+          developer: "Google",
+          vendorLabels: ["Google"],
+          inputTypes: ["文本"],
+          protocols: ["Google Gemini"],
+          parameters: ["max_completion_tokens", "temperature", "top_p"],
+          badges: [],
+          uptime: "100.00%",
+          updatedAt: "2026-06-12 15:00:00",
+          category: "文本",
+          accentA: "#74d7ff",
+          accentB: "#3b79ff",
+          typeIcons: 2,
+          versions: [
+            {
+              id: "gemini-3.5-flash-a1",
+              discount: "61%",
+              label: "官方",
+              tags: ["官方", "低延迟"],
+              tps: "87.4 t/s",
+              latency: "12.66s",
+              successRate: "100.00%",
+            },
+            {
+              id: "gemini-3.5-flash-b1",
+              discount: "56%",
+              label: "兼容",
+              tags: ["兼容", "稳定"],
+              tps: "82.1 t/s",
+              latency: "13.89s",
+              successRate: "99.99%",
+            },
+            {
+              id: "gemini-3.5-flash-c1",
+              discount: "49%",
+              label: "弹性",
+              tags: ["弹性", "低价"],
+              tps: "76.5 t/s",
+              latency: "15.02s",
+              successRate: "99.95%",
+            },
+          ],
+        },
+      ];
+
+      const categoryConfig = [
+        { key: "All", label: "All" },
+        { key: "文本", label: "文本" },
+        { key: "图片", label: "图片" },
+        { key: "音频", label: "音频" },
+        { key: "视频", label: "视频" },
+        { key: "Free Trial", label: "Free Trial" },
+      ];
+
+      const filterGroupLabels = {
+        inputType: "输入类型",
+        developer: "开发者",
+        vendor: "供应商",
+        parameter: "支持参数",
+        protocol: "支持协议",
+        reasoning: "推理模式",
+      };
+
+      const sortOptions = [
+        { key: "updated", label: "最新" },
+        { key: "traffic", label: "调用量" },
+        { key: "discount", label: "折扣" },
+      ];
+
+      const state = {
+        category: "All",
+        sortBy: "updated",
+        query: "",
+        sidebarFilters: {
+          inputType: new Set(),
+          developer: new Set(),
+          vendor: new Set(),
+          parameter: new Set(),
+          protocol: new Set(),
+          reasoning: new Set(),
+        },
+        contextMinTokens: 0,
+        discountMinPercent: 0,
+        expandedLists: {
+          developer: false,
+          vendor: false,
+          parameter: false,
+          protocol: false,
+        },
+      };
+
+      const grid = document.getElementById("card-grid");
+      const chips = document.getElementById("category-chips");
+      const countLabel = document.getElementById("model-count");
+      const searchInput = document.getElementById("search-input");
+      const sortButton = document.getElementById("sort-button");
+      const sortLabel = document.getElementById("sort-label");
+      const filterSummary = document.getElementById("filter-summary");
+      const contextRangeRail = document.getElementById("context-range");
+      const contextRangeFill = document.getElementById("context-range-fill");
+      const contextRangeThumb = document.getElementById("context-range-thumb");
+      const contextRangeValue = document.getElementById("context-range-value");
+      const discountRangeRail = document.getElementById("discount-range");
+      const discountRangeFill = document.getElementById("discount-range-fill");
+      const discountRangeThumb = document.getElementById(
+        "discount-range-thumb",
+      );
+      const discountRangeValue = document.getElementById(
+        "discount-range-value",
+      );
+      const floatingActions = document.querySelector(".floating-actions");
+      const promoSlides = Array.from(
+        document.querySelectorAll("[data-promo-slide]"),
+      );
+      const promoDots = Array.from(
+        document.querySelectorAll("[data-promo-dot]"),
+      );
+      let activePromoIndex = 0;
+      let promoTimer = null;
+
+      function badgeClass(label) {
+        if (label.includes("免费") || label.includes("Free"))
+          return "status-badge free";
+        if (label.includes("折扣")) return "status-badge discount";
+        if (label.includes("下线")) return "status-badge sunset";
+        return "status-badge";
+      }
+
+      function typeSquares(count) {
+        const iconPool = [
+          '<svg viewBox="0 0 24 24"><path d="M5 6.5h14"></path><path d="M12 6.5v11"></path><path d="M8 17.5h8"></path></svg>',
+          '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"></rect><circle cx="9" cy="10" r="1.5"></circle><path d="m7 16 3.5-3.5 2.5 2.5 2-2 2.5 3"></path></svg>',
+          '<svg viewBox="0 0 24 24"><path d="M8 3.5h6l4 4V20H8z"></path><path d="M14 3.5V8h4"></path></svg>',
+          '<svg viewBox="0 0 24 24"><path d="M10 8v8"></path><path d="M14 6v12"></path><path d="M7 10v4"></path><path d="M17 10v4"></path></svg>',
+          '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="11" height="12" rx="2"></rect><path d="m15 10 5-3v10l-5-3z"></path></svg>',
+        ];
+        return Array.from(
+          { length: count },
+          (_, index) =>
+            `<span class="tiny-square">${iconPool[index % iconPool.length]}</span>`,
+        ).join("");
+      }
+
+      function providerTone(provider) {
+        const tones = {
+          openai: ["#78b7ff", "#5d73ff"],
+          anthropic: ["#f6a66c", "#c96931"],
+          google: ["#78d6ff", "#3178ff"],
+          qwen: ["#9b8dff", "#5f4fff"],
+          minimax: ["#ffd06f", "#f08a20"],
+          stepfun: ["#43d5bd", "#117365"],
+          baidu: ["#7db4ff", "#225cff"],
+        };
+        return tones[String(provider).toLowerCase()] || ["#c7d2fe", "#64748b"];
+      }
+
+      function renderProviderAvatars(model) {
+        const providers = model.vendorLabels?.length
+          ? model.vendorLabels
+          : model.vendors || [];
+        return providers
+          .slice(0, 4)
+          .map((provider, index) => {
+            const [accentA, accentB] = providerTone(
+              model.vendors?.[index] || provider,
+            );
+            const initial =
+              String(provider).trim().charAt(0).toUpperCase() || "M";
+            return `<span class="provider-avatar" style="--avatar-a:${accentA}; --avatar-b:${accentB};" title="${provider}">${initial}</span>`;
+          })
+          .join("");
+      }
+
+      function renderUptimeBars(model) {
+        const uptime = Number.parseFloat(model.uptime) || 100;
+        return Array.from({ length: 32 }, (_, index) => {
+          const activeIndex = Math.round((uptime / 100) * 31);
+          const active = index <= activeIndex ? " active" : "";
+          return `<span class="uptime-bar${active}"></span>`;
+        }).join("");
+      }
+
+      function renderModelFooter(model) {
+        const providerCount =
+          model.vendorLabels?.length || model.vendors?.length || 0;
+        return `
+          <div class="card-footer">
+            <div class="footer-left">
+              <span>可用于 ${providerCount} 个供应商</span>
+              <div class="provider-avatars">${renderProviderAvatars(model)}</div>
+            </div>
+            <div class="footer-right">
+              <div class="uptime-header">
+                <span>${model.updatedAt}</span>
+                <strong>${model.uptime}</strong>
+              </div>
+              <div class="uptime-graph" aria-label="可用评级 ${model.uptime}">
+                ${renderUptimeBars(model)}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      function parseTokenValue(value) {
+        if (!value) return 0;
+        const normalized = String(value).trim().toUpperCase();
+        if (normalized.endsWith("M"))
+          return Number.parseFloat(normalized) * 1_000_000;
+        if (normalized.endsWith("K"))
+          return Number.parseFloat(normalized) * 1_000;
+        return Number.parseFloat(normalized) || 0;
+      }
+
+      function parseTrafficValue(value) {
+        if (!value) return 0;
+        const normalized = String(value).trim().toUpperCase();
+        if (normalized.endsWith("B"))
+          return Number.parseFloat(normalized) * 1_000_000_000;
+        if (normalized.endsWith("M"))
+          return Number.parseFloat(normalized) * 1_000_000;
+        if (normalized.endsWith("K"))
+          return Number.parseFloat(normalized) * 1_000;
+        return Number.parseFloat(normalized) || 0;
+      }
+
+      function parseDateValue(value) {
+        const parsed = Date.parse(value?.replace(" ", "T") || "");
+        return Number.isNaN(parsed) ? 0 : parsed;
+      }
+
+      function hasSelections(set) {
+        return set && set.size > 0;
+      }
+
+      function matchesSet(values, selectedSet) {
+        if (!hasSelections(selectedSet)) return true;
+        return values.some((value) => selectedSet.has(value));
+      }
+
+      function matchesVersionQuery(model, query) {
+        if (!query) return true;
+        const versions = model.versions || [];
+        return versions.some(
+          (version) =>
+            version.id.toLowerCase().includes(query) ||
+            version.label.toLowerCase().includes(query) ||
+            version.tags.some((tag) => tag.toLowerCase().includes(query)),
+        );
+      }
+
+      function getFilteredModels() {
+        return mockModels.filter((model) => {
+          const matchCategory =
+            state.category === "All" ||
+            (state.category === "Free Trial"
+              ? model.badges.some(
+                  (badge) => badge.includes("Free") || badge.includes("免费"),
+                )
+              : model.category === state.category);
+          const q = state.query.trim().toLowerCase();
+          const matchQuery =
+            q === "" ||
+            model.title.toLowerCase().includes(q) ||
+            model.slug.toLowerCase().includes(q) ||
+            model.description.toLowerCase().includes(q) ||
+            matchesVersionQuery(model, q);
+          const matchInputType = matchesSet(
+            model.inputTypes || [],
+            state.sidebarFilters.inputType,
+          );
+          const matchDeveloper =
+            !hasSelections(state.sidebarFilters.developer) ||
+            state.sidebarFilters.developer.has(model.developer);
+          const matchVendor = matchesSet(
+            model.vendorLabels || [],
+            state.sidebarFilters.vendor,
+          );
+          const matchParameter = matchesSet(
+            model.parameters || [],
+            state.sidebarFilters.parameter,
+          );
+          const matchProtocol = matchesSet(
+            model.protocols || [],
+            state.sidebarFilters.protocol,
+          );
+          const matchReasoning =
+            !hasSelections(state.sidebarFilters.reasoning) ||
+            state.sidebarFilters.reasoning.has(model.reasoning);
+          const matchContext =
+            parseTokenValue(model.context) >= state.contextMinTokens;
+          const matchDiscount =
+            (model.discountPercent || 0) >= state.discountMinPercent;
+          return (
+            matchCategory &&
+            matchQuery &&
+            matchInputType &&
+            matchDeveloper &&
+            matchVendor &&
+            matchParameter &&
+            matchProtocol &&
+            matchReasoning &&
+            matchContext &&
+            matchDiscount
+          );
+        });
+      }
+
+      function sortModels(models) {
+        const sorted = [...models];
+        sorted.sort((left, right) => {
+          if (state.sortBy === "traffic") {
+            return (
+              parseTrafficValue(right.traffic) - parseTrafficValue(left.traffic)
+            );
+          }
+          if (state.sortBy === "discount") {
+            return (right.discountPercent || 0) - (left.discountPercent || 0);
+          }
+          return (
+            parseDateValue(right.updatedAt) - parseDateValue(left.updatedAt)
+          );
+        });
+        return sorted;
+      }
+
+      function getVisibleModels() {
+        return sortModels(getFilteredModels());
+      }
+
+      function getCategoryCount(categoryKey) {
+        if (categoryKey === "All") return mockModels.length;
+        if (categoryKey === "Free Trial") {
+          return mockModels.filter((model) =>
+            model.badges.some(
+              (badge) => badge.includes("Free") || badge.includes("免费"),
+            ),
+          ).length;
+        }
+        return mockModels.filter((model) => model.category === categoryKey)
+          .length;
+      }
+
+      function updateFilterSummary() {
+        const labels = [];
+        Object.entries(state.sidebarFilters).forEach(([group, values]) => {
+          if (!values.size) return;
+          labels.push(
+            `${filterGroupLabels[group] || group}: ${Array.from(values).join(" / ")}`,
+          );
+        });
+        if (state.contextMinTokens > 0) {
+          labels.push(formatContextSummary(state.contextMinTokens));
+        }
+        if (state.discountMinPercent > 0) {
+          labels.push(`折扣 >= ${state.discountMinPercent}%`);
+        }
+        filterSummary.textContent = labels.length
+          ? `已筛选 ${labels.join(" · ")}`
+          : "当前未应用左侧筛选";
+      }
+
+      function bindExpandToggles() {
+        document.querySelectorAll("[data-expand-toggle]").forEach((button) => {
+          const key = button.dataset.expandToggle;
+          const expanded = Boolean(state.expandedLists[key]);
+          button.textContent = expanded ? "收起" : "展开更多";
+          button.classList.toggle("is-open", expanded);
+          button.onclick = () => {
+            state.expandedLists[key] = !state.expandedLists[key];
+            render();
+          };
+        });
+
+        document.querySelectorAll("[data-expand-list]").forEach((list) => {
+          const key = list.dataset.expandList;
+          list.classList.toggle("collapsed", !state.expandedLists[key]);
+        });
+      }
+
+      function positionRange(fillEl, thumbEl, ratio) {
+        const percent = Math.max(0, Math.min(100, ratio * 100));
+        fillEl.style.width = `${percent}%`;
+        thumbEl.style.left = `${percent}%`;
+      }
+
+      const contextStops = [
+        { ratio: 0, tokens: 0 },
+        { ratio: 1 / 3, tokens: 4_000 },
+        { ratio: 2 / 3, tokens: 64_000 },
+        { ratio: 1, tokens: 1_000_000 },
+      ];
+
+      function nearestContextStop(ratio) {
+        return contextStops.reduce((closest, stop) =>
+          Math.abs(stop.ratio - ratio) < Math.abs(closest.ratio - ratio)
+            ? stop
+            : closest,
+        );
+      }
+
+      function contextRatioFromTokens(tokens) {
+        return contextStops.find((stop) => stop.tokens === tokens)?.ratio || 0;
+      }
+
+      function formatContextLabel(tokens) {
+        if (tokens <= 0) return "全部上下文";
+        if (tokens >= 1_000_000)
+          return `>= ${(tokens / 1_000_000).toFixed(0)}M`;
+        return `>= ${(tokens / 1_000).toFixed(0)}K`;
+      }
+
+      function formatContextSummary(tokens) {
+        return formatContextLabel(tokens).replace(">=", "上下文 >=");
+      }
+
+      function syncRangeLabels() {
+        const contextRatio = contextRatioFromTokens(state.contextMinTokens);
+        positionRange(contextRangeFill, contextRangeThumb, contextRatio);
+        contextRangeValue.textContent = formatContextLabel(
+          state.contextMinTokens,
+        );
+
+        const discountRatio = state.discountMinPercent / 100;
+        positionRange(discountRangeFill, discountRangeThumb, discountRatio);
+        discountRangeValue.textContent =
+          state.discountMinPercent > 0
+            ? `至少 ${state.discountMinPercent}% 折扣`
+            : "全部折扣";
+      }
+
+      function bindRangeControl(rangeRail, onChange) {
+        const updateFromClientX = (clientX) => {
+          const rect = rangeRail.getBoundingClientRect();
+          const ratio = rect.width ? (clientX - rect.left) / rect.width : 0;
+          onChange(Math.max(0, Math.min(1, ratio)));
+        };
+
+        rangeRail.onmousedown = (event) => {
+          updateFromClientX(event.clientX);
+          const move = (moveEvent) => updateFromClientX(moveEvent.clientX);
+          const up = () => {
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+          };
+          window.addEventListener("mousemove", move);
+          window.addEventListener("mouseup", up);
+        };
+      }
+
+      function bindSidebarFilters() {
+        document.querySelectorAll("[data-filter-group]").forEach((button) => {
+          const group = button.dataset.filterGroup;
+          const value = button.dataset.filterValue;
+          const active = state.sidebarFilters[group]?.has(value);
+          button.classList.toggle("active", Boolean(active));
+          button.onclick = () => {
+            const set = state.sidebarFilters[group];
+            if (set.has(value)) {
+              set.delete(value);
+            } else {
+              set.add(value);
+            }
+            render();
+          };
+        });
+      }
+
+      function renderChips() {
+        chips.innerHTML = categoryConfig
+          .map(
+            (item) => `
+              <button class="chip ${state.category === item.key ? "active" : ""}" type="button" data-category="${item.key}">
+                <span>${item.label}</span>
+                <span class="count">${getCategoryCount(item.key)}</span>
+              </button>
+            `,
+          )
+          .join("");
+
+        chips.querySelectorAll("[data-category]").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.category = button.dataset.category;
+            render();
+          });
+        });
+      }
+
+      function renderVersionPanel(model, key) {
+        const versions = model.versions || [];
+        if (!versions.length) return "";
+        return `
+          <div class="version-panel">
+            <div class="version-head">
+              <div>
+                <span>共 ${versions.length} 个渠道版本，支持折扣与性能对比</span>
+              </div>
+            </div>
+            <div class="version-columns">
+              <span>模型</span>
+              <span>折扣</span>
+              <span>标签</span>
+              <span>TPS</span>
+              <span>Latency</span>
+              <span>Success</span>
+            </div>
+            <div class="version-list" data-version-list="${key}">
+              ${versions
+                .map(
+                  (version) => `
+                    <div class="version-row">
+                      <div class="version-id" data-label="模型">
+                        <code>${version.id}</code>
+                      </div>
+                      <span class="version-discount" data-label="折扣">${version.discount}</span>
+                      <div class="version-tags" data-label="标签">
+                        ${version.tags.map((tag) => `<span class="version-tag">${tag}</span>`).join("")}
+                      </div>
+                      <div class="metric-cell" data-label="TPS"><strong>${version.tps}</strong></div>
+                      <div class="metric-cell" data-label="延迟"><strong>${version.latency}</strong></div>
+                      <div class="metric-cell" data-label="成功率"><strong>${version.successRate}</strong></div>
+                    </div>
+                  `,
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+      }
+
+      function renderModelCard(model, index, options = {}) {
+        const key = `${options.keyPrefix || model.slug}-${index}`;
+        const cardClass = options.featured
+          ? "model-card featured-card"
+          : "model-card";
+        return `
+          <article class="${cardClass}">
+            <div class="card-top">
+              <div class="card-name">
+                <span class="logo-orb" style="--accent-a: ${model.accentA}; --accent-b: ${model.accentB};"></span>
+                <div class="name-block">
+                  <h3>${model.title}</h3>
+                  <div class="slug-row">
+                    <code>${model.slug}</code>
+                    <span class="mini-icon"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"></rect><rect x="5" y="5" width="10" height="10" rx="2"></rect></svg></span>
+                    <span class="mini-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></span>
+                  </div>
+                </div>
+              </div>
+              <div class="badge-stack">
+                ${model.badges
+                  .map(
+                    (badge) =>
+                      `<span class="${badgeClass(badge)}">${badge}</span>`,
+                  )
+                  .join("")}
+              </div>
+            </div>
+            <div class="traffic">${model.traffic}<span> token</span></div>
+            <p class="card-desc">${model.description}</p>
+            <div class="meta-grid">
+              <div class="meta-item">
+                <strong>输入类型</strong>
+                <span class="input-tags">${typeSquares(model.typeIcons)}</span>
+              </div>
+              <div class="meta-item">
+                <strong>输出类型</strong>
+                <span class="input-tags">${typeSquares(Math.max(2, model.typeIcons - 1))}</span>
+              </div>
+              <div class="meta-item">
+                <strong>输入</strong>
+                <span>${model.inputPrice}</span>
+              </div>
+              <div class="meta-item">
+                <strong>输出</strong>
+                <span>${model.outputPrice}</span>
+              </div>
+              <div class="meta-item">
+                <strong>上下文</strong>
+                <span>${model.context}</span>
+              </div>
+              <div class="meta-item">
+                <strong>最大输出</strong>
+                <span>${model.maxOutput}</span>
+              </div>
+            </div>
+            ${renderVersionPanel(model, key)}
+            ${renderModelFooter(model)}
+          </article>
+        `;
+      }
+
+      function renderCards(models) {
+        countLabel.textContent = String(models.length);
+        if (!models.length) {
+          grid.innerHTML = `
+            <div class="empty-state">
+              <strong>没有匹配的模型</strong>
+              <p>可以试试清空搜索词、放宽折扣或上下文筛选，或者点击右下角按钮快速重置模型广场。</p>
+            </div>
+          `;
+          return;
+        }
+        grid.innerHTML = models
+          .map((model, index) => renderModelCard(model, index))
+          .join("");
+      }
+
+      function syncSortLabel() {
+        const current = sortOptions.find(
+          (option) => option.key === state.sortBy,
+        );
+        sortLabel.textContent = current?.label || "最新";
+      }
+
+      function render() {
+        const visibleModels = getVisibleModels();
+        syncSortLabel();
+        renderChips();
+        renderCards(visibleModels);
+        bindSidebarFilters();
+        bindExpandToggles();
+        updateFilterSummary();
+        syncRangeLabels();
+      }
+
+      function showPromoSlide(index) {
+        if (!promoSlides.length) return;
+        activePromoIndex = (index + promoSlides.length) % promoSlides.length;
+        promoSlides.forEach((slide, slideIndex) => {
+          slide.classList.toggle("active", slideIndex === activePromoIndex);
+        });
+        promoDots.forEach((dot, dotIndex) => {
+          dot.classList.toggle("active", dotIndex === activePromoIndex);
+        });
+      }
+
+      function startPromoRotation() {
+        if (promoTimer || promoSlides.length < 2) return;
+        promoTimer = window.setInterval(() => {
+          showPromoSlide(activePromoIndex + 1);
+        }, 4500);
+      }
+
+      function restartPromoRotation() {
+        if (promoTimer) {
+          window.clearInterval(promoTimer);
+          promoTimer = null;
+        }
+        startPromoRotation();
+      }
+
+      function scrollToPageTop() {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function resetModelSquare() {
+        state.category = "All";
+        state.query = "";
+        Object.values(state.sidebarFilters).forEach((set) => set.clear());
+        state.contextMinTokens = 0;
+        state.discountMinPercent = 0;
+        searchInput.value = "";
+        render();
+        scrollToPageTop();
+      }
+
+      searchInput.addEventListener("input", (event) => {
+        state.query = event.target.value;
+        render();
+      });
+
+      sortButton.addEventListener("click", () => {
+        const currentIndex = sortOptions.findIndex(
+          (option) => option.key === state.sortBy,
+        );
+        const nextOption = sortOptions[(currentIndex + 1) % sortOptions.length];
+        state.sortBy = nextOption.key;
+        render();
+      });
+
+      bindRangeControl(contextRangeRail, (ratio) => {
+        state.contextMinTokens = nearestContextStop(ratio).tokens;
+        render();
+      });
+
+      bindRangeControl(discountRangeRail, (ratio) => {
+        state.discountMinPercent = Math.round(ratio * 100);
+        render();
+      });
+
+      floatingActions.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-floating-action]");
+        if (!button) return;
+        if (button.dataset.floatingAction === "top") {
+          scrollToPageTop();
+          return;
+        }
+        resetModelSquare();
+      });
+
+      promoDots.forEach((dot) => {
+        dot.addEventListener("click", () => {
+          showPromoSlide(Number(dot.dataset.promoDot || 0));
+          restartPromoRotation();
+        });
+      });
+
+      render();
+      startPromoRotation();
+    </script>
+  </body>
+</html>

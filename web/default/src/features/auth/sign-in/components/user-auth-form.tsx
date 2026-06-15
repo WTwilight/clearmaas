@@ -21,7 +21,7 @@ import type { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from '@tanstack/react-router'
-import { Loader2, LogIn, KeyRound } from 'lucide-react'
+import { Loader2, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -40,17 +40,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { PasswordInput } from '@/components/password-input'
 import { Turnstile } from '@/components/turnstile'
 import { login, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
@@ -74,13 +65,15 @@ export function UserAuthForm({
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false)
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
+  const [passwordVisible, setPasswordVisible] = useState(false)
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
   const loginFailedMessage = t('Login failed')
 
   const { status } = useStatus()
-  const passkeyLoginEnabled = Boolean(
-    status?.passkey_login ?? status?.data?.passkey_login
-  )
+  const statusData = status?.data ?? status
+  const passkeyLoginEnabled = Boolean(statusData?.passkey_login)
+  const requiresLegalConsent = true
+  const selfUseModeEnabled = Boolean(statusData?.self_use_mode_enabled)
   const {
     isTurnstileEnabled,
     turnstileSiteKey,
@@ -90,21 +83,27 @@ export function UserAuthForm({
   } = useTurnstile()
   const { handleLoginSuccess, redirectTo2FA } = useAuthRedirect()
 
-  const hasUserAgreement = Boolean(status?.user_agreement_enabled)
-  const hasPrivacyPolicy = Boolean(status?.privacy_policy_enabled)
-  const requiresLegalConsent = hasUserAgreement || hasPrivacyPolicy
   const passkeyButtonDisabled =
     isPasskeyLoading ||
     !passkeySupported ||
     (requiresLegalConsent && !agreedToLegal)
-  const hasWeChatLogin = Boolean(status?.wechat_login)
+  const hasWeChatLogin = Boolean(statusData?.wechat_login)
+  const hasOAuthProviders = Boolean(
+    (statusData?.wechat_login && hasWeChatLogin) ||
+      (statusData?.github_oauth && statusData?.github_client_id) ||
+      (statusData?.discord_oauth && statusData?.discord_client_id) ||
+      (statusData?.oidc_enabled &&
+        statusData?.oidc_client_id &&
+        statusData?.oidc_authorization_endpoint) ||
+      (statusData?.linuxdo_oauth && statusData?.linuxdo_client_id) ||
+      (statusData?.custom_oauth_providers &&
+        statusData.custom_oauth_providers.some(
+          (provider) => provider.client_id && provider.authorization_endpoint
+        ))
+  )
 
   useEffect(() => {
-    if (requiresLegalConsent) {
-      setAgreedToLegal(false)
-    } else {
-      setAgreedToLegal(true)
-    }
+    setAgreedToLegal(!requiresLegalConsent)
   }, [requiresLegalConsent])
 
   useEffect(() => {
@@ -129,11 +128,11 @@ export function UserAuthForm({
       status?.wechat_qr_code_image_url ||
       status?.wechat_account_qrcode_image_url ||
       status?.WeChatAccountQRCodeImageURL ||
-      status?.data?.wechat_qrcode ||
-      status?.data?.WeChatAccountQRCodeImageURL ||
+      statusData?.wechat_qrcode ||
+      statusData?.WeChatAccountQRCodeImageURL ||
       ''
     )
-  }, [status])
+  }, [status, statusData])
 
   async function onSubmit(data: z.infer<typeof loginFormSchema>) {
     if (requiresLegalConsent && !agreedToLegal) {
@@ -275,111 +274,133 @@ export function UserAuthForm({
     }
   }
 
+  const usernameError = form.formState.errors.username?.message
+  const passwordError = form.formState.errors.password?.message
+
   return (
-    <Form {...form}>
+    <>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('grid gap-4', className)}
+        className={cn('close-auth-form', className)}
         {...props}
       >
-        {/* Username Field */}
-        <FormField
-          control={form.control}
-          name='username'
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('Username or Email')}</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder={t('Enter your username or email')}
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <label className='close-field'>
+          <span className='close-field-icon' aria-hidden='true'>
+            <svg viewBox='0 0 24 24'>
+              <path d='M20 21a8 8 0 0 0-16 0' />
+              <circle cx='12' cy='7' r='4' />
+            </svg>
+          </span>
+          <input
+            type='text'
+            placeholder={t('Username or email')}
+            autoComplete='username'
+            required
+            {...form.register('username')}
+          />
+        </label>
+        {usernameError ? (
+          <p className='-mt-5 text-xs text-red-500'>{t(usernameError)}</p>
+        ) : null}
 
-        {/* Password Field */}
-        <FormField
-          control={form.control}
-          name='password'
-          render={({ field }) => (
-            <FormItem className='relative'>
-              <FormLabel>{t('Password')}</FormLabel>
-              <FormControl>
-                <PasswordInput placeholder={t('Enter password')} {...field} />
-              </FormControl>
-              <FormMessage />
-              <Link
-                to='/forgot-password'
-                className='text-muted-foreground absolute end-0 -top-0.5 text-sm font-medium hover:opacity-75'
-              >
-                {t('Forgot password?')}
-              </Link>
-            </FormItem>
-          )}
-        />
+        <label className='close-field'>
+          <span className='close-field-icon' aria-hidden='true'>
+            <svg viewBox='0 0 24 24'>
+              <rect x='3' y='11' width='18' height='10' rx='2' />
+              <path d='M7 11V7a5 5 0 0 1 10 0v4' />
+            </svg>
+          </span>
+          <input
+            type={passwordVisible ? 'text' : 'password'}
+            placeholder={t('Password')}
+            autoComplete='current-password'
+            required
+            {...form.register('password')}
+          />
+          <button
+            className='close-eye'
+            type='button'
+            aria-label={
+              passwordVisible ? t('Hide password') : t('Show password')
+            }
+            onClick={() => setPasswordVisible((visible) => !visible)}
+          >
+            <svg viewBox='0 0 24 24'>
+              <path d='M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z' />
+              <circle cx='12' cy='12' r='3' />
+            </svg>
+          </button>
+        </label>
+        {passwordError ? (
+          <p className='-mt-5 text-xs text-red-500'>{t(passwordError)}</p>
+        ) : null}
 
-        {/* Submit Button */}
-        <Button
-          type='submit'
-          className='mt-2 w-full justify-center gap-2'
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-        >
-          {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
-          {t('Sign in')}
-        </Button>
-
-        {/* Turnstile */}
-        {isTurnstileEnabled && (
-          <div className='mt-2'>
-            <Turnstile
-              siteKey={turnstileSiteKey}
-              onVerify={setTurnstileToken}
-            />
-          </div>
-        )}
+        <div className='close-form-links'>
+          <Link to='/forgot-password'>{t('Forgot password?')}</Link>
+          {!selfUseModeEnabled ? (
+            <Link to='/sign-up'>{t('Email registration')}</Link>
+          ) : null}
+        </div>
 
         <LegalConsent
           status={status}
           checked={agreedToLegal}
           onCheckedChange={setAgreedToLegal}
-          className='mt-1'
+          className='close-legal-consent'
+          forceVisible
         />
 
+        {isTurnstileEnabled && (
+          <Turnstile siteKey={turnstileSiteKey} onVerify={setTurnstileToken} />
+        )}
+
+        <button
+          className={cn(
+            'close-submit',
+            (isLoading || (requiresLegalConsent && !agreedToLegal)) &&
+              'close-submit-disabled'
+          )}
+          type='submit'
+          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
+        >
+          {isLoading ? t('Signing in...') : t('Sign in')}
+        </button>
+
         {passkeyLoginEnabled && (
-          <div className='mt-2 space-y-1'>
-            <Button
-              type='button'
-              variant='outline'
-              disabled={passkeyButtonDisabled}
-              onClick={handlePasskeyLogin}
-              className='h-11 w-full justify-center gap-2 rounded-lg'
-            >
+          <Button
+            type='button'
+            variant='outline'
+            disabled={passkeyButtonDisabled}
+            onClick={handlePasskeyLogin}
+            className='google-register'
+          >
+            <span className='google-g'>
               {isPasskeyLoading ? (
                 <Loader2 className='h-4 w-4 animate-spin' />
               ) : (
                 <KeyRound className='h-4 w-4' />
               )}
-              {t('Sign in with Passkey')}
-            </Button>
-            {!passkeySupported && (
-              <p className='text-muted-foreground text-xs'>
-                {t('Passkey is not supported on this device.')}
-              </p>
-            )}
-          </div>
+            </span>
+            <span>{t('Sign in with Passkey')}</span>
+          </Button>
         )}
-
-        {/* OAuth Providers */}
-        <OAuthProviders
-          status={status}
-          disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
-          onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
-          isWeChatLoading={isWeChatSubmitting}
-        />
       </form>
+
+      {hasOAuthProviders && (
+        <>
+          <div className='close-divider'>
+            <span>{t('Other login methods')}</span>
+          </div>
+
+          <OAuthProviders
+            status={status}
+            disabled
+            onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+            isWeChatLoading={isWeChatSubmitting}
+            variant='close'
+          />
+        </>
+      )}
 
       {hasWeChatLogin && (
         <Dialog
@@ -449,6 +470,6 @@ export function UserAuthForm({
           </DialogContent>
         </Dialog>
       )}
-    </Form>
+    </>
   )
 }

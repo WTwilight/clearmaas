@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>注册账户 · ClearMaas API-Pro</title>
+    <link rel="stylesheet" href="maas-page.css?v=refine-6" />
+  </head>
+  <body>
+    <main class="close-auth-page">
+      <section class="close-auth-card register-card">
+        <a class="close-logo" href="shouye.html" aria-label="ClearMaas API-Pro">
+          <span class="close-logo-symbol"><b>CM</b></span>
+          <span class="close-logo-text">Clear<span>Maas</span></span>
+        </a>
+        <p class="close-auth-subtitle">
+          企业级 OpenAI 接口服务，全球任意位置高速稳定接入
+        </p>
+
+        <div class="warning-stack">
+          <article class="warning-box">
+            <span>!</span>
+            <strong
+              >本服务仅面向企业、高校等机构客户使用，需完成相关资质认证，最低充值金额
+              500 元，请确认后再注册。</strong
+            >
+          </article>
+          <article class="warning-box">
+            <span>!</span>
+            <strong
+              >邮箱注册方式仅支持中国大陆用户，境外 IP 请使用下方 Google
+              注册。</strong
+            >
+          </article>
+        </div>
+
+        <form class="close-auth-form register-form" data-auth-form>
+          <label class="close-terms">
+            <input type="checkbox" data-auth-check />
+            <span
+              >我已阅读并同意<a href="#">《服务条款》</a>和<a href="#"
+                >《隐私政策》</a
+              ></span
+            >
+          </label>
+        </form>
+
+        <div class="close-divider"><span>Google 注册</span></div>
+
+        <button
+          class="google-register close-submit-disabled"
+          type="button"
+          data-auth-submit
+          disabled
+        >
+          <span class="google-g">G</span>
+          <span>使用 Google 账号注册</span>
+        </button>
+
+        <div class="close-bottom-link">
+          <span>已有账号？</span>
+          <a href="login.html">立即登录</a>
+        </div>
+      </section>
+
+      <footer class="close-auth-footer">
+        © 2026 ClearMaas 企业级大模型API代理平台
+      </footer>
+    </main>
+    <script>
+      const form = document.querySelector("[data-auth-form]");
+      const check = form?.querySelector("[data-auth-check]");
+      const submit = document.querySelector("[data-auth-submit]");
+      check?.addEventListener("change", () => {
+        submit.disabled = !check.checked;
+        submit.classList.toggle("close-submit-disabled", !check.checked);
+      });
+    </script>
+  </body>
+</html>

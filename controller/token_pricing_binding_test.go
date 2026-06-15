@@ -60,7 +60,7 @@ func setupTokenBindingControllerDB(t *testing.T) *gorm.DB {
 
 func truncateControllerBindings(t *testing.T) {
 	t.Helper()
-	t.Cleanup(func() {
+	cleanup := func() {
 		model.DB.Exec("DELETE FROM token_pricing_model_bindings")
 		model.DB.Exec("DELETE FROM tokens")
 		model.DB.Exec("DELETE FROM enterprise_pricing_items")
@@ -68,7 +68,9 @@ func truncateControllerBindings(t *testing.T) {
 		model.DB.Exec("DELETE FROM enterprise_user_bindings")
 		model.DB.Exec("DELETE FROM enterprises")
 		model.DB.Exec("DELETE FROM users")
-	})
+	}
+	cleanup()
+	t.Cleanup(cleanup)
 }
 
 // ---------------------------------------------------------------------------
@@ -81,13 +83,14 @@ func TestBindTokenPricingModels_Success(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "bind-user")
 	e := seedControllerEnterprise(t, "BindCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "BindSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o", "gpt-4o-mini"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "bind-token")
 
 	reqBody := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
-		ModelLimits:       "gpt-4o,gpt-4o-mini",
+		ModelLimits:        "gpt-4o,gpt-4o-mini",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -117,6 +120,7 @@ func TestBindTokenPricingModels_NonExistentToken(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "no-token-user")
 	e := seedControllerEnterprise(t, "NoTokenCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "NoTokenSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o"}, model.DiscountTypeRatio, 0.7)
 
@@ -145,13 +149,14 @@ func TestBindTokenPricingModels_EmptyModelList(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "empty-models-user")
 	e := seedControllerEnterprise(t, "EmptyCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	seedControllerPricingSheet(t, e.Id, "EmptySheet")
 	token := seedControllerToken(t, user.Id, "empty-models-token")
 
 	// Empty bindings array — controller should accept it (just no bindings created)
 	reqBody := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
-		Bindings:          []struct {
+		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
 		}{},
@@ -169,6 +174,7 @@ func TestBindTokenPricingModels_ModelNotInPricingSheet(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "not-in-sheet-user")
 	e := seedControllerEnterprise(t, "NotInSheetCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "NotInSheetSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "not-in-sheet-token")
@@ -187,10 +193,9 @@ func TestBindTokenPricingModels_ModelNotInPricingSheet(t *testing.T) {
 	ctx.Params = gin.Params{{Key: "id", Value: tokenKey(token)}}
 	BindTokenPricingModels(ctx)
 
-	// The controller inserts without validation, so this may succeed
-	// (the "model not in sheet" check may be in service/UI layer)
-	// Just verify the controller handles the request without panic
-	assert.True(t, recorder.Code == http.StatusOK || recorder.Code == http.StatusBadRequest)
+	var resp apiResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	assert.False(t, resp.Success)
 }
 
 func TestBindTokenPricingModels_SetsModelLimitsOnToken(t *testing.T) {
@@ -199,13 +204,14 @@ func TestBindTokenPricingModels_SetsModelLimitsOnToken(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "limits-set-user")
 	e := seedControllerEnterprise(t, "LimitsSetCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "LimitsSetSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o", "gpt-4o-mini"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "limits-set-token")
 
 	reqBody := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
-		ModelLimits:       "gpt-4o,gpt-4o-mini",
+		ModelLimits:        "gpt-4o,gpt-4o-mini",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -233,6 +239,7 @@ func TestBindTokenPricingModels_IdempotentOverwrite(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "idempotent-user")
 	e := seedControllerEnterprise(t, "IdempotentCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "IdempotentSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "idempotent-token")
@@ -240,6 +247,7 @@ func TestBindTokenPricingModels_IdempotentOverwrite(t *testing.T) {
 	// First bind: gpt-4o, gpt-4o-mini
 	reqBody1 := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
+		ModelLimits:        "gpt-4o,gpt-4o-mini",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -255,6 +263,7 @@ func TestBindTokenPricingModels_IdempotentOverwrite(t *testing.T) {
 	// Second bind: replaces with claude-3-5-sonnet only
 	reqBody2 := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
+		ModelLimits:        "claude-3-5-sonnet",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -284,6 +293,7 @@ func TestUnbindTokenPricingModels_Success(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "unbind-user")
 	e := seedControllerEnterprise(t, "UnbindCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "UnbindSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o", "gpt-4o-mini"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "unbind-token")
@@ -291,6 +301,7 @@ func TestUnbindTokenPricingModels_Success(t *testing.T) {
 	// First bind
 	bindReq := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
+		ModelLimits:        "gpt-4o,gpt-4o-mini",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -327,6 +338,7 @@ func TestUnbindTokenPricingModels_AllModels(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "all-unbind-user")
 	e := seedControllerEnterprise(t, "AllUnbindCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "AllUnbindSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "all-unbind-token")
@@ -334,6 +346,7 @@ func TestUnbindTokenPricingModels_AllModels(t *testing.T) {
 	// Bind all models
 	bindReq := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
+		ModelLimits:        "gpt-4o,gpt-4o-mini,claude-3-5-sonnet",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -369,6 +382,7 @@ func TestGetTokenPricingModels_Success(t *testing.T) {
 
 	user := seedControllerUser(t, 1, "get-models-user")
 	e := seedControllerEnterprise(t, "GetModelsCorp")
+	seedControllerUserBinding(t, e.Id, user.Id)
 	sheet := seedControllerPricingSheet(t, e.Id, "GetModelsSheet")
 	seedControllerPricingItem(t, sheet.Id, []string{"gpt-4o", "gpt-4o-mini"}, model.DiscountTypeRatio, 0.7)
 	token := seedControllerToken(t, user.Id, "get-models-token")
@@ -376,6 +390,7 @@ func TestGetTokenPricingModels_Success(t *testing.T) {
 	// Bind models
 	bindReq := BindTokenPricingModelsRequest{
 		ModelLimitsEnabled: true,
+		ModelLimits:        "gpt-4o,gpt-4o-mini",
 		Bindings: []struct {
 			SheetId int    `json:"sheet_id"`
 			Model   string `json:"model"`
@@ -522,9 +537,20 @@ func seedControllerToken(t *testing.T, userId int, key string) *model.Token {
 
 func seedControllerEnterprise(t *testing.T, name string) *model.Enterprise {
 	t.Helper()
-	e := &model.Enterprise{Name: name, Status: model.EnterpriseStatusEnabled}
+	e := &model.Enterprise{Name: name, EntType: model.EnterpriseTypeEnterprise, Status: model.EnterpriseStatusEnabled}
 	require.NoError(t, model.DB.Create(e).Error)
 	return e
+}
+
+func seedControllerUserBinding(t *testing.T, enterpriseId int, userId int) *model.EnterpriseUserBinding {
+	t.Helper()
+	binding := &model.EnterpriseUserBinding{
+		EnterpriseId: enterpriseId,
+		UserId:       userId,
+		CreatedAt:    time.Now().Unix(),
+	}
+	require.NoError(t, model.DB.Create(binding).Error)
+	return binding
 }
 
 func seedControllerPricingSheet(t *testing.T, enterpriseId int, name string) *model.EnterprisePricingSheet {
@@ -534,7 +560,7 @@ func seedControllerPricingSheet(t *testing.T, enterpriseId int, name string) *mo
 		Name:         name,
 		Status:       model.PricingSheetStatusActive,
 		StartTime:    1,
-		EndTime:     9999999999,
+		EndTime:      9999999999,
 	}
 	require.NoError(t, model.DB.Create(s).Error)
 	return s
@@ -544,10 +570,10 @@ func seedControllerPricingItem(t *testing.T, sheetId int, models []string, disco
 	t.Helper()
 	item := &model.EnterprisePricingItem{
 		PricingSheetId: sheetId,
-		VendorType:    "openai",
-		Models:        models,
-		DiscountType: discountType,
-		DiscountValue: discountValue,
+		VendorType:     "openai",
+		Models:         models,
+		DiscountType:   discountType,
+		DiscountValue:  discountValue,
 	}
 	require.NoError(t, model.DB.Create(item).Error)
 	return item

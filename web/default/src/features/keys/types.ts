@@ -136,6 +136,29 @@ export interface SelectablePricingModel {
   sheet_name: string
 }
 
+export interface SelectablePricingModelVersion extends SelectablePricingModel {
+  upstream_key?: string
+  channel_id?: number
+  channel_name?: string
+  channel_tags?: string[]
+  pricing_sheet_id?: number
+}
+
+export interface SelectablePricingModelGroup {
+  name: string
+  display_name: string
+  icon?: string
+  vendor_id?: number
+  vendor?: string
+  vendor_name?: string
+  vendor_icon?: string
+  tags?: string[]
+  context_tokens?: number
+  max_output?: number
+  best_discount_ratio?: number
+  versions: SelectablePricingModelVersion[]
+}
+
 // ============================================================================
 // Dialog Types
 // ============================================================================

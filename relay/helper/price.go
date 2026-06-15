@@ -116,6 +116,13 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) (types
 					groupRatioInfo.GroupRatio = pricingItem.DiscountValue
 				}
 				groupRatioInfo.RatioSource = "token_pricing_binding"
+			} else {
+				return groupRatioInfo, types.NewErrorWithStatusCode(
+					fmt.Errorf("model '%s' has pricing binding to sheet %d but no matching pricing item", relayInfo.OriginModelName, modelBinding.PricingSheetId),
+					types.ErrorCodeTokenModelLimitInconsistent,
+					http.StatusForbidden,
+					types.ErrOptionWithSkipRetry(),
+				)
 			}
 			// Whether or not pricingItem was found, do not fall through to enterprise/platform chain
 		} else {
@@ -269,8 +276,8 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 			FreeModel:         freeModel,
 			ModelPrice:        groupRatioInfo.PerCallPriceSheet,
 			GroupRatioInfo:    groupRatioInfo,
-			UsePrice:         true,
-			Quota:            quota,
+			UsePrice:          true,
+			Quota:             quota,
 			PerCallPriceSheet: groupRatioInfo.PerCallPriceSheet,
 		}
 		if common.DebugEnabled {
@@ -400,8 +407,8 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 			FreeModel:         freeModel,
 			ModelPrice:        groupRatioInfo.PerCallPriceSheet,
 			GroupRatioInfo:    groupRatioInfo,
-			UsePrice:         true,
-			Quota:            quota,
+			UsePrice:          true,
+			Quota:             quota,
 			PerCallPriceSheet: groupRatioInfo.PerCallPriceSheet,
 		}
 		if common.DebugEnabled {

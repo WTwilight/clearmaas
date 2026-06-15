@@ -27,11 +27,12 @@ import { useStatus } from '@/hooks/use-status'
 export function useTurnstile() {
   const { status } = useStatus()
   const [turnstileToken, setTurnstileToken] = useState('')
+  const statusData = status?.data ?? status
 
   const isTurnstileEnabled = !!(
-    status?.turnstile_check && status?.turnstile_site_key
+    statusData?.turnstile_check && statusData?.turnstile_site_key
   )
-  const turnstileSiteKey = status?.turnstile_site_key || ''
+  const turnstileSiteKey = statusData?.turnstile_site_key || ''
 
   /**
    * Validate if turnstile is ready when required

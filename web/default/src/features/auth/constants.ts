@@ -24,65 +24,43 @@ import { z } from 'zod'
 
 export const loginFormSchema = z.object({
   username: z.string().min(1, 'Please enter your username or email'),
-  password: z
-    .string()
-    .superRefine((val, ctx) => {
-      if (!val) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.too_small,
-          minimum: 1,
-          type: 'string',
-          inclusive: true,
-          message: 'Please enter your password',
-        })
-      } else if (val.length < 8) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.too_small,
-          minimum: 8,
-          type: 'string',
-          inclusive: true,
-          message: 'Password must be at least 8 characters long',
-        })
-      }
-    }),
+  password: z.string().min(1, 'Please enter your password'),
 })
 
 export const registerFormSchema = z
   .object({
     username: z.string().min(1, 'Please enter your username'),
     email: z.string().optional(),
-    password: z
-      .string()
-      .superRefine((val, ctx) => {
-        if (!val) {
+    password: z.string().superRefine((val, ctx) => {
+      if (!val) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.too_small,
+          minimum: 1,
+          origin: 'string',
+          inclusive: true,
+          message: 'Please enter your password',
+        })
+      } else {
+        if (val.length < 8) {
           ctx.addIssue({
             code: z.ZodIssueCode.too_small,
-            minimum: 1,
-            type: 'string',
+            minimum: 8,
+            origin: 'string',
             inclusive: true,
-            message: 'Please enter your password',
+            message: 'Password must be at least 8 characters long',
           })
-        } else {
-          if (val.length < 8) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.too_small,
-              minimum: 8,
-              type: 'string',
-              inclusive: true,
-              message: 'Password must be at least 8 characters long',
-            })
-          }
-          if (val.length > 20) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.too_big,
-              maximum: 20,
-              type: 'string',
-              inclusive: true,
-              message: 'Password must be at most 20 characters long',
-            })
-          }
         }
-      }),
+        if (val.length > 20) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.too_big,
+            maximum: 20,
+            origin: 'string',
+            inclusive: true,
+            message: 'Password must be at most 20 characters long',
+          })
+        }
+      }
+    }),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
   .refine((data) => data.password === data.confirmPassword, {
